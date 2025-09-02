@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+
+# Audio files (if large)
+src/assets/samples/
