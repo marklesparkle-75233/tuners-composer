@@ -1,7 +1,8 @@
 /**
- * Session 1: AudioManager - Complete Implementation
- * Add this at the very top of your scripts.js file
+ * Session 1: Web Audio API Foundation
+ * AudioManager - Core audio system management
  */
+
 class AudioManager {
     constructor() {
         this.audioContext = null;
@@ -61,7 +62,7 @@ class AudioManager {
         this.testOscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // A4 note
 
         // Configure gain (start at 0 to prevent sudden loud sound)
-        this.testGainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+        this.testGainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
 
         // Connect the audio chain: oscillator -> gain -> master -> speakers
         this.testOscillator.connect(this.testGainNode);
@@ -78,11 +79,7 @@ class AudioManager {
      */
     stopTestOscillator() {
         if (this.testOscillator) {
-            try {
-                this.testOscillator.stop();
-            } catch (e) {
-                // Oscillator already stopped
-            }
+            this.testOscillator.stop();
             this.testOscillator.disconnect();
             this.testOscillator = null;
         }
@@ -112,5 +109,5 @@ class AudioManager {
     }
 }
 
-// Global audio manager instance
-let audioManager = null;
+// Export for use in other modules
+export default AudioManager;
