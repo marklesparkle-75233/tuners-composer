@@ -535,33 +535,55 @@ function renderParameters() {
   });
 }
 
-// Voice-specific functions (placeholders for future implementation)
+// Voice-specific functions with Preview/Stop toggle
 function previewVoice(voiceIndex) {
-  console.log(`Preview voice ${voiceIndex + 1}`);
+  console.log(`Preview button clicked for voice ${voiceIndex + 1}`);
   
   if (!audioManager || !audioManager.isInitialized) {
     console.log('Audio not initialized - click anywhere to start');
     return;
   }
   
-  // Get the selected sound for this voice
-  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
-  const selectedSoundName = gmSounds[selectedSoundIndex];
+  // Find the preview button for this voice
+  const voiceControls = document.querySelector('.voice-controls');
+  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
   
-  // Map to oscillator type
-  const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
-  
-  console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
-  
-  // Use the new method with different oscillator types
-  audioManager.createTestOscillatorWithType(oscillatorType);
-  
-  // Apply volume
-  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-  const currentVolume = (volumeParam.min + volumeParam.max) / 2;
-  audioManager.setTestVolume(currentVolume);
+  // Check if currently playing (button shows "STOP")
+  if (previewButton.textContent === 'STOP') {
+    // Stop the audio
+    audioManager.stopTestOscillator();
+    
+    // Reset button appearance
+    previewButton.textContent = 'PREVIEW';
+    previewButton.style.backgroundColor = '';
+    previewButton.style.color = '';
+    
+    console.log(`Stopped preview for voice ${voiceIndex + 1}`);
+  } else {
+    // Start the audio
+    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+    const selectedSoundName = gmSounds[selectedSoundIndex];
+    const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+    
+    console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
+    
+    audioManager.createTestOscillatorWithType(oscillatorType);
+    
+    // Apply volume
+    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+    const currentVolume = (volumeParam.min + volumeParam.max) / 2;
+    audioManager.setTestVolume(currentVolume);
+    
+    // Update button appearance
+    previewButton.textContent = 'STOP';
+    previewButton.style.backgroundColor = '#ffcccc';
+    previewButton.style.color = '#333';
+    
+    console.log(`Started preview for voice ${voiceIndex + 1}`);
+  }
 }
-
+  
+  
 function toggleLockVoice(voiceIndex) {
   voiceData[voiceIndex].locked = !voiceData[voiceIndex].locked;
   console.log(`Voice ${voiceIndex + 1} ${voiceData[voiceIndex].locked ? 'locked' : 'unlocked'}`);
