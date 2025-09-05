@@ -1,3 +1,4 @@
+
 console.log("NoteNest 16-Voice Composer loaded");
 
 // Parameter definitions
@@ -18,6 +19,7 @@ const parameterDefinitions = [
   { name: "CHORUS", type: "multi-dual", min: 0, max: 100 },
   { name: "PHASER", type: "multi-dual", min: 0, max: 100 }
 ];
+
 
 // GM Sounds list
 const gmSounds = [
@@ -535,8 +537,29 @@ function renderParameters() {
 
 // Voice-specific functions (placeholders for future implementation)
 function previewVoice(voiceIndex) {
-  console.log(`Previewing voice ${voiceIndex + 1}`);
-  // TODO: Implement voice preview functionality
+  console.log(`Preview voice ${voiceIndex + 1}`);
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('Audio not initialized - click anywhere to start');
+    return;
+  }
+  
+  // Get the selected sound for this voice
+  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+  const selectedSoundName = gmSounds[selectedSoundIndex];
+  
+  // Map to oscillator type
+  const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+  
+  console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
+  
+  // Use the new method with different oscillator types
+  audioManager.createTestOscillatorWithType(oscillatorType);
+  
+  // Apply volume
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  const currentVolume = (volumeParam.min + volumeParam.max) / 2;
+  audioManager.setTestVolume(currentVolume);
 }
 
 function toggleLockVoice(voiceIndex) {
@@ -547,10 +570,69 @@ function toggleLockVoice(voiceIndex) {
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
+  // Create audio manager instance 
+  audioManager = new AudioManager();
+
   initializeVoices();
   createVoiceTabs();
   renderParameters();
   
   console.log('16-Voice Composer initialized');
   console.log('Voice data structure:', voiceData);
+  
+  // Add click handler to initialize audio on first user interaction
+  document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
 });
+
+// Initialize audio on first user click
+async function initializeAudioOnFirstClick() {
+  console.log('Initializing audio system...');
+  await audioManager.initialize();
+  
+  if (audioManager.isInitialized) {
+    console.log('Audio system ready');
+    audioManager.createTestOscillator();
+  } else {
+    console.error('Failed to initialize audio system');
+  }
+}
+
+// GM Sound mapping function
+function getOscillatorTypeForGMSound(gmSoundName) {
+    const GM_SOUND_MAPPING = {
+        "Acoustic Grand Piano": "triangle",
+        "Electric Piano 1": "square", 
+        "Harpsichord": "sawtooth",
+        "Clavi": "square",
+        "Celesta": "sine",
+        "Music Box": "sine",
+        "Vibraphone": "sine",
+        "Marimba": "triangle",
+        "Church Organ": "sine",
+        "Rock Organ": "sawtooth",
+        "Acoustic Guitar": "sawtooth",
+        "Electric Guitar (Clean)": "triangle",
+        "Electric Guitar (Distorted)": "square",
+        "Acoustic Bass": "sine",
+        "Electric Bass": "triangle",
+        "Violin": "sawtooth",
+        "Cello": "sawtooth",
+        "String Ensemble": "sawtooth",
+        "Trumpet": "square",
+        "Trombone": "sawtooth",
+        "French Horn": "triangle",
+        "Brass Section": "square",
+        "Soprano Sax": "sawtooth",
+        "Tenor Sax": "sawtooth",
+        "Flute": "sine",
+        "Piccolo": "sine",
+        "Clarinet": "triangle",
+        "Oboe": "sawtooth",
+        "Synth Lead": "square",
+        "Synth Pad": "triangle",
+        "Synth Bass": "sawtooth",
+        "Drum Kit": "square"
+    };
+    
+    return GM_SOUND_MAPPING[gmSoundName] || 'sine';
+}

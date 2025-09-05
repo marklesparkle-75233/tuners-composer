@@ -98,19 +98,45 @@ class AudioManager {
     setTestVolume(volume) {
         if (!this.testGainNode) return;
         
-        // Convert UI range (0-100) to gain range (0-1)
         const gainValue = Math.max(0, Math.min(1, volume / 100));
         
-        // Smooth volume changes to prevent audio pops
         this.testGainNode.gain.setTargetAtTime(
             gainValue, 
             this.audioContext.currentTime, 
-            0.1 // Time constant for smooth transition
+            0.1
         );
         
         console.log(`Volume set to: ${volume}% (gain: ${gainValue})`);
     }
-}
+
+    /**
+     * Create a test oscillator with specific waveform type
+     * @param {string} oscillatorType - 'sine', 'sawtooth', 'square', 'triangle'
+     */
+    createTestOscillatorWithType(oscillatorType = 'sine') {
+        if (!this.isInitialized) {
+            console.error('AudioManager not initialized');
+            return;
+        }
+
+        this.stopTestOscillator();
+
+        this.testOscillator = this.audioContext.createOscillator();
+        this.testGainNode = this.audioContext.createGain();
+
+        this.testOscillator.type = oscillatorType;
+        this.testOscillator.frequency.setValueAtTime(440, this.audioContext.currentTime);
+
+        this.testGainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+
+        this.testOscillator.connect(this.testGainNode);
+        this.testGainNode.connect(this.masterGainNode);
+
+        this.testOscillator.start();
+        
+        console.log(`Test oscillator created with ${oscillatorType} wave type`);
+    }
+} // <- CLASS ENDS HERE
 
 // Global audio manager instance
 let audioManager = null;
