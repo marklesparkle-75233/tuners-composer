@@ -1,9 +1,3 @@
-// Import AudioManager
-import AudioManager from './audio/AudioManager.js';
-
-// Global audio manager instance
-let audioManager = null;
-
 console.log("NoteNest 16-Voice Composer loaded");
 
 // Parameter definitions
@@ -539,22 +533,10 @@ function renderParameters() {
   });
 }
 
-// Voice-specific functions
+// Voice-specific functions (placeholders for future implementation)
 function previewVoice(voiceIndex) {
   console.log(`Previewing voice ${voiceIndex + 1}`);
-  
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('Audio not initialized - click anywhere to start');
-    return;
-  }
-  
-  // For Session 1: just demonstrate the test oscillator
-  audioManager.createTestOscillator();
-  
-  // Get current volume parameter for this voice and apply it
-  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-  const currentVolume = (volumeParam.min + volumeParam.max) / 2; // Use middle of range
-  audioManager.setTestVolume(currentVolume);
+  // TODO: Implement voice preview functionality
 }
 
 function toggleLockVoice(voiceIndex) {
@@ -565,31 +547,10 @@ function toggleLockVoice(voiceIndex) {
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  // Create audio manager instance
-  audioManager = new AudioManager();
-
-  // Initialize existing voice system
   initializeVoices();
   createVoiceTabs();
   renderParameters();
   
   console.log('16-Voice Composer initialized');
   console.log('Voice data structure:', voiceData);
-  
-  // Add click handler to initialize audio on first user interaction
-  document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
 });
-
-// Initialize audio on first user click (required for browser autoplay policies)
-async function initializeAudioOnFirstClick() {
-  console.log('Initializing audio system...');
-  await audioManager.initialize();
-  
-  if (audioManager.isInitialized) {
-    console.log('Audio system ready');
-    // Create test oscillator for immediate testing
-    audioManager.createTestOscillator();
-  } else {
-    console.error('Failed to initialize audio system');
-  }
-}
