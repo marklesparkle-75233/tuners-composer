@@ -112,35 +112,45 @@ function initializeVoices() {
     };
     
     // Set default values for each parameter
-    parameterDefinitions.forEach(param => {
-      if (param.type === 'dropdown') {
-        voice.parameters[param.name] = 0; // Select first option
-      } else if (param.type === 'dual-dropdown') {
-        voice.parameters[param.name] = {
-          min: 0, // First option
-          max: 0, // Second option
-          behavior: 50
-        };
-      } else if (param.type === 'single-dual') {
-        voice.parameters[param.name] = {
-          min: param.min + (param.max - param.min) * 0.25,
-          max: param.min + (param.max - param.min) * 0.75,
-          behavior: 50
-        };
-      } else if (param.type === 'multi-dual') {
-        voice.parameters[param.name] = {
-          speed: {
-            min: param.min + (param.max - param.min) * 0.25,
-            max: param.min + (param.max - param.min) * 0.75
-          },
-          depth: {
-            min: param.min + (param.max - param.min) * 0.25,
-            max: param.min + (param.max - param.min) * 0.75
-          },
-          behavior: 50
-        };
-      }
-    });
+parameterDefinitions.forEach(param => {
+  console.log(`Processing parameter: ${param.name}, min: ${param.min}, max: ${param.max}`);
+  
+  if (param.type === 'dropdown') {
+    voice.parameters[param.name] = 0; // Select first option
+  } else if (param.type === 'dual-dropdown') {
+    voice.parameters[param.name] = {
+      min: 0, // First option
+      max: 0, // Second option
+      behavior: 50
+    };
+  } else if (param.type === 'single-dual') {
+    if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
+      console.error(`Missing min/max for parameter: ${param.name}`);
+    }
+    
+    voice.parameters[param.name] = {
+      min: param.min + (param.max - param.min) * 0.25,
+      max: param.min + (param.max - param.min) * 0.75,
+      behavior: 50
+    };
+  } else if (param.type === 'multi-dual') {
+    if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
+      console.error(`Missing min/max for parameter: ${param.name}`);
+    }
+    
+    voice.parameters[param.name] = {
+      speed: {
+        min: param.min + (param.max - param.min) * 0.25,
+        max: param.min + (param.max - param.min) * 0.75
+      },
+      depth: {
+        min: param.min + (param.max - param.min) * 0.25,
+        max: param.min + (param.max - param.min) * 0.75
+      },
+      behavior: 50
+    };
+  }
+});
     
     voiceData.push(voice);
   }
@@ -298,8 +308,16 @@ function createDualSlider(param, voiceIndex) {
   const sliderDiv = document.createElement('div');
   
   const useNoteNames = param.name === 'MELODIC RANGE';
-  const voiceParam = voiceData[voiceIndex].parameters[param.name];
   
+  const voiceParam = voiceData[voiceIndex].parameters[param.name];
+  // Validate and fix any NaN values before slider creation
+    if (isNaN(voiceParam.min) || isNaN(voiceParam.max)) {
+    console.warn(`Fixing NaN values for ${param.name}:`, voiceParam);
+    voiceParam.min = param.min + (param.max - param.min) * 0.25;
+    voiceParam.max = param.min + (param.max - param.min) * 0.75;
+    }
+
+
   noUiSlider.create(sliderDiv, {
     start: [voiceParam.min, voiceParam.max],
     connect: true,
@@ -328,14 +346,29 @@ function createDualSlider(param, voiceIndex) {
   });
   
   const updateValues = () => {
-    const values = sliderDiv.noUiSlider.get();
-    const min = Math.round(values[0]);
-    const max = Math.round(values[1]);
-    
-    // Update voice data only, no display
+  const values = sliderDiv.noUiSlider.get();
+  const min = Math.round(Number(values[0]));
+  const max = Math.round(Number(values[1]));
+  
+  // Only update if we get valid numbers
+  if (!isNaN(min) && !isNaN(max)) {
     voiceData[voiceIndex].parameters[param.name].min = min;
     voiceData[voiceIndex].parameters[param.name].max = max;
-  };
+    
+    // Real-time audio updates ONLY during active playback
+    if (audioManager && audioManager.testOscillator && audioManager.testGainNode && audioManager.isInitialized) {
+      if (param.name === 'VOLUME') {
+        const currentVolume = (min + max) / 2;
+        audioManager.setVolumeRealTime(currentVolume);
+      } else if (param.name === 'STEREO BALANCE') {
+        const currentBalance = (min + max) / 2;
+        audioManager.setBalanceRealTime(currentBalance);
+      }
+    }
+  } else {
+    console.warn(`Ignoring NaN values from slider: ${param.name}`, values);
+  }
+};
   
   sliderDiv.noUiSlider.on('update', updateValues);
   updateValues();
@@ -559,28 +592,33 @@ function previewVoice(voiceIndex) {
     previewButton.style.color = '';
     
     console.log(`Stopped preview for voice ${voiceIndex + 1}`);
+  
   } else {
-    // Start the audio
-    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
-    const selectedSoundName = gmSounds[selectedSoundIndex];
-    const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
-    
-    console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
-    
-    audioManager.createTestOscillatorWithType(oscillatorType);
-    
-    // Apply volume
-    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-    const currentVolume = (volumeParam.min + volumeParam.max) / 2;
-    audioManager.setTestVolume(currentVolume);
-    
-    // Update button appearance
-    previewButton.textContent = 'STOP';
-    previewButton.style.backgroundColor = '#ffcccc';
-    previewButton.style.color = '#333';
-    
-    console.log(`Started preview for voice ${voiceIndex + 1}`);
-  }
+  // Start the audio
+  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+  const selectedSoundName = gmSounds[selectedSoundIndex];
+  const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+  
+  console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
+  
+  audioManager.createTestOscillatorWithType(oscillatorType);
+  
+  // Apply current voice parameters immediately after creating oscillator
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  const currentVolume = (volumeParam.min + volumeParam.max) / 2;
+  audioManager.setVolumeRealTime(currentVolume);
+  
+  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+  const currentBalance = (balanceParam.min + balanceParam.max) / 2;
+  audioManager.setBalanceRealTime(currentBalance);
+  
+  // Update button appearance
+  previewButton.textContent = 'STOP';
+  previewButton.style.backgroundColor = '#ffcccc';
+  previewButton.style.color = '#333';
+  
+  console.log(`Started preview for voice ${voiceIndex + 1}`);
+}
 }
   
   
