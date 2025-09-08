@@ -1,6 +1,3 @@
-
-console.log("NoteNest 16-Voice Composer loaded");
-
 // Parameter definitions
 const parameterDefinitions = [
   { name: "SOUND", type: "dropdown", options: "gm-sounds" },
@@ -19,7 +16,6 @@ const parameterDefinitions = [
   { name: "CHORUS", type: "multi-dual", min: 0, max: 100 },
   { name: "PHASER", type: "multi-dual", min: 0, max: 100 }
 ];
-
 
 // GM Sounds list
 const gmSounds = [
@@ -64,8 +60,11 @@ const rhythmOptions = [
   "Sixteenth Notes", 
   "Eighth Note Triplets",
   "Eighth Notes",
+  "Quarter Note Triplets",  // MISSING - was index 5
+  "Quarter Notes",          // MISSING - was index 6  
   "Half Note Triplets",
   "Half Notes",
+  "Whole Note Triplets",    // MISSING - was index 9
   "Whole Note",
   "Two Whole Notes",
   "Three Whole Notes",
@@ -78,8 +77,11 @@ const restOptions = [
   "Sixteenth Notes",
   "Eighth Note Triplets", 
   "Eighth Notes",
+  "Quarter Note Triplets",  // MISSING - was index 5
+  "Quarter Notes",          // MISSING - was index 6
   "Half Note Triplets",
-  "Half Notes",
+  "Half Notes", 
+  "Whole Note Triplets",    // MISSING - was index 9
   "Whole Note",
   "Two Whole Notes",
   "Three Whole Notes",
@@ -106,51 +108,48 @@ function initializeVoices() {
   voiceData = [];
   for (let i = 0; i < 16; i++) {
     const voice = {
-      enabled: i === 0, // Only voice 1 enabled by default
-      locked: false, // Add locked state
+      enabled: i === 0,
+      locked: false,
       parameters: {}
     };
     
-    // Set default values for each parameter
-parameterDefinitions.forEach(param => {
-  console.log(`Processing parameter: ${param.name}, min: ${param.min}, max: ${param.max}`);
-  
-  if (param.type === 'dropdown') {
-    voice.parameters[param.name] = 0; // Select first option
-  } else if (param.type === 'dual-dropdown') {
-    voice.parameters[param.name] = {
-      min: 0, // First option
-      max: 0, // Second option
-      behavior: 50
-    };
-  } else if (param.type === 'single-dual') {
-    if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
-      console.error(`Missing min/max for parameter: ${param.name}`);
-    }
-    
-    voice.parameters[param.name] = {
-      min: param.min + (param.max - param.min) * 0.25,
-      max: param.min + (param.max - param.min) * 0.75,
-      behavior: 50
-    };
-  } else if (param.type === 'multi-dual') {
-    if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
-      console.error(`Missing min/max for parameter: ${param.name}`);
-    }
-    
-    voice.parameters[param.name] = {
-      speed: {
-        min: param.min + (param.max - param.min) * 0.25,
-        max: param.min + (param.max - param.min) * 0.75
-      },
-      depth: {
-        min: param.min + (param.max - param.min) * 0.25,
-        max: param.min + (param.max - param.min) * 0.75
-      },
-      behavior: 50
-    };
-  }
-});
+    parameterDefinitions.forEach(param => {
+      if (param.type === 'dropdown') {
+        voice.parameters[param.name] = 0;
+      } else if (param.type === 'dual-dropdown') {
+        voice.parameters[param.name] = {
+          min: 0,
+          max: 0,
+          behavior: 50
+        };
+      } else if (param.type === 'single-dual') {
+        if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
+          console.error(`Missing min/max for parameter: ${param.name}`);
+        }
+        
+        voice.parameters[param.name] = {
+          min: param.min + (param.max - param.min) * 0.25,
+          max: param.min + (param.max - param.min) * 0.75,
+          behavior: 50
+        };
+      } else if (param.type === 'multi-dual') {
+        if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
+          console.error(`Missing min/max for parameter: ${param.name}`);
+        }
+        
+        voice.parameters[param.name] = {
+          speed: {
+            min: param.min + (param.max - param.min) * 0.25,
+            max: param.min + (param.max - param.min) * 0.75
+          },
+          depth: {
+            min: param.min + (param.max - param.min) * 0.25,
+            max: param.min + (param.max - param.min) * 0.75
+          },
+          behavior: 50
+        };
+      }
+    });
     
     voiceData.push(voice);
   }
@@ -230,7 +229,6 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-dropdown-container';
   
-  // Minimum dropdown
   const minWrapper = document.createElement('div');
   minWrapper.className = 'dropdown-container';
   
@@ -242,7 +240,6 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
   const minSelect = document.createElement('select');
   minSelect.className = 'param-select';
   
-  // Maximum dropdown  
   const maxWrapper = document.createElement('div');
   maxWrapper.className = 'dropdown-container';
   
@@ -258,7 +255,6 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
   if (optionsType === 'rhythms') options = rhythmOptions;
   else if (optionsType === 'rests') options = restOptions;
   
-  // Populate both dropdowns with same options
   options.forEach((option, index) => {
     const minOption = document.createElement('option');
     minOption.value = index;
@@ -271,11 +267,9 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
     maxSelect.appendChild(maxOption);
   });
   
-  // Set current values
   minSelect.value = voiceData[voiceIndex].parameters[paramName].min;
   maxSelect.value = voiceData[voiceIndex].parameters[paramName].max;
   
-  // Event handlers
   minSelect.onchange = (e) => {
     voiceData[voiceIndex].parameters[paramName].min = parseInt(e.target.value);
   };
@@ -310,13 +304,17 @@ function createDualSlider(param, voiceIndex) {
   const useNoteNames = param.name === 'MELODIC RANGE';
   
   const voiceParam = voiceData[voiceIndex].parameters[param.name];
+  
   // Validate and fix any NaN values before slider creation
-    if (isNaN(voiceParam.min) || isNaN(voiceParam.max)) {
-    console.warn(`Fixing NaN values for ${param.name}:`, voiceParam);
+  if (isNaN(voiceParam.min) || isNaN(voiceParam.max)) {
     voiceParam.min = param.min + (param.max - param.min) * 0.25;
     voiceParam.max = param.min + (param.max - param.min) * 0.75;
-    }
+  }
 
+  // Check if slider already exists and destroy it
+  if (sliderDiv.noUiSlider) {
+    sliderDiv.noUiSlider.destroy();
+  }
 
   noUiSlider.create(sliderDiv, {
     start: [voiceParam.min, voiceParam.max],
@@ -346,30 +344,37 @@ function createDualSlider(param, voiceIndex) {
   });
   
   const updateValues = () => {
-  const values = sliderDiv.noUiSlider.get();
-  const min = Math.round(Number(values[0]));
-  const max = Math.round(Number(values[1]));
-  
-  // Only update if we get valid numbers
-  if (!isNaN(min) && !isNaN(max)) {
-    voiceData[voiceIndex].parameters[param.name].min = min;
-    voiceData[voiceIndex].parameters[param.name].max = max;
+    if (!sliderDiv.noUiSlider) return;
     
-    // Real-time audio updates ONLY during active playback
-    if (audioManager && audioManager.testOscillator && audioManager.testGainNode && audioManager.isInitialized) {
-      if (param.name === 'VOLUME') {
-        const currentVolume = (min + max) / 2;
-        audioManager.setVolumeRealTime(currentVolume);
-      } else if (param.name === 'STEREO BALANCE') {
-        const currentBalance = (min + max) / 2;
-        audioManager.setBalanceRealTime(currentBalance);
+    try {
+      const values = sliderDiv.noUiSlider.get();
+      const min = Math.round(Number(values[0]));
+      const max = Math.round(Number(values[1]));
+      
+      // Only update if we get valid numbers AND this is the current voice
+      if (!isNaN(min) && !isNaN(max) && voiceIndex === currentVoice) {
+        voiceData[voiceIndex].parameters[param.name].min = min;
+        voiceData[voiceIndex].parameters[param.name].max = max;
+        
+        // Real-time audio updates ONLY during active playback for current voice
+        if (audioManager && audioManager.testOscillator && audioManager.testGainNode && 
+            audioManager.isInitialized && voiceIndex === currentVoice) {
+          if (param.name === 'VOLUME') {
+            const currentVolume = (min + max) / 2;
+            audioManager.setVolumeRealTime(currentVolume);
+          } else if (param.name === 'STEREO BALANCE') {
+            const currentBalance = (min + max) / 2;
+            audioManager.setBalanceRealTime(currentBalance);
+          }
+        }
       }
+    } catch (error) {
+      // Silent error handling
     }
-  } else {
-    console.warn(`Ignoring NaN values from slider: ${param.name}`, values);
-  }
-};
+  };
   
+  // Remove any existing event listeners before adding new ones
+  sliderDiv.noUiSlider.off('update');
   sliderDiv.noUiSlider.on('update', updateValues);
   updateValues();
   
@@ -383,7 +388,6 @@ function createMultiDualSlider(param, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-slider';
   
-  // Speed slider
   const speedWrapper = document.createElement('div');
   speedWrapper.className = 'slider-wrapper';
   
@@ -411,7 +415,6 @@ function createMultiDualSlider(param, voiceIndex) {
     const values = speedDiv.noUiSlider.get();
     const min = Math.round(values[0]);
     const max = Math.round(values[1]);
-    // Remove visual display, keep data update only
     voiceData[voiceIndex].parameters[param.name].speed.min = min;
     voiceData[voiceIndex].parameters[param.name].speed.max = max;
   };
@@ -421,7 +424,6 @@ function createMultiDualSlider(param, voiceIndex) {
   
   speedWrapper.appendChild(speedDiv);
   
-  // Depth slider  
   const depthWrapper = document.createElement('div');
   depthWrapper.className = 'slider-wrapper';
   
@@ -448,7 +450,6 @@ function createMultiDualSlider(param, voiceIndex) {
     const values = depthDiv.noUiSlider.get();
     const min = Math.round(values[0]);
     const max = Math.round(values[1]);
-    // Remove visual display, keep data update only
     voiceData[voiceIndex].parameters[param.name].depth.min = min;
     voiceData[voiceIndex].parameters[param.name].depth.max = max;
   };
@@ -488,8 +489,8 @@ function createBehaviorSlider(param, voiceIndex) {
   const updateTooltipPosition = () => {
     const value = parseInt(slider.value);
     const percentage = (value - slider.min) / (slider.max - slider.min);
-    const offset = percentage * (slider.offsetWidth - 16); // 16px is handle width
-    tooltip.style.left = `${offset + 8}px`; // 8px is half handle width to center
+    const offset = percentage * (slider.offsetWidth - 16);
+    tooltip.style.left = `${offset + 8}px`;
     tooltip.textContent = value + '%';
   };
   
@@ -499,7 +500,6 @@ function createBehaviorSlider(param, voiceIndex) {
     updateTooltipPosition();
   };
   
-  // Update position on initial load and resize
   setTimeout(updateTooltipPosition, 0);
   window.addEventListener('resize', updateTooltipPosition);
   
@@ -534,7 +534,6 @@ function createRow(param, voiceIndex) {
 
   row.appendChild(range);
 
-  // Behavior column
   if (param.type !== 'dropdown') {
     row.appendChild(createBehaviorSlider(param, voiceIndex));
   } else {
@@ -548,9 +547,21 @@ function createRow(param, voiceIndex) {
 
 function renderParameters() {
   const parameterSection = document.getElementById('parameter-section');
+  
+  // Properly destroy all existing noUiSlider instances before clearing
+  const existingSliders = parameterSection.querySelectorAll('[data-nouislider]');
+  existingSliders.forEach(slider => {
+    if (slider.noUiSlider) {
+      try {
+        slider.noUiSlider.destroy();
+      } catch (error) {
+        // Silent error handling
+      }
+    }
+  });
+  
   parameterSection.innerHTML = '';
   
-  // Add voice-specific controls at the top
   const voiceControls = document.createElement('div');
   voiceControls.className = 'voice-controls';
   voiceControls.innerHTML = `
@@ -562,7 +573,6 @@ function renderParameters() {
   `;
   parameterSection.appendChild(voiceControls);
   
-  // Add parameters
   parameterDefinitions.forEach(param => {
     parameterSection.appendChild(createRow(param, currentVoice));
   });
@@ -570,90 +580,70 @@ function renderParameters() {
 
 // Voice-specific functions with Preview/Stop toggle
 function previewVoice(voiceIndex) {
-  console.log(`Preview button clicked for voice ${voiceIndex + 1}`);
-  
   if (!audioManager || !audioManager.isInitialized) {
-    console.log('Audio not initialized - click anywhere to start');
     return;
   }
   
-  // Find the preview button for this voice
   const voiceControls = document.querySelector('.voice-controls');
   const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
   
-  // Check if currently playing (button shows "STOP")
   if (previewButton.textContent === 'STOP') {
-    // Stop the audio
+    // Stop audio and parameter interpolation
     audioManager.stopTestOscillator();
+    disableParameterInterpolation();
     
-    // Reset button appearance
     previewButton.textContent = 'PREVIEW';
     previewButton.style.backgroundColor = '';
     previewButton.style.color = '';
-    
-    console.log(`Stopped preview for voice ${voiceIndex + 1}`);
   
   } else {
-  // Start the audio
-  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
-  const selectedSoundName = gmSounds[selectedSoundIndex];
-  const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
-  
-  console.log(`Playing: ${selectedSoundName} as ${oscillatorType} wave`);
-  
-  audioManager.createTestOscillatorWithType(oscillatorType);
-  
-  // Apply current voice parameters immediately after creating oscillator
-  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-  const currentVolume = (volumeParam.min + volumeParam.max) / 2;
-  audioManager.setVolumeRealTime(currentVolume);
-  
-  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
-  const currentBalance = (balanceParam.min + balanceParam.max) / 2;
-  audioManager.setBalanceRealTime(currentBalance);
-  
-  // Update button appearance
-  previewButton.textContent = 'STOP';
-  previewButton.style.backgroundColor = '#ffcccc';
-  previewButton.style.color = '#333';
-  
-  console.log(`Started preview for voice ${voiceIndex + 1}`);
+    // Start audio
+    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+    const selectedSoundName = gmSounds[selectedSoundIndex];
+    const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+    
+    audioManager.createTestOscillatorWithType(oscillatorType);
+    
+    // Apply initial parameters
+    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+    const currentVolume = (volumeParam.min + volumeParam.max) / 2;
+    audioManager.setVolumeRealTime(currentVolume);
+    
+    const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+    const currentBalance = (balanceParam.min + balanceParam.max) / 2;
+    audioManager.setBalanceRealTime(currentBalance);
+    
+    // Start parameter interpolation
+    enableParameterInterpolation();
+    
+    previewButton.textContent = 'STOP';
+    previewButton.style.backgroundColor = '#ffcccc';
+    previewButton.style.color = '#333';
+  }
 }
-}
-  
   
 function toggleLockVoice(voiceIndex) {
   voiceData[voiceIndex].locked = !voiceData[voiceIndex].locked;
-  console.log(`Voice ${voiceIndex + 1} ${voiceData[voiceIndex].locked ? 'locked' : 'unlocked'}`);
-  renderParameters(); // Re-render to update button text
+  renderParameters();
 }
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  // Create audio manager instance 
   audioManager = new AudioManager();
 
   initializeVoices();
   createVoiceTabs();
   renderParameters();
   
-  console.log('16-Voice Composer initialized');
-  console.log('Voice data structure:', voiceData);
-  
-  // Add click handler to initialize audio on first user interaction
   document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
 });
 
 // Initialize audio on first user click
 async function initializeAudioOnFirstClick() {
-  console.log('Initializing audio system...');
   await audioManager.initialize();
   
   if (audioManager.isInitialized) {
-    console.log('Audio system ready');
     audioManager.createTestOscillator();
-  } else {
-    console.error('Failed to initialize audio system');
   }
 }
 
@@ -696,3 +686,948 @@ function getOscillatorTypeForGMSound(gmSoundName) {
     
     return GM_SOUND_MAPPING[gmSoundName] || 'sine';
 }
+
+// Session 4: Parameter Interpolation Implementation
+// Add these functions to scripts.js
+
+// Global variables for parameter interpolation
+let parameterUpdateTimer = null;
+let isParameterInterpolationActive = false;
+let lastUpdateTime = Date.now();
+
+/**
+ * Core parameter interpolation algorithm
+ * Controls how dramatically parameters change during playback based on behavior settings
+ */
+function interpolateParameter(currentValue, minRange, maxRange, behaviorSetting, deltaTime) {
+  // Calculate maximum possible change based on behavior setting and time
+  const maxChange = (maxRange - minRange) * (behaviorSetting / 100) * deltaTime;
+  
+  // Generate random factor between -1 and 1
+  const randomFactor = (Math.random() - 0.5) * 2;
+  
+  // Calculate actual change
+  const change = maxChange * randomFactor;
+  
+  // Apply change while respecting boundaries
+  return Math.max(minRange, Math.min(maxRange, currentValue + change));
+}
+
+// Replace the updateVoiceParameters and updateCurrentVoiceSliders functions
+
+/**
+ * Update parameters for a specific voice during playback
+ * FIXED: Better parameter evolution strategy
+ */
+function updateVoiceParameters(voiceIndex) {
+  if (!voiceData[voiceIndex] || !voiceData[voiceIndex].enabled) {
+    return;
+  }
+  
+  const currentTime = Date.now();
+  const deltaTime = Math.min((currentTime - lastUpdateTime) / 1000, 0.2); // Cap deltaTime to prevent jumps
+  
+  // Update VOLUME parameter
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  if (volumeParam && volumeParam.behavior > 0) {
+    // Store the current center value if not already stored
+    if (!volumeParam.currentValue) {
+      volumeParam.currentValue = (volumeParam.min + volumeParam.max) / 2;
+    }
+    
+    // Evolve the current value within the original range
+    volumeParam.currentValue = interpolateParameter(
+      volumeParam.currentValue,
+      volumeParam.min,
+      volumeParam.max,
+      volumeParam.behavior,
+      deltaTime
+    );
+    
+    // Apply real-time audio changes for current voice
+    if (voiceIndex === currentVoice && audioManager && audioManager.isPlaying) {
+      audioManager.setVolumeRealTime(volumeParam.currentValue);
+    }
+  }
+  
+  // Update STEREO BALANCE parameter
+  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+  if (balanceParam && balanceParam.behavior > 0) {
+    // Store the current center value if not already stored
+    if (!balanceParam.currentValue) {
+      balanceParam.currentValue = (balanceParam.min + balanceParam.max) / 2;
+    }
+    
+    // Evolve the current value within the original range
+    balanceParam.currentValue = interpolateParameter(
+      balanceParam.currentValue,
+      balanceParam.min,
+      balanceParam.max,
+      balanceParam.behavior,
+      deltaTime
+    );
+    
+    // Apply real-time audio changes for current voice
+    if (voiceIndex === currentVoice && audioManager && audioManager.isPlaying) {
+      audioManager.setBalanceRealTime(balanceParam.currentValue);
+    }
+  }
+}
+
+/**
+ * Main parameter interpolation update loop
+ * FIXED: Removed problematic slider updates
+ */
+function startParameterInterpolation() {
+  if (!isParameterInterpolationActive) {
+    return;
+  }
+  
+  // Update each enabled voice's parameters
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i] && voiceData[i].enabled) {
+      updateVoiceParameters(i);
+    }
+  }
+  
+  lastUpdateTime = Date.now();
+  
+  // Display current parameter values in console for debugging
+  if (currentVoice >= 0 && currentVoice < 16) {
+    const volumeParam = voiceData[currentVoice].parameters['VOLUME'];
+    const balanceParam = voiceData[currentVoice].parameters['STEREO BALANCE'];
+    
+    if (volumeParam && volumeParam.currentValue !== undefined) {
+      console.log(`Voice ${currentVoice + 1} - Volume: ${Math.round(volumeParam.currentValue)}%, Balance: ${Math.round(balanceParam.currentValue || 0)}%`);
+    }
+  }
+}
+
+/**
+ * Reset parameter evolution when stopping
+ */
+function resetParameterValues() {
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i]) {
+      Object.keys(voiceData[i].parameters).forEach(paramName => {
+        const param = voiceData[i].parameters[paramName];
+        if (param && typeof param === 'object' && 'currentValue' in param) {
+          delete param.currentValue; // Reset for next preview session
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Enhanced disable function with cleanup
+ */
+function disableParameterInterpolation() {
+  isParameterInterpolationActive = false;
+  
+  if (parameterUpdateTimer) {
+    clearInterval(parameterUpdateTimer);
+    parameterUpdateTimer = null;
+  }
+  
+  // Reset all parameter evolution values
+  resetParameterValues();
+  
+  console.log('Parameter interpolation disabled');
+}
+
+/**
+ * Main parameter interpolation update loop
+ * Runs continuously during playback
+ */
+function startParameterInterpolation() {
+  if (!isParameterInterpolationActive) {
+    return;
+  }
+  
+  // Update each enabled voice's parameters
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i] && voiceData[i].enabled) {
+      updateVoiceParameters(i);
+    }
+  }
+  
+  lastUpdateTime = Date.now();
+  
+  // Update UI sliders for current voice to show parameter changes
+  if (currentVoice >= 0 && currentVoice < 16) {
+    updateCurrentVoiceSliders();
+  }
+}
+
+/**
+ * Update the UI sliders to reflect current parameter values
+ */
+function updateCurrentVoiceSliders() {
+  const parameterSection = document.getElementById('parameter-section');
+  const sliders = parameterSection.querySelectorAll('[data-nouislider]');
+  
+  sliders.forEach(slider => {
+    if (slider.noUiSlider) {
+      try {
+        // Find which parameter this slider represents
+        const sliderWrapper = slider.closest('.row-container');
+        if (!sliderWrapper) return;
+        
+        const labelElement = sliderWrapper.querySelector('.label-container');
+        if (!labelElement) return;
+        
+        const paramName = labelElement.textContent.trim();
+        const paramData = voiceData[currentVoice].parameters[paramName];
+        
+        if (paramData && typeof paramData.min !== 'undefined' && typeof paramData.max !== 'undefined') {
+          // Update slider values without triggering events
+          slider.noUiSlider.set([paramData.min, paramData.max]);
+        }
+      } catch (error) {
+        // Silent error handling - slider might be in transition
+      }
+    }
+  });
+}
+
+/**
+ * Start parameter interpolation system
+ */
+// Add this debugging version to test what's happening
+// Replace the enableParameterInterpolation function with this debug version
+
+function enableParameterInterpolation() {
+  console.log('=== ENABLING PARAMETER INTERPOLATION ===');
+  
+  if (parameterUpdateTimer) {
+    clearInterval(parameterUpdateTimer);
+  }
+  
+  isParameterInterpolationActive = true;
+  lastUpdateTime = Date.now();
+  
+  // Check current voice parameters before starting
+  console.log('Current voice:', currentVoice);
+  console.log('Voice data:', voiceData[currentVoice]);
+  console.log('Volume param:', voiceData[currentVoice].parameters['VOLUME']);
+  console.log('Balance param:', voiceData[currentVoice].parameters['STEREO BALANCE']);
+  
+  // Update every 100ms for smooth parameter evolution
+  parameterUpdateTimer = setInterval(() => {
+    console.log('Timer tick - isActive:', isParameterInterpolationActive);
+    startParameterInterpolation();
+  }, 100);
+  
+  console.log('Parameter interpolation timer started');
+}
+
+// Also add this test function to manually check the interpolation
+function testInterpolation() {
+  console.log('=== TESTING INTERPOLATION ===');
+  
+  // Test the core algorithm
+  const testResult = interpolateParameter(50, 20, 80, 75, 0.1);
+  console.log('Interpolation test - Input: 50, Range: 20-80, Behavior: 75%, Result:', testResult);
+  
+  // Check if voices are enabled
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i] && voiceData[i].enabled) {
+      console.log(`Voice ${i + 1} is enabled`);
+    }
+  }
+  
+  // Check current voice behavior settings
+  const volumeParam = voiceData[currentVoice].parameters['VOLUME'];
+  const balanceParam = voiceData[currentVoice].parameters['STEREO BALANCE'];
+  
+  console.log('Current voice volume behavior:', volumeParam.behavior);
+  console.log('Current voice balance behavior:', balanceParam.behavior);
+}
+
+// Updated previewVoice with more debugging
+// Replace the previewVoice function with this fixed version
+// Simple test clock for Session 4 - Add to scripts.js
+
+// Simple test timing variables
+let testClockInterval = null;
+let testBeatCount = 0;
+let testTempo = 120; // Fixed test tempo for now
+
+/**
+ * Simple test clock - just to make parameter evolution visible
+ * This will be replaced with proper multi-voice timing in Session 5
+ */
+function startTestClock() {
+  if (testClockInterval) {
+    clearInterval(testClockInterval);
+  }
+  
+  testBeatCount = 0;
+  const beatDuration = (60 / testTempo) * 1000; // Convert to milliseconds
+  
+  console.log(`Test clock started: ${testTempo} BPM (${beatDuration}ms per beat)`);
+  
+  testClockInterval = setInterval(() => {
+    testBeatCount++;
+    console.log(`--- TEST BEAT ${testBeatCount} ---`);
+    
+    // Update parameters for current voice only (for testing)
+    if (voiceData[currentVoice] && voiceData[currentVoice].enabled) {
+      updateParametersOnTestBeat(currentVoice);
+    }
+  }, beatDuration);
+}
+
+/**
+ * Stop the test clock
+ */
+function stopTestClock() {
+  if (testClockInterval) {
+    clearInterval(testClockInterval);
+    testClockInterval = null;
+  }
+  testBeatCount = 0;
+  console.log('Test clock stopped');
+}
+
+/**
+ * Updated parameter update function with amplified changes
+ * Replace the updateParametersOnTestBeat function
+ */
+function updateParametersOnTestBeat(voiceIndex) {
+  // Update VOLUME parameter with much more dramatic changes
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  if (volumeParam && volumeParam.behavior > 0) {
+    if (!volumeParam.currentValue) {
+      volumeParam.currentValue = (volumeParam.min + volumeParam.max) / 2;
+    }
+    
+    // AMPLIFIED: Much larger delta scaling for dramatic changes
+    const scaledDelta = (volumeParam.behavior / 100) * 0.8; // Increased from 0.3 to 0.8
+    
+    const newVolume = interpolateParameter(
+      volumeParam.currentValue,
+      volumeParam.min,
+      volumeParam.max,
+      volumeParam.behavior,
+      scaledDelta
+    );
+    
+    volumeParam.currentValue = newVolume;
+    
+    console.log(`Volume: ${Math.round(newVolume)}% (behavior: ${volumeParam.behavior}%, delta: ${scaledDelta.toFixed(2)})`);
+  }
+  
+  // Update BALANCE parameter with much more dramatic changes
+  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+  if (balanceParam && balanceParam.behavior > 0) {
+    if (!balanceParam.currentValue) {
+      balanceParam.currentValue = (balanceParam.min + balanceParam.max) / 2;
+    }
+    
+    // AMPLIFIED: Much larger delta scaling for dramatic changes
+    const scaledDelta = (balanceParam.behavior / 100) * 0.8; // Increased from 0.3 to 0.8
+    
+    const newBalance = interpolateParameter(
+      balanceParam.currentValue,
+      balanceParam.min,
+      balanceParam.max,
+      balanceParam.behavior,
+      scaledDelta
+    );
+    
+    balanceParam.currentValue = newBalance;
+    
+    console.log(`Balance: ${Math.round(newBalance)}% (behavior: ${balanceParam.behavior}%, delta: ${scaledDelta.toFixed(2)})`);
+  }
+}
+/**
+ * Updated preview function using simple test clock
+ // Replace the existing previewVoice function with this unified version
+ */
+
+async function previewVoice(voiceIndex) {
+  console.log('=== PREVIEW VOICE (unified rhythmic system) ===', voiceIndex);
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    if (!audioManager) {
+      audioManager = new AudioManager();
+    }
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('Failed to initialize audio manager');
+      return;
+    }
+    console.log('Audio manager ready');
+  }
+  
+  const voiceControls = document.querySelector('.voice-controls');
+  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
+  
+  if (previewButton.textContent === 'STOP') {
+    console.log('Stopping all playback...');
+    
+    // Stop rhythmic playback
+    stopRhythmicPlayback();
+    
+    // Stop test clock
+    stopTestClock();
+    
+    // Stop any old continuous tone
+    if (audioManager.isPlaying) {
+      audioManager.stopTestOscillator();
+    }
+    
+    // Reset parameters
+    resetParameterValues();
+    
+    previewButton.textContent = 'PREVIEW';
+    previewButton.style.backgroundColor = '';
+    previewButton.style.color = '';
+    
+    console.log('All playback stopped');
+  
+  } else {
+    console.log('Starting unified rhythmic preview...');
+    
+    // Stop any existing playback first
+    stopRhythmicPlayback();
+    stopTestClock();
+    if (audioManager.isPlaying) {
+      audioManager.stopTestOscillator();
+    }
+    
+    // Show current parameter settings
+    const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
+    const restParam = voiceData[voiceIndex].parameters['RESTS'];
+    const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+    const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+    
+    console.log('Voice settings:', {
+      rhythm: `${rhythmParam.min}-${rhythmParam.max} (behavior: ${rhythmParam.behavior}%)`,
+      rest: `${restParam.min}-${restParam.max} (behavior: ${restParam.behavior}%)`,
+      melodic: `MIDI ${melodicParam.min}-${melodicParam.max} (behavior: ${melodicParam.behavior}%)`,
+      volume: `${volumeParam.min}-${volumeParam.max}% (behavior: ${volumeParam.behavior}%)`,
+      balance: `${balanceParam.min}-${balanceParam.max}% (behavior: ${balanceParam.behavior}%)`
+    });
+    
+    // Start parameter interpolation for volume/balance evolution
+    startTestClock();
+    
+    // Start rhythmic note patterns
+    startRhythmicPlayback(voiceIndex);
+    
+    previewButton.textContent = 'STOP';
+    previewButton.style.backgroundColor = '#ffcccc';
+    previewButton.style.color = '#333';
+    
+    console.log('Unified rhythmic preview started');
+  }
+}
+
+
+/**
+ * Stop parameter interpolation system
+ */
+function disableParameterInterpolation() {
+  isParameterInterpolationActive = false;
+  
+  if (parameterUpdateTimer) {
+    clearInterval(parameterUpdateTimer);
+    parameterUpdateTimer = null;
+  }
+  
+  console.log('Parameter interpolation disabled');
+}
+
+/**
+ * Enhanced preview function with parameter interpolation
+ */
+function previewVoiceWithInterpolation(voiceIndex) {
+  if (!audioManager || !audioManager.isInitialized) {
+    return;
+  }
+  
+  const voiceControls = document.querySelector('.voice-controls');
+  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
+  
+  if (previewButton.textContent === 'STOP') {
+    // Stop audio and parameter interpolation
+    audioManager.stopTestOscillator();
+    disableParameterInterpolation();
+    
+    previewButton.textContent = 'PREVIEW';
+    previewButton.style.backgroundColor = '';
+    previewButton.style.color = '';
+  
+  } else {
+    // Start audio
+    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+    const selectedSoundName = gmSounds[selectedSoundIndex];
+    const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+    
+    audioManager.createTestOscillatorWithType(oscillatorType);
+    
+    // Apply initial parameters
+    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+    const currentVolume = (volumeParam.min + volumeParam.max) / 2;
+    audioManager.setVolumeRealTime(currentVolume);
+    
+    const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+    const currentBalance = (balanceParam.min + balanceParam.max) / 2;
+    audioManager.setBalanceRealTime(currentBalance);
+    
+    // Start parameter interpolation
+    enableParameterInterpolation();
+    
+    previewButton.textContent = 'STOP';
+    previewButton.style.backgroundColor = '#ffcccc';
+    previewButton.style.color = '#333';
+  }
+}
+
+// Session 5: Rhythm Implementation - Add to scripts.js
+
+// Rhythm duration mapping (beats relative to quarter note = 1 beat)
+const rhythmDurations = {
+  0: { name: "Select", beats: 1 }, // Default
+  1: { name: "Sixteenth Note Triplets", beats: 1/6 },
+  2: { name: "Sixteenth Notes", beats: 0.25 },
+  3: { name: "Eighth Note Triplets", beats: 1/3 },
+  4: { name: "Eighth Notes", beats: 0.5 },
+  5: { name: "Quarter Note Triplets", beats: 2/3 },    // ADDED
+  6: { name: "Quarter Notes", beats: 1 },              // ADDED  
+  7: { name: "Half Note Triplets", beats: 4/3 },
+  8: { name: "Half Notes", beats: 2 },
+  9: { name: "Whole Note Triplets", beats: 8/3 },      // ADDED
+  10: { name: "Whole Note", beats: 4 },
+  11: { name: "Two Whole Notes", beats: 8 },
+  12: { name: "Three Whole Notes", beats: 12 },
+  13: { name: "Four Whole Notes", beats: 16 }
+};
+
+// Global rhythm system variables
+let noteScheduler = null;
+let nextNoteTime = 0;
+let isRhythmicPlaybackActive = false;
+
+/**
+ * Convert rhythm dropdown index to actual duration in seconds
+ */
+function getRhythmDuration(rhythmIndex, currentTempo) {
+  const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[4]; // Default to eighth notes
+  const beatDuration = 60 / currentTempo; // Seconds per quarter note beat
+  const noteDuration = rhythmInfo.beats * beatDuration;
+  
+  console.log(`Rhythm: ${rhythmInfo.name} = ${rhythmInfo.beats} beats = ${noteDuration.toFixed(3)}s at ${currentTempo} BPM`);
+  return noteDuration;
+}
+
+/**
+ * Convert rest dropdown index to actual duration in seconds
+ */
+function getRestDuration(restIndex, currentTempo) {
+  const restInfo = rhythmDurations[restIndex] || rhythmDurations[4]; // Default to eighth notes
+  const beatDuration = 60 / currentTempo;
+  const restDuration = restInfo.beats * beatDuration;
+  
+  console.log(`Rest: ${restInfo.name} = ${restInfo.beats} beats = ${restDuration.toFixed(3)}s at ${currentTempo} BPM`);
+  return restDuration;
+}
+
+/**
+ * MIDI note to frequency conversion
+ */
+function midiToFrequency(midiNote) {
+  // A4 (440Hz) = MIDI note 69
+  return 440 * Math.pow(2, (midiNote - 69) / 12);
+}
+
+/**
+ * Select random MIDI note within melodic range and behavior
+ */
+function selectMidiNote(voiceIndex) {
+  const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+  
+  if (!melodicParam.currentNote) {
+    // Initialize with center of range
+    melodicParam.currentNote = Math.floor((melodicParam.min + melodicParam.max) / 2);
+  }
+  
+  // Use behavior setting to control how much the note can change
+  if (melodicParam.behavior > 0) {
+    const newNote = interpolateParameter(
+      melodicParam.currentNote,
+      melodicParam.min,
+      melodicParam.max,
+      melodicParam.behavior,
+      0.1 // Small changes per note for musical coherence
+    );
+    
+    melodicParam.currentNote = Math.round(newNote);
+  }
+  
+  const frequency = midiToFrequency(melodicParam.currentNote);
+  const noteName = midiNoteNames[melodicParam.currentNote] || `MIDI${melodicParam.currentNote}`;
+  
+  console.log(`Selected note: ${noteName} (MIDI ${melodicParam.currentNote}) = ${frequency.toFixed(1)}Hz`);
+  return { midiNote: melodicParam.currentNote, frequency, noteName };
+}
+
+/**
+ * Test rhythm duration calculations
+ */
+function testRhythmCalculations() {
+  console.log('=== TESTING RHYTHM CALCULATIONS ===');
+  
+  const testTempo = 120;
+  console.log(`Test tempo: ${testTempo} BPM`);
+  
+  // Test various rhythm types
+  for (let i = 1; i <= 10; i++) {
+    const duration = getRhythmDuration(i, testTempo);
+    console.log(`Index ${i}: ${rhythmDurations[i].name} = ${duration.toFixed(3)}s`);
+  }
+  
+  // Test MIDI conversion
+  console.log('\n=== TESTING MIDI CONVERSION ===');
+  const testNotes = [60, 69, 72, 84]; // C4, A4, C5, C6
+  testNotes.forEach(midi => {
+    const freq = midiToFrequency(midi);
+    const name = midiNoteNames[midi];
+    console.log(`${name} (MIDI ${midi}) = ${freq.toFixed(1)}Hz`);
+  });
+  
+  // Test note selection for current voice
+  console.log('\n=== TESTING NOTE SELECTION ===');
+  console.log('Current voice melodic range:', voiceData[currentVoice].parameters['MELODIC RANGE']);
+  
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`Test note ${i + 1}: ${note.noteName} = ${note.frequency.toFixed(1)}Hz`);
+  }
+}
+
+
+// Session 5 Phase 2: Note Scheduling System - Add to scripts.js
+
+// Note scheduling variables
+let currentlyPlayingNotes = [];
+let nextScheduledNoteTime = 0;
+let rhythmScheduler = null;
+
+/**
+ * Create and schedule a single note with envelope
+ */
+function scheduleNote(frequency, duration, startTime, voiceIndex) {
+  if (!audioManager || !audioManager.isInitialized) {
+    return null;
+  }
+  
+  const oscillator = audioManager.audioContext.createOscillator();
+  const gainNode = audioManager.audioContext.createGain();
+  const panNode = audioManager.audioContext.createStereoPanner();
+  
+  // Get current sound type for this voice
+  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+  const selectedSoundName = gmSounds[selectedSoundIndex];
+  const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+  
+  // Set up oscillator
+  oscillator.type = oscillatorType;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  
+  // Apply current volume parameter
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+  const gainValue = currentVolume / 100;
+  
+  // Apply current balance parameter
+  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+  const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
+  const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
+  
+  // Set up envelope (simple attack/release)
+  const attackTime = 0.01; // 10ms attack
+  const releaseTime = 0.1;  // 100ms release
+  const sustainLevel = gainValue * 0.8; // 80% of target volume
+  
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+  gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+  
+  panNode.pan.setValueAtTime(panValue, startTime);
+  
+  // Connect audio chain
+  oscillator.connect(gainNode);
+  gainNode.connect(panNode);
+  panNode.connect(audioManager.masterGainNode);
+  
+  // Schedule start and stop
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration);
+  
+  // Track this note
+  const noteInfo = {
+    oscillator,
+    gainNode,
+    panNode,
+    startTime,
+    duration,
+    frequency,
+    voiceIndex
+  };
+  
+  currentlyPlayingNotes.push(noteInfo);
+  
+  // Clean up when note ends
+  oscillator.onended = () => {
+    const index = currentlyPlayingNotes.indexOf(noteInfo);
+    if (index > -1) {
+      currentlyPlayingNotes.splice(index, 1);
+    }
+    try {
+      oscillator.disconnect();
+      gainNode.disconnect();
+      panNode.disconnect();
+    } catch (e) {
+      // Already disconnected
+    }
+  };
+  
+  return noteInfo;
+}
+
+/**
+ * Schedule a rhythm pattern for a voice
+ */
+function scheduleRhythmPattern(voiceIndex, startTime) {
+  const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
+  const restParam = voiceData[voiceIndex].parameters['RESTS'];
+  
+  // Select rhythm and rest within behavior ranges - AMPLIFIED changes
+  let rhythmIndex, restIndex;
+  
+  if (rhythmParam.behavior > 0) {
+    rhythmIndex = Math.floor(interpolateParameter(
+      (rhythmParam.min + rhythmParam.max) / 2,
+      rhythmParam.min,
+      rhythmParam.max,
+      rhythmParam.behavior,
+      0.5 // Increased from 0.2 to 0.5 for more dramatic rhythm changes
+    ));
+  } else {
+    rhythmIndex = Math.floor((rhythmParam.min + rhythmParam.max) / 2);
+  }
+  
+  if (restParam.behavior > 0) {
+    restIndex = Math.floor(interpolateParameter(
+      (restParam.min + restParam.max) / 2,
+      restParam.min,
+      restParam.max,
+      restParam.behavior,
+      0.5 // Increased from 0.2 to 0.5 for more dramatic rest changes
+    ));
+  } else {
+    restIndex = Math.floor((restParam.min + restParam.max) / 2);
+  }
+  
+  // Ensure indices stay within valid range
+  rhythmIndex = Math.max(0, Math.min(10, rhythmIndex));
+  restIndex = Math.max(0, Math.min(10, restIndex));
+  
+  // Get durations
+  const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
+  const restDuration = getRestDuration(restIndex, testTempo);
+  
+  // Select note within melodic range (already working well)
+  const noteInfo = selectMidiNote(voiceIndex);
+  
+  // Apply current volume and balance to the scheduled note
+  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
+  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
+  
+  // Schedule the note with current parameter values
+  const scheduledNote = scheduleNote(noteInfo.frequency, noteDuration, startTime, voiceIndex);
+  
+  console.log(`Scheduled: ${noteInfo.noteName} for ${noteDuration.toFixed(3)}s, rest ${restDuration.toFixed(3)}s (vol: ${Math.round(volumeParam.currentValue || 50)}%, bal: ${Math.round(balanceParam.currentValue || 0)}%)`);
+  
+  // Return when the next note should be scheduled
+  return startTime + noteDuration + restDuration;
+}
+
+/**
+ * Rhythmic pattern scheduler - replaces continuous tone
+ */
+function startRhythmicPlayback(voiceIndex) {
+  if (rhythmScheduler) {
+    clearInterval(rhythmScheduler);
+  }
+  
+  console.log(`=== STARTING RHYTHMIC PLAYBACK FOR VOICE ${voiceIndex + 1} ===`);
+  
+  isRhythmicPlaybackActive = true;
+  nextScheduledNoteTime = audioManager.audioContext.currentTime + 0.1; // Start slightly in future
+  
+  // Schedule notes ahead of time for smooth playback
+  function scheduleAhead() {
+    if (!isRhythmicPlaybackActive) return;
+    
+    const currentTime = audioManager.audioContext.currentTime;
+    const scheduleAheadTime = 0.5; // Schedule 500ms ahead
+    
+    // Schedule notes while we're within the lookahead window
+    while (nextScheduledNoteTime < currentTime + scheduleAheadTime) {
+      nextScheduledNoteTime = scheduleRhythmPattern(voiceIndex, nextScheduledNoteTime);
+    }
+  }
+  
+  // Check for new notes to schedule every 50ms
+  rhythmScheduler = setInterval(scheduleAhead, 50);
+  
+  // Schedule first note immediately
+  scheduleAhead();
+}
+
+/**
+ * Stop rhythmic playback
+ */
+function stopRhythmicPlayback() {
+  console.log('=== STOPPING RHYTHMIC PLAYBACK ===');
+  
+  isRhythmicPlaybackActive = false;
+  
+  if (rhythmScheduler) {
+    clearInterval(rhythmScheduler);
+    rhythmScheduler = null;
+  }
+  
+  // Stop all currently playing notes
+  currentlyPlayingNotes.forEach(note => {
+    try {
+      note.oscillator.stop();
+    } catch (e) {
+      // Already stopped
+    }
+  });
+  
+  currentlyPlayingNotes = [];
+  nextScheduledNoteTime = 0;
+}
+
+/**
+ * Updated preview function with rhythmic playback
+ */
+async function previewVoiceRhythmic(voiceIndex) {
+  console.log('=== PREVIEW VOICE (rhythmic) ===', voiceIndex);
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    if (!audioManager) {
+      audioManager = new AudioManager();
+    }
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('Failed to initialize audio manager');
+      return;
+    }
+    console.log('Audio manager ready');
+  }
+  
+  const voiceControls = document.querySelector('.voice-controls');
+  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
+  
+  if (previewButton.textContent === 'STOP') {
+    console.log('Stopping rhythmic preview...');
+    stopRhythmicPlayback();
+    stopTestClock();
+    resetParameterValues();
+    
+    previewButton.textContent = 'PREVIEW';
+    previewButton.style.backgroundColor = '';
+    previewButton.style.color = '';
+  
+  } else {
+    console.log('Starting rhythmic preview...');
+    
+    // Show current parameter settings
+    const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
+    const restParam = voiceData[voiceIndex].parameters['RESTS'];
+    const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+    
+    console.log('Settings:', {
+      rhythm: `${rhythmParam.min}-${rhythmParam.max} (behavior: ${rhythmParam.behavior}%)`,
+      rest: `${restParam.min}-${restParam.max} (behavior: ${restParam.behavior}%)`,
+      melodic: `${melodicParam.min}-${melodicParam.max} (behavior: ${melodicParam.behavior}%)`
+    });
+    
+    // Start parameter interpolation (for volume/balance evolution)
+    startTestClock();
+    
+    // Start rhythmic note pattern
+    startRhythmicPlayback(voiceIndex);
+    
+    previewButton.textContent = 'STOP';
+    previewButton.style.backgroundColor = '#ffcccc';
+    previewButton.style.color = '#333';
+    
+    console.log('Rhythmic preview started');
+  }
+}
+
+
+
+// Test function to verify all rhythm options are working
+// Add this to scripts.js and run in console
+
+function testAllRhythmOptions() {
+  console.log('=== TESTING ALL RHYTHM OPTIONS ===');
+  
+  const testTempo = 120; // BPM
+  const beatDuration = 60 / testTempo; // 0.5 seconds per beat at 120 BPM
+  
+  console.log(`Test tempo: ${testTempo} BPM (${beatDuration}s per beat)`);
+  console.log('');
+  
+  // Test each rhythm option
+  for (let i = 0; i <= 10; i++) {
+    const duration = getRhythmDuration(i, testTempo);
+    const rhythmInfo = rhythmDurations[i];
+    const beatsCalculated = duration / beatDuration;
+    
+    console.log(`Index ${i}: ${rhythmInfo.name}`);
+    console.log(`  Expected: ${rhythmInfo.beats} beats`);
+    console.log(`  Calculated: ${beatsCalculated.toFixed(3)} beats`);
+    console.log(`  Duration: ${duration.toFixed(3)} seconds`);
+    console.log(`  Time range: ${duration < 0.1 ? 'Very fast' : duration < 0.5 ? 'Fast' : duration < 2 ? 'Medium' : duration < 5 ? 'Slow' : 'Very slow'}`);
+    console.log('');
+  }
+  
+  // Test extreme cases
+  console.log('=== EXTREME DURATION EXAMPLES ===');
+  
+  const shortestDuration = getRhythmDuration(1, testTempo); // 16th note triplets
+  const longestDuration = getRhythmDuration(10, testTempo); // 4 whole notes
+  
+  console.log(`Shortest: ${rhythmDurations[1].name} = ${shortestDuration.toFixed(3)}s`);
+  console.log(`Longest: ${rhythmDurations[10].name} = ${longestDuration.toFixed(3)}s`);
+  console.log(`Duration ratio: ${(longestDuration / shortestDuration).toFixed(1)}x difference`);
+  
+  // Verify mathematical consistency
+  console.log('');
+  console.log('=== MATHEMATICAL VERIFICATION ===');
+  const wholNote = getRhythmDuration(7, testTempo); // Whole note = 4 beats
+  const halfNote = getRhythmDuration(6, testTempo); // Half note = 2 beats
+  const quarterNote = beatDuration; // 1 beat by definition
+  
+  console.log(`Whole note: ${wholNote.toFixed(3)}s (should be 4x quarter note)`);
+  console.log(`Half note: ${halfNote.toFixed(3)}s (should be 2x quarter note)`);
+  console.log(`Quarter note: ${quarterNote.toFixed(3)}s (1 beat)`);
+  console.log(`Ratio check: whole/half = ${(wholNote/halfNote).toFixed(1)} (should be 2.0)`);
+  console.log(`Ratio check: half/quarter = ${(halfNote/quarterNote).toFixed(1)} (should be 2.0)`);
+}
+
