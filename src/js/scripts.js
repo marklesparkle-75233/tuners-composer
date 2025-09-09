@@ -1249,32 +1249,101 @@ function midiToFrequency(midiNote) {
 /**
  * Select random MIDI note within melodic range and behavior
  */
+// Replace the selectMidiNote function with this fixed version
+
 function selectMidiNote(voiceIndex) {
   const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
   
-  if (!melodicParam.currentNote) {
-    // Initialize with center of range
-    melodicParam.currentNote = Math.floor((melodicParam.min + melodicParam.max) / 2);
+  // CRITICAL FIX: Always read current min/max from sliders, not cached values
+  const currentMin = Math.round(melodicParam.min);
+  const currentMax = Math.round(melodicParam.max);
+  
+  // Initialize currentNote if it doesn't exist or is outside the current range
+  if (!melodicParam.currentNote || 
+      melodicParam.currentNote < currentMin || 
+      melodicParam.currentNote > currentMax) {
+    melodicParam.currentNote = Math.floor((currentMin + currentMax) / 2);
+    console.log(`Reset currentNote to ${melodicParam.currentNote} (range: ${currentMin}-${currentMax})`);
   }
   
   // Use behavior setting to control how much the note can change
   if (melodicParam.behavior > 0) {
     const newNote = interpolateParameter(
       melodicParam.currentNote,
-      melodicParam.min,
-      melodicParam.max,
+      currentMin,
+      currentMax,
       melodicParam.behavior,
-      0.1 // Small changes per note for musical coherence
+      0.15 // Increased from 0.1 for more melodic movement
     );
     
     melodicParam.currentNote = Math.round(newNote);
   }
   
+  // Ensure note stays within bounds
+  melodicParam.currentNote = Math.max(currentMin, Math.min(currentMax, melodicParam.currentNote));
+  
   const frequency = midiToFrequency(melodicParam.currentNote);
   const noteName = midiNoteNames[melodicParam.currentNote] || `MIDI${melodicParam.currentNote}`;
   
-  console.log(`Selected note: ${noteName} (MIDI ${melodicParam.currentNote}) = ${frequency.toFixed(1)}Hz`);
+  console.log(`Selected note: ${noteName} (MIDI ${melodicParam.currentNote}) = ${frequency.toFixed(1)}Hz [Range: ${currentMin}-${currentMax}]`);
   return { midiNote: melodicParam.currentNote, frequency, noteName };
+}
+
+// Add a function to test melodic range responsiveness
+function testMelodicRangeResponsiveness() {
+  console.log('=== TESTING MELODIC RANGE RESPONSIVENESS ===');
+  
+  const melodicParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  
+  console.log('Current slider settings:', {
+    min: melodicParam.min,
+    max: melodicParam.max,
+    behavior: melodicParam.behavior
+  });
+  
+  console.log('\nGenerating 10 notes with current range:');
+  for (let i = 0; i < 10; i++) {
+    const note = selectMidiNote(currentVoice);
+    // Just call the function to see the range in action
+  }
+  
+  console.log('\nTo test different ranges:');
+  console.log('1. Move the melodic range sliders to different positions');
+  console.log('2. Run this test again to see if notes change ranges');
+  console.log('3. Try extreme ranges like A0-C2 (bass) or C6-C8 (treble)');
+}
+
+// Add a function to force-refresh the melodic parameter from UI
+function refreshMelodicRangeFromUI() {
+  console.log('=== REFRESHING MELODIC RANGE FROM UI ===');
+  
+  // Find the melodic range slider in the current UI
+  const parameterSection = document.getElementById('parameter-section');
+  const rows = parameterSection.querySelectorAll('.row-container');
+  
+  rows.forEach(row => {
+    const label = row.querySelector('.label-container');
+    if (label && label.textContent.trim() === 'MELODIC RANGE') {
+      const slider = row.querySelector('[data-nouislider]');
+      if (slider && slider.noUiSlider) {
+        const values = slider.noUiSlider.get();
+        const min = Math.round(Number(values[0]));
+        const max = Math.round(Number(values[1]));
+        
+        console.log('UI slider values:', { min, max });
+        
+        // Force update the parameter
+        voiceData[currentVoice].parameters['MELODIC RANGE'].min = min;
+        voiceData[currentVoice].parameters['MELODIC RANGE'].max = max;
+        
+        // Reset current note to force recalculation
+        delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentNote;
+        
+        console.log('Parameter forcibly updated to match UI');
+        return;
+      }
+    }
+  });
 }
 
 /**
@@ -1631,3 +1700,535 @@ function testAllRhythmOptions() {
   console.log(`Ratio check: half/quarter = ${(halfNote/quarterNote).toFixed(1)} (should be 2.0)`);
 }
 
+
+// Add this diagnostic function to test melodic range issues
+
+function testMelodicRangeIssues() {
+  console.log('=== MELODIC RANGE DIAGNOSTIC ===');
+  
+  const currentVoiceParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  
+  console.log('Current melodic range parameter:', {
+    min: currentVoiceParam.min,
+    max: currentVoiceParam.max,
+    behavior: currentVoiceParam.behavior,
+    currentNote: currentVoiceParam.currentNote
+  });
+  
+  // Test frequency range capabilities
+  console.log('\n=== FREQUENCY RANGE TEST ===');
+  const extremeNotes = [
+    { midi: 21, name: 'A0', freq: midiToFrequency(21) },   // Lowest piano key
+    { midi: 36, name: 'C2', freq: midiToFrequency(36) },   // Low bass
+    { midi: 60, name: 'C4', freq: midiToFrequency(60) },   // Middle C
+    { midi: 84, name: 'C6', freq: midiToFrequency(84) },   // High treble
+    { midi: 108, name: 'C8', freq: midiToFrequency(108) }  // Highest piano key
+  ];
+  
+  extremeNotes.forEach(note => {
+    console.log(`${note.name} (MIDI ${note.midi}) = ${note.freq.toFixed(1)}Hz`);
+  });
+  
+  // Test note selection with different ranges
+  console.log('\n=== NOTE SELECTION TEST ===');
+  
+  // Backup original values
+  const originalMin = currentVoiceParam.min;
+  const originalMax = currentVoiceParam.max;
+  const originalCurrentNote = currentVoiceParam.currentNote;
+  
+  // Test low range (bass notes)
+  console.log('Testing LOW RANGE (C2-C3):');
+  currentVoiceParam.min = 36;  // C2
+  currentVoiceParam.max = 48;  // C3
+  currentVoiceParam.currentNote = 42; // Reset to middle of new range
+  
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`  Low test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+  }
+  
+  // Test high range (treble notes)
+  console.log('Testing HIGH RANGE (C5-C6):');
+  currentVoiceParam.min = 72;  // C5
+  currentVoiceParam.max = 84;  // C6
+  currentVoiceParam.currentNote = 78; // Reset to middle of new range
+  
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`  High test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+  }
+  
+  // Test extreme range (full piano)
+  console.log('Testing EXTREME RANGE (A0-C8):');
+  currentVoiceParam.min = 21;   // A0
+  currentVoiceParam.max = 108;  // C8
+  currentVoiceParam.currentNote = 60; // Reset to middle C
+  
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`  Extreme test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+  }
+  
+  // Restore original values
+  currentVoiceParam.min = originalMin;
+  currentVoiceParam.max = originalMax;
+  currentVoiceParam.currentNote = originalCurrentNote;
+  
+  console.log('\n=== INTERPOLATION BEHAVIOR TEST ===');
+  console.log('Testing how behavior affects note changes...');
+  
+  // Test with different behavior settings
+  const originalBehavior = currentVoiceParam.behavior;
+  
+  currentVoiceParam.behavior = 0;
+  const staticNote = selectMidiNote(currentVoice);
+  console.log(`0% behavior: ${staticNote.noteName} (should stay same)`);
+  
+  currentVoiceParam.behavior = 100;
+  const varyingNote1 = selectMidiNote(currentVoice);
+  const varyingNote2 = selectMidiNote(currentVoice);
+  console.log(`100% behavior: ${varyingNote1.noteName} -> ${varyingNote2.noteName} (should vary dramatically)`);
+  
+  // Restore original behavior
+  currentVoiceParam.behavior = originalBehavior;
+  
+  console.log('\nDiagnostic complete. Check if note selection reflects the ranges tested.');
+}
+
+// Test function to play specific MIDI notes to verify oscillator capabilities
+function testOscillatorRange() {
+  console.log('=== TESTING OSCILLATOR FREQUENCY RANGE ===');
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('ERROR: Audio manager not initialized. Start preview first.');
+    return;
+  }
+  
+  const testNotes = [
+    { midi: 21, name: 'A0' },    // 27.5 Hz - Lowest piano
+    { midi: 36, name: 'C2' },    // 65.4 Hz - Low bass
+    { midi: 60, name: 'C4' },    // 261.6 Hz - Middle C
+    { midi: 84, name: 'C6' },    // 1046.5 Hz - High treble
+    { midi: 108, name: 'C8' }    // 4186.0 Hz - Highest piano
+  ];
+  
+  let currentIndex = 0;
+  
+  function playNextTestNote() {
+    if (currentIndex >= testNotes.length) {
+      console.log('Oscillator range test complete!');
+      return;
+    }
+    
+    const note = testNotes[currentIndex];
+    const frequency = midiToFrequency(note.midi);
+    
+    console.log(`Playing: ${note.name} (MIDI ${note.midi}) = ${frequency.toFixed(1)}Hz`);
+    
+    // Schedule a 1-second test note
+    scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
+    
+    currentIndex++;
+    
+    // Play next note after 1.5 seconds
+    setTimeout(playNextTestNote, 1500);
+  }
+  
+  playNextTestNote();
+}
+
+
+// Function to play complete 88-key chromatic scale from A0 to C8
+
+function playChromaticScale() {
+  console.log('=== PLAYING 88-KEY CHROMATIC SCALE ===');
+  console.log('Starting from A0 (27.5Hz) to C8 (4186.0Hz)');
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('ERROR: Audio manager not initialized. Start preview first.');
+    return;
+  }
+  
+  const startMidi = 21;  // A0 - first key on piano
+  const endMidi = 108;   // C8 - last key on piano
+  const noteDuration = 0.3; // 300ms per note for reasonable speed
+  const gapDuration = 0.05;  // 50ms gap between notes
+  
+  let currentMidi = startMidi;
+  let playbackStartTime = audioManager.audioContext.currentTime + 0.1;
+  
+  console.log(`Playing ${endMidi - startMidi + 1} notes from MIDI ${startMidi} to ${endMidi}`);
+  console.log('Note duration: 300ms, Gap: 50ms, Total time: ~31 seconds');
+  
+  function scheduleNextNote() {
+    if (currentMidi > endMidi) {
+      console.log('Chromatic scale complete!');
+      return;
+    }
+    
+    // Calculate frequency using 12th root of 2 (semitone ratio)
+    const frequency = 440 * Math.pow(2, (currentMidi - 69) / 12);
+    
+    // Get note name
+    const noteName = midiNoteNames[currentMidi] || `MIDI${currentMidi}`;
+    
+    // Calculate octave for display
+    const octave = Math.floor((currentMidi - 12) / 12);
+    const noteInOctave = (currentMidi - 12) % 12;
+    const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    const calculatedName = noteNames[noteInOctave] + octave;
+    
+    console.log(`MIDI ${currentMidi}: ${noteName} = ${frequency.toFixed(2)}Hz (calculated: ${calculatedName})`);
+    
+    // Schedule the note
+    scheduleNote(frequency, noteDuration, playbackStartTime, currentVoice);
+    
+    // Advance to next note
+    currentMidi++;
+    playbackStartTime += noteDuration + gapDuration;
+    
+    // Schedule next note immediately (don't wait for audio)
+    setTimeout(scheduleNextNote, 10);
+  }
+  
+  scheduleNextNote();
+}
+
+// Function to test specific frequency calculations
+function testFrequencyCalculations() {
+  console.log('=== FREQUENCY CALCULATION VERIFICATION ===');
+  
+  const semitoneRatio = Math.pow(2, 1/12); // 12th root of 2
+  console.log(`Semitone ratio (12th root of 2): ${semitoneRatio.toFixed(6)}`);
+  
+  // Test the calculation manually
+  console.log('\nManual frequency calculations:');
+  
+  let testFreq = 27.5; // A0
+  for (let i = 21; i <= 30; i++) {
+    const midiCalc = midiToFrequency(i);
+    const noteName = midiNoteNames[i];
+    
+    console.log(`MIDI ${i} (${noteName}): Manual=${testFreq.toFixed(2)}Hz, Function=${midiCalc.toFixed(2)}Hz, Diff=${Math.abs(testFreq - midiCalc).toFixed(3)}Hz`);
+    
+    testFreq *= semitoneRatio; // Multiply by 12th root of 2 for next semitone
+  }
+  
+  // Test key reference points
+  console.log('\nKey reference points:');
+  const referenceNotes = [
+    { midi: 21, expected: 27.5, name: 'A0' },     // Lowest piano key
+    { midi: 33, expected: 55.0, name: 'A1' },     // One octave up
+    { midi: 45, expected: 110.0, name: 'A2' },    // Two octaves up
+    { midi: 57, expected: 220.0, name: 'A3' },    // Three octaves up
+    { midi: 69, expected: 440.0, name: 'A4' },    // Concert pitch
+    { midi: 81, expected: 880.0, name: 'A5' },    // One octave above concert
+    { midi: 60, expected: 261.626, name: 'C4' },  // Middle C
+    { midi: 108, expected: 4186.009, name: 'C8' } // Highest piano key
+  ];
+  
+  referenceNotes.forEach(ref => {
+    const calculated = midiToFrequency(ref.midi);
+    const error = Math.abs(calculated - ref.expected);
+    const errorPercent = (error / ref.expected) * 100;
+    
+    console.log(`${ref.name}: Expected=${ref.expected}Hz, Calculated=${calculated.toFixed(3)}Hz, Error=${error.toFixed(3)}Hz (${errorPercent.toFixed(3)}%)`);
+  });
+}
+
+// Function to play specific octaves for comparison
+function playOctaveComparison() {
+  console.log('=== OCTAVE COMPARISON TEST ===');
+  
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('ERROR: Audio manager not initialized. Start preview first.');
+    return;
+  }
+  
+  const octaveTests = [
+    { midi: 21, name: 'A0', octave: 0 },   // 27.5 Hz
+    { midi: 33, name: 'A1', octave: 1 },   // 55 Hz
+    { midi: 45, name: 'A2', octave: 2 },   // 110 Hz
+    { midi: 57, name: 'A3', octave: 3 },   // 220 Hz
+    { midi: 69, name: 'A4', octave: 4 },   // 440 Hz (concert pitch)
+    { midi: 81, name: 'A5', octave: 5 },   // 880 Hz
+    { midi: 93, name: 'A6', octave: 6 },   // 1760 Hz
+    { midi: 105, name: 'A7', octave: 7 }   // 3520 Hz
+  ];
+  
+  let currentIndex = 0;
+  
+  function playNextOctave() {
+    if (currentIndex >= octaveTests.length) {
+      console.log('Octave comparison complete!');
+      return;
+    }
+    
+    const test = octaveTests[currentIndex];
+    const frequency = midiToFrequency(test.midi);
+    
+    console.log(`Playing ${test.name} (octave ${test.octave}): ${frequency.toFixed(1)}Hz`);
+    
+    // Play a 1-second note
+    scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
+    
+    currentIndex++;
+    
+    // Next octave after 1.5 seconds
+    setTimeout(playNextOctave, 1500);
+  }
+  
+  playNextOctave();
+}
+
+
+
+// Diagnostic function to trace the complete data flow from UI to note selection
+
+function diagnoseMelodicRangeDataFlow() {
+  console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
+  
+  // Step 1: Check what's stored in voiceData
+  console.log('1. Current voiceData parameter:');
+  const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  console.log('   Stored values:', {
+    min: storedParam.min,
+    max: storedParam.max,
+    behavior: storedParam.behavior,
+    currentNote: storedParam.currentNote
+  });
+  
+  // Step 2: Find and read the actual UI slider
+  console.log('\n2. Reading UI slider values:');
+  const parameterSection = document.getElementById('parameter-section');
+  const rows = parameterSection.querySelectorAll('.row-container');
+  
+  let sliderFound = false;
+  rows.forEach(row => {
+    const label = row.querySelector('.label-container');
+    if (label && label.textContent.trim() === 'MELODIC RANGE') {
+      const slider = row.querySelector('[data-nouislider]');
+      if (slider && slider.noUiSlider) {
+        const values = slider.noUiSlider.get();
+        console.log('   UI slider shows:', {
+          rawValues: values,
+          min: Math.round(Number(values[0])),
+          max: Math.round(Number(values[1]))
+        });
+        
+        // Check if values match voiceData
+        const uiMin = Math.round(Number(values[0]));
+        const uiMax = Math.round(Number(values[1]));
+        const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
+        console.log('   UI matches stored data:', dataMatch);
+        
+        sliderFound = true;
+      }
+    }
+  });
+  
+  if (!sliderFound) {
+    console.log('   ERROR: Melodic range slider not found in UI!');
+  }
+  
+  // Step 3: Test the selectMidiNote function
+  console.log('\n3. Testing note selection with current data:');
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+  }
+  
+  // Step 4: Check if the slider update events are working
+  console.log('\n4. Checking slider update mechanism:');
+  console.log('   The issue might be that slider changes aren\'t updating voiceData');
+  console.log('   This would happen if the slider\'s onChange event is broken');
+  
+  return {
+    voiceDataValues: storedParam,
+    sliderFound: sliderFound,
+    recommendation: sliderFound ? 
+      'Slider found - check if onChange events are firing' : 
+      'Slider missing - UI rendering problem'
+  };
+}
+
+// Function to manually set melodic range for testing
+function forceSetMelodicRange(minNote, maxNote) {
+  console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
+  
+  const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  
+  // Store old values
+  const oldMin = param.min;
+  const oldMax = param.max;
+  
+  // Force new values
+  param.min = minNote;
+  param.max = maxNote;
+  param.currentNote = Math.floor((minNote + maxNote) / 2);
+  
+  console.log('Forced parameter values:', {
+    old: { min: oldMin, max: oldMax },
+    new: { min: param.min, max: param.max },
+    resetNote: param.currentNote
+  });
+  
+  // Test note selection with forced values
+  console.log('\nTesting note selection with forced range:');
+  for (let i = 0; i < 8; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+  }
+  
+  console.log('\nIf you hear different notes now, the issue is UI->data connection');
+  console.log('If notes are still the same, the issue is in selectMidiNote function');
+}
+
+// Function to test extreme ranges manually
+function testExtremeRanges() {
+  console.log('=== TESTING EXTREME MELODIC RANGES ===');
+  
+  console.log('\n1. Testing BASS range (A0-C2):');
+  forceSetMelodicRange(21, 36);  // A0 to C2
+  
+  setTimeout(() => {
+    console.log('\n2. Testing TREBLE range (C6-C8):');
+    forceSetMelodicRange(84, 108); // C6 to C8
+    
+    setTimeout(() => {
+      console.log('\n3. Testing MID range (C4-C5):');
+      forceSetMelodicRange(60, 72); // C4 to C5
+      
+      console.log('\nListen to the playback - you should hear:');
+      console.log('- Very low bass notes, then');
+      console.log('- Very high treble notes, then'); 
+      console.log('- Mid-range notes');
+    }, 3000);
+  }, 3000);
+}
+
+
+// Diagnostic function to trace the complete data flow from UI to note selection
+
+function diagnoseMelodicRangeDataFlow() {
+  console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
+  
+  // Step 1: Check what's stored in voiceData
+  console.log('1. Current voiceData parameter:');
+  const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  console.log('   Stored values:', {
+    min: storedParam.min,
+    max: storedParam.max,
+    behavior: storedParam.behavior,
+    currentNote: storedParam.currentNote
+  });
+  
+  // Step 2: Find and read the actual UI slider
+  console.log('\n2. Reading UI slider values:');
+  const parameterSection = document.getElementById('parameter-section');
+  const rows = parameterSection.querySelectorAll('.row-container');
+  
+  let sliderFound = false;
+  rows.forEach(row => {
+    const label = row.querySelector('.label-container');
+    if (label && label.textContent.trim() === 'MELODIC RANGE') {
+      const slider = row.querySelector('[data-nouislider]');
+      if (slider && slider.noUiSlider) {
+        const values = slider.noUiSlider.get();
+        console.log('   UI slider shows:', {
+          rawValues: values,
+          min: Math.round(Number(values[0])),
+          max: Math.round(Number(values[1]))
+        });
+        
+        // Check if values match voiceData
+        const uiMin = Math.round(Number(values[0]));
+        const uiMax = Math.round(Number(values[1]));
+        const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
+        console.log('   UI matches stored data:', dataMatch);
+        
+        sliderFound = true;
+      }
+    }
+  });
+  
+  if (!sliderFound) {
+    console.log('   ERROR: Melodic range slider not found in UI!');
+  }
+  
+  // Step 3: Test the selectMidiNote function
+  console.log('\n3. Testing note selection with current data:');
+  for (let i = 0; i < 5; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+  }
+  
+  // Step 4: Check if the slider update events are working
+  console.log('\n4. Checking slider update mechanism:');
+  console.log('   The issue might be that slider changes aren\'t updating voiceData');
+  console.log('   This would happen if the slider\'s onChange event is broken');
+  
+  return {
+    voiceDataValues: storedParam,
+    sliderFound: sliderFound,
+    recommendation: sliderFound ? 
+      'Slider found - check if onChange events are firing' : 
+      'Slider missing - UI rendering problem'
+  };
+}
+
+// Function to manually set melodic range for testing
+function forceSetMelodicRange(minNote, maxNote) {
+  console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
+  
+  const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
+  
+  // Store old values
+  const oldMin = param.min;
+  const oldMax = param.max;
+  
+  // Force new values
+  param.min = minNote;
+  param.max = maxNote;
+  param.currentNote = Math.floor((minNote + maxNote) / 2);
+  
+  console.log('Forced parameter values:', {
+    old: { min: oldMin, max: oldMax },
+    new: { min: param.min, max: param.max },
+    resetNote: param.currentNote
+  });
+  
+  // Test note selection with forced values
+  console.log('\nTesting note selection with forced range:');
+  for (let i = 0; i < 8; i++) {
+    const note = selectMidiNote(currentVoice);
+    console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+  }
+  
+  console.log('\nIf you hear different notes now, the issue is UI->data connection');
+  console.log('If notes are still the same, the issue is in selectMidiNote function');
+}
+
+// Function to test extreme ranges manually
+function testExtremeRanges() {
+  console.log('=== TESTING EXTREME MELODIC RANGES ===');
+  
+  console.log('\n1. Testing BASS range (A0-C2):');
+  forceSetMelodicRange(21, 36);  // A0 to C2
+  
+  setTimeout(() => {
+    console.log('\n2. Testing TREBLE range (C6-C8):');
+    forceSetMelodicRange(84, 108); // C6 to C8
+    
+    setTimeout(() => {
+      console.log('\n3. Testing MID range (C4-C5):');
+      forceSetMelodicRange(60, 72); // C4 to C5
+      
+      console.log('\nListen to the playback - you should hear:');
+      console.log('- Very low bass notes, then');
+      console.log('- Very high treble notes, then'); 
+      console.log('- Mid-range notes');
+    }, 3000);
+  }, 3000);
+}
