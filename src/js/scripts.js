@@ -2848,3 +2848,5 @@ class ADSREnvelope {
     console.log(`ADSR: Attack=${attackTime*1000}ms, Decay=${decayTime*1000}ms, Sustain=${sustainLevel*100}%, Release=${releaseTime*1000}ms, Velocity=${velocity}`);
   }
 }
+=======
+>>>>>>> parent of 4a93bff (MAJOR: Complete parameter system now fully functional)
