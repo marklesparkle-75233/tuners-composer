@@ -2589,6 +2589,7 @@ function permanentlyFixSliderEvents() {
   
   console.log('All sliders fixed! Try moving the melodic range slider now.');
 }
+<<<<<<< HEAD
 
 // Check if the melodic range connection broke
 function quickDiagnostic() {
