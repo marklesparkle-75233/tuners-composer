@@ -2232,3 +2232,358 @@ function testExtremeRanges() {
     }, 3000);
   }, 3000);
 }
+
+
+// Enhanced diagnostic to find ALL sliders
+function findAllParameterSliders() {
+  console.log('=== FINDING ALL PARAMETER SLIDERS ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const allRows = parameterSection.querySelectorAll('.row-container');
+  
+  console.log(`Found ${allRows.length} parameter rows`);
+  
+  allRows.forEach((row, index) => {
+    const label = row.querySelector('.label-container');
+    const slider = row.querySelector('[data-nouislider]');
+    
+    if (label) {
+      const paramName = label.textContent.trim();
+      const hasSlider = slider && slider.noUiSlider;
+      
+      console.log(`Row ${index}: "${paramName}" - Slider: ${hasSlider ? 'YES' : 'NO'}`);
+      
+      if (hasSlider && paramName.toLowerCase().includes('melodic')) {
+        console.log('  -> FOUND MELODIC SLIDER!');
+        const values = slider.noUiSlider.get();
+        console.log('  -> Current values:', values);
+      }
+    }
+  });
+}
+
+
+// Check if noUiSlider library loaded
+function checkNoUiSliderLibrary() {
+  console.log('=== CHECKING NOUISLIDER LIBRARY ===');
+  console.log('noUiSlider available:', typeof noUiSlider !== 'undefined');
+  console.log('noUiSlider.create:', typeof noUiSlider?.create);
+  
+  // Find a raw slider div to test
+  const parameterSection = document.getElementById('parameter-section');
+  const sliderDivs = parameterSection.querySelectorAll('.slider-wrapper > div');
+  
+  console.log(`Found ${sliderDivs.length} slider divs`);
+  
+  sliderDivs.forEach((div, index) => {
+    console.log(`Slider div ${index}:`, {
+      hasNoUiSlider: !!div.noUiSlider,
+      hasDataAttribute: div.hasAttribute('data-nouislider'),
+      className: div.className
+    });
+  });
+}
+
+
+// Fixed diagnostic - look for actual noUiSlider elements
+function findWorkingSliders() {
+  console.log('=== FINDING WORKING SLIDERS (FIXED) ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const allRows = parameterSection.querySelectorAll('.row-container');
+  
+  console.log(`Found ${allRows.length} parameter rows`);
+  
+  allRows.forEach((row, index) => {
+    const label = row.querySelector('.label-container');
+    // FIXED: Look for noUi-target class instead of data-nouislider attribute
+    const slider = row.querySelector('.noUi-target');
+    
+    if (label) {
+      const paramName = label.textContent.trim();
+      const hasSlider = slider && slider.noUiSlider;
+      
+      console.log(`Row ${index}: "${paramName}" - Slider: ${hasSlider ? 'YES' : 'NO'}`);
+      
+      if (hasSlider) {
+        try {
+          const values = slider.noUiSlider.get();
+          console.log(`  -> Values: [${values[0]}, ${values[1]}]`);
+          
+          // Check if this is melodic range
+          if (paramName === 'MELODIC RANGE') {
+            console.log(`  -> MELODIC RANGE FOUND! Current range: ${values[0]}-${values[1]}`);
+          }
+        } catch (error) {
+          console.log(`  -> Error reading values: ${error.message}`);
+        }
+      }
+    }
+  });
+}
+
+
+// Quick test - manually sync slider to voiceData
+function testSliderSync() {
+  console.log('=== TESTING SLIDER SYNC ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const rows = parameterSection.querySelectorAll('.row-container');
+  
+  rows.forEach(row => {
+    const label = row.querySelector('.label-container');
+    const slider = row.querySelector('.noUi-target');
+    
+    if (label && label.textContent.trim() === 'MELODIC RANGE' && slider) {
+      console.log('Found melodic range slider');
+      
+      // Get current UI values
+      const values = slider.noUiSlider.get();
+      console.log('UI shows:', values);
+      
+      // Get current voiceData
+      const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+      console.log('voiceData shows:', storedParam);
+      
+      // Test if onChange is working - try to trigger it
+      console.log('Testing onChange...');
+      slider.noUiSlider.set([60, 72]); // Should trigger onChange
+      
+      // Check if voiceData updated
+      setTimeout(() => {
+        const afterUpdate = voiceData[currentVoice].parameters['MELODIC RANGE'];
+        console.log('After manual update:', afterUpdate);
+      }, 100);
+    }
+  });
+}
+
+// Emergency fix - let's reconnect the melodic range slider manually
+function fixMelodicRangeConnection() {
+  console.log('=== FIXING MELODIC RANGE CONNECTION ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const rows = parameterSection.querySelectorAll('.row-container');
+  
+  rows.forEach(row => {
+    const label = row.querySelector('.label-container');
+    const slider = row.querySelector('.noUi-target');
+    
+    if (label && label.textContent.trim() === 'MELODIC RANGE' && slider) {
+      console.log('Reconnecting melodic range slider...');
+      
+      // Remove existing event listeners
+      slider.noUiSlider.off('update');
+      
+      // Add working event listener
+      slider.noUiSlider.on('update', function(values) {
+        console.log('Slider changed to:', values);
+        
+        // Convert note names back to MIDI numbers
+        const minMidi = convertNoteNameToMidi(values[0]);
+        const maxMidi = convertNoteNameToMidi(values[1]);
+        
+        console.log(`Converting ${values[0]}-${values[1]} to MIDI ${minMidi}-${maxMidi}`);
+        
+        // Update voiceData
+        if (!isNaN(minMidi) && !isNaN(maxMidi)) {
+          voiceData[currentVoice].parameters['MELODIC RANGE'].min = minMidi;
+          voiceData[currentVoice].parameters['MELODIC RANGE'].max = maxMidi;
+          
+          // Reset current note to force recalculation
+          delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentNote;
+          
+          console.log('Updated voiceData:', voiceData[currentVoice].parameters['MELODIC RANGE']);
+        }
+      });
+      
+      // Set initial values correctly
+      const currentParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+      const currentMinNote = midiNoteNames[Math.round(currentParam.min)] || 'C4';
+      const currentMaxNote = midiNoteNames[Math.round(currentParam.max)] || 'C5';
+      
+      console.log(`Setting slider to show stored values: ${currentMinNote}-${currentMaxNote}`);
+      slider.noUiSlider.set([currentMinNote, currentMaxNote]);
+    }
+  });
+}
+
+// Helper function to convert note names back to MIDI
+function convertNoteNameToMidi(noteName) {
+  for (let [midi, name] of Object.entries(midiNoteNames)) {
+    if (name === noteName) {
+      return parseInt(midi);
+    }
+  }
+  return 60; // Default to C4 if not found
+}
+
+// Test if melodic range changes are working in audio
+function testMelodicRangeAudio() {
+  console.log('=== TESTING MELODIC RANGE AUDIO RESPONSE ===');
+  
+  const slider = document.querySelector('.row-container:nth-child(5) .noUi-target'); // Melodic range is row 5
+  
+  if (slider && slider.noUiSlider) {
+    console.log('Testing LOW range (bass notes)...');
+    slider.noUiSlider.set(['A0', 'C2']); // Very low bass range
+    
+    setTimeout(() => {
+      console.log('Testing HIGH range (treble notes)...');
+      slider.noUiSlider.set(['C6', 'C8']); // Very high treble range
+      
+      setTimeout(() => {
+        console.log('Testing MID range...');
+        slider.noUiSlider.set(['C4', 'C5']); // Back to middle range
+        
+        console.log('Now start Preview and you should hear:');
+        console.log('1. Very low bass notes');
+        console.log('2. Then very high treble notes'); 
+        console.log('3. Then mid-range notes');
+        console.log('Each range change should be audible!');
+      }, 1000);
+    }, 1000);
+  }
+}
+
+// Debug the melodic note selection process
+function debugNoteSelection() {
+  console.log('=== DEBUGGING NOTE SELECTION ===');
+  
+  // Check what the slider currently shows
+  const melodicRow = document.querySelector('.row-container:nth-child(5)');
+  const slider = melodicRow.querySelector('.noUi-target');
+  
+  if (slider && slider.noUiSlider) {
+    const uiValues = slider.noUiSlider.get();
+    console.log('UI slider shows:', uiValues);
+    
+    // Check what voiceData has
+    const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+    console.log('voiceData has:', storedParam);
+    
+    // Test the selectMidiNote function directly
+    console.log('\nTesting selectMidiNote function:');
+    for (let i = 0; i < 10; i++) {
+      const note = selectMidiNote(currentVoice);
+      console.log(`Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+    }
+    
+    // Force extreme ranges and test again
+    console.log('\nForcing extreme LOW range (A0-C2, MIDI 21-36):');
+    storedParam.min = 21;
+    storedParam.max = 36;
+    delete storedParam.currentNote; // Force reset
+    
+    for (let i = 0; i < 5; i++) {
+      const note = selectMidiNote(currentVoice);
+      console.log(`Low test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+    }
+    
+    console.log('\nForcing extreme HIGH range (C6-C8, MIDI 84-108):');
+    storedParam.min = 84;
+    storedParam.max = 108;
+    delete storedParam.currentNote; // Force reset
+    
+    for (let i = 0; i < 5; i++) {
+      const note = selectMidiNote(currentVoice);
+      console.log(`High test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+    }
+  }
+}
+
+
+// Fix the melodic range slider detection
+function fixMelodicRangeSliderDetection() {
+  console.log('=== FINDING CORRECT MELODIC RANGE SLIDER ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const allRows = parameterSection.querySelectorAll('.row-container');
+  
+  allRows.forEach((row, index) => {
+    const label = row.querySelector('.label-container');
+    if (label) {
+      const paramName = label.textContent.trim();
+      console.log(`Row ${index}: "${paramName}"`);
+      
+      if (paramName === 'MELODIC RANGE') {
+        const slider = row.querySelector('.noUi-target');
+        if (slider && slider.noUiSlider) {
+          const values = slider.noUiSlider.get();
+          console.log(`  -> Found MELODIC RANGE slider! Values: ${values}`);
+          
+          // Test extreme ranges on the CORRECT slider
+          console.log('Setting to extreme LOW range...');
+          slider.noUiSlider.set(['A0', 'C2']);
+          
+          setTimeout(() => {
+            console.log('Setting to extreme HIGH range...');
+            slider.noUiSlider.set(['C6', 'C8']);
+            
+            setTimeout(() => {
+              console.log('Now start Preview - you should hear:');
+              console.log('1. Very high treble notes around 2000Hz');
+              console.log('2. Try moving the slider manually and restart preview');
+            }, 1000);
+          }, 1000);
+        }
+      }
+    }
+  });
+}
+
+// Quick permanent fix - update the createDualSlider function
+function permanentlyFixSliderEvents() {
+  console.log('=== APPLYING PERMANENT FIX ===');
+  
+  // Find the createDualSlider function and patch it
+  // The issue is it's looking for [data-nouislider] instead of .noUi-target
+  
+  // For now, let's manually fix ALL sliders that exist right now
+  const parameterSection = document.getElementById('parameter-section');
+  const allSliders = parameterSection.querySelectorAll('.noUi-target');
+  
+  console.log(`Found ${allSliders.length} sliders to fix`);
+  
+  allSliders.forEach((slider, index) => {
+    if (slider.noUiSlider) {
+      // Find the parameter name for this slider
+      const row = slider.closest('.row-container');
+      const label = row ? row.querySelector('.label-container') : null;
+      const paramName = label ? label.textContent.trim() : `Unknown ${index}`;
+      
+      console.log(`Fixing slider: ${paramName}`);
+      
+      // Remove any existing broken events
+      slider.noUiSlider.off('update');
+      
+      // Add proper event handler
+      slider.noUiSlider.on('update', function(values) {
+        const min = parseFloat(values[0]);
+        const max = parseFloat(values[1]);
+        
+        // Handle special case for melodic range (note names to MIDI)
+        if (paramName === 'MELODIC RANGE') {
+          const minMidi = convertNoteNameToMidi(values[0]);
+          const maxMidi = convertNoteNameToMidi(values[1]);
+          
+          if (!isNaN(minMidi) && !isNaN(maxMidi)) {
+            voiceData[currentVoice].parameters[paramName].min = minMidi;
+            voiceData[currentVoice].parameters[paramName].max = maxMidi;
+            delete voiceData[currentVoice].parameters[paramName].currentNote;
+            console.log(`Updated ${paramName}: ${values[0]}-${values[1]} -> MIDI ${minMidi}-${maxMidi}`);
+          }
+        } else {
+          // Handle regular numeric parameters
+          if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]) {
+            voiceData[currentVoice].parameters[paramName].min = min;
+            voiceData[currentVoice].parameters[paramName].max = max;
+            console.log(`Updated ${paramName}: ${min}-${max}`);
+          }
+        }
+      });
+    }
+  });
+  
+  console.log('All sliders fixed! Try moving the melodic range slider now.');
+}
