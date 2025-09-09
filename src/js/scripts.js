@@ -2590,6 +2590,7 @@ function permanentlyFixSliderEvents() {
   console.log('All sliders fixed! Try moving the melodic range slider now.');
 }
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 // Check if the melodic range connection broke
 function quickDiagnostic() {
@@ -2799,55 +2800,4 @@ function connectAllSlidersForReal() {
   console.log('🎉 All sliders connected! Try moving any slider - Preview should respond immediately!');
 }
 
-// Session 6: ADSR Envelope Implementation
-class ADSREnvelope {
-  constructor(audioContext, gainNode) {
-    this.audioContext = audioContext;
-    this.gainNode = gainNode;
-  }
-  
-  /**
-   * Create professional envelope with musical curves
-   * @param {number} startTime - When the note starts
-   * @param {number} duration - How long the note plays
-   * @param {number} velocity - MIDI velocity (0-127)
-   * @param {object} envelopeParams - Attack, decay, sustain, release settings
-   */
-  trigger(startTime, duration, velocity, envelopeParams = {}) {
-    const {
-      attackTime = 0.02,    // 20ms attack
-      decayTime = 0.1,      // 100ms decay  
-      sustainLevel = 0.7,   // 70% of peak
-      releaseTime = 0.15    // 150ms release
-    } = envelopeParams;
-    
-    // Convert velocity to gain (MIDI 0-127 → 0.0-1.0)
-    const peakLevel = (velocity / 127) * 0.8; // Scale to reasonable peak
-    const sustainGain = peakLevel * sustainLevel;
-    
-    const gain = this.gainNode.gain;
-    
-    // Clear any existing automation
-    gain.cancelScheduledValues(startTime);
-    
-    // ADSR Envelope phases:
-    
-    // 1. Attack: 0 → peak level
-    gain.setValueAtTime(0, startTime);
-    gain.linearRampToValueAtTime(peakLevel, startTime + attackTime);
-    
-    // 2. Decay: peak → sustain level  
-    gain.linearRampToValueAtTime(sustainGain, startTime + attackTime + decayTime);
-    
-    // 3. Sustain: hold level (duration determines length)
-    const sustainEnd = startTime + duration - releaseTime;
-    gain.setValueAtTime(sustainGain, sustainEnd);
-    
-    // 4. Release: sustain → 0
-    gain.linearRampToValueAtTime(0, startTime + duration);
-    
-    console.log(`ADSR: Attack=${attackTime*1000}ms, Decay=${decayTime*1000}ms, Sustain=${sustainLevel*100}%, Release=${releaseTime*1000}ms, Velocity=${velocity}`);
-  }
-}
-=======
->>>>>>> parent of 4a93bff (MAJOR: Complete parameter system now fully functional)
+
