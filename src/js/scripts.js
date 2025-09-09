@@ -11,6 +11,7 @@ const parameterDefinitions = [
   { name: "POLYPHONY", type: "single-dual", min: 1, max: 16 },
   { name: "PORTAMENTO GLIDE TIME", type: "single-dual", min: 0, max: 100 },
   { name: "REVERB", type: "single-dual", min: 0, max: 100 },
+  { name: "DELAY", type: "multi-dual", min: 0, max: 2000 },  // NEW: Time (ms) and Feedback (%),
   { name: "DETUNING", type: "single-dual", min: -50, max: 50 },
   { name: "TREMOLO", type: "multi-dual", min: 0, max: 100 },
   { name: "CHORUS", type: "multi-dual", min: 0, max: 100 },
@@ -153,6 +154,8 @@ function initializeVoices() {
     
     voiceData.push(voice);
   }
+  // TEMPORARY: Test what DELAY looks like
+  console.log('DELAY parameter for voice 0:', voiceData[0].parameters['DELAY']);
 }
 
 // Create voice tabs
@@ -628,6 +631,7 @@ function toggleLockVoice(voiceIndex) {
 }
 
 // Initialize the application
+// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   audioManager = new AudioManager();
 
@@ -635,8 +639,14 @@ document.addEventListener('DOMContentLoaded', () => {
   createVoiceTabs();
   renderParameters();
   
+  // Automatically connect sliders after UI is ready
+  setTimeout(() => {
+    connectAllSliders();
+  }, 100);
+  
   document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
 });
+
 
 // Initialize audio on first user click
 async function initializeAudioOnFirstClick() {
@@ -2588,190 +2598,31 @@ function permanentlyFixSliderEvents() {
   });
   
   console.log('All sliders fixed! Try moving the melodic range slider now.');
-}
-<<<<<<< HEAD
-<<<<<<< HEAD
 
-// Check if the melodic range connection broke
-function quickDiagnostic() {
-  console.log('=== QUICK DIAGNOSTIC ===');
-  
-  // What does the UI show?
-  console.log('UI shows: G2-D6');
-  
-  // What's stored in voiceData?
-  const stored = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  console.log('voiceData shows:', stored);
-  
-  // Convert G2 and D6 to MIDI for comparison
-  const g2midi = convertNoteNameToMidi('G2');
-  const d6midi = convertNoteNameToMidi('D6');
-  console.log(`G2-D6 should be MIDI ${g2midi}-${d6midi}`);
-  
-  // Test a few notes to see what range they're actually using
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`Note ${i+1}: ${note.noteName} (MIDI ${note.midiNote})`);
-  }
 }
 
-// Clean test with extreme ranges
-function cleanRangeTest() {
-  console.log('=== CLEAN RANGE TEST ===');
-  
-  // Stop all audio first
-  if (audioManager && audioManager.isPlaying) {
-    audioManager.stopTestOscillator();
-  }
-  
-  // Test extreme LOW range
-  console.log('Setting to A0-C2 (very low bass)...');
-  voiceData[currentVoice].parameters['MELODIC RANGE'].min = 21;
-  voiceData[currentVoice].parameters['MELODIC RANGE'].max = 36;
-  delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentNote;
-  
-  for (let i = 0; i < 3; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`Low note ${i+1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
-  }
-  
-  console.log('\nNow start Preview - should hear very deep bass notes around 30-65Hz');
-}
 
-// Test with clearly audible range
-function testAudibleRange() {
-  console.log('=== TESTING CLEARLY AUDIBLE RANGE ===');
+// Core parameter connection system - connects all UI sliders to voiceData  
+function connectAllSliders() {
+  console.log('=== CONNECTING ALL SLIDERS ===');
   
-  // Set to middle octave that all speakers can reproduce
-  voiceData[currentVoice].parameters['MELODIC RANGE'].min = 60; // C4
-  voiceData[currentVoice].parameters['MELODIC RANGE'].max = 72; // C5
-  delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentNote;
-  
-  console.log('Set to C4-C5 (261-523Hz) - universally audible range');
-  console.log('Start Preview - should hear clear middle-range notes');
-}
-
-// Debug what Preview is actually reading
-function debugPreviewValues() {
-  console.log('=== DEBUGGING PREVIEW VALUES ===');
-  
-  // Check current voice
-  console.log('Current voice:', currentVoice);
-  
-  // Check what Preview will read
-  const previewParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  console.log('Preview will read:', previewParam);
-  
-  // Check what the UI slider shows
   const parameterSection = document.getElementById('parameter-section');
-  const rows = parameterSection.querySelectorAll('.row-container');
+  const allSliders = parameterSection.querySelectorAll('.noUi-target');
   
-  rows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    const slider = row.querySelector('.noUi-target');
-    
-    if (label && label.textContent.trim() === 'MELODIC RANGE' && slider) {
-      const uiValues = slider.noUiSlider.get();
-      console.log('UI slider shows:', uiValues);
+  console.log(`Found ${allSliders.length} sliders to connect`);
+  
+  allSliders.forEach((slider, index) => {
+    if (slider.noUiSlider) {
+      const row = slider.closest('.row-container');
+      const label = row ? row.querySelector('.label-container') : null;
+      const paramName = label ? label.textContent.trim() : `Unknown ${index}`;
       
-      // Convert to MIDI
-      const minMidi = convertNoteNameToMidi(uiValues[0]);
-      const maxMidi = convertNoteNameToMidi(uiValues[1]);
-      console.log(`UI converts to MIDI: ${minMidi}-${maxMidi}`);
-    }
-  });
-  
-  // The problem: Preview might be reading from the UI instead of voiceData!
-  // Or the onChange event isn't connected properly
-}
-
-// Sync UI slider to match our manual changes
-function syncUIToVoiceData() {
-  console.log('=== SYNCING UI TO VOICE DATA ===');
-  
-  const melodicParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  console.log('voiceData has:', melodicParam);
-  
-  // Find the slider and update it
-  const parameterSection = document.getElementById('parameter-section');
-  const rows = parameterSection.querySelectorAll('.row-container');
-  
-  rows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    const slider = row.querySelector('.noUi-target');
-    
-    if (label && label.textContent.trim() === 'MELODIC RANGE' && slider) {
-      const minNote = midiNoteNames[Math.round(melodicParam.min)] || 'C4';
-      const maxNote = midiNoteNames[Math.round(melodicParam.max)] || 'C5';
-      
-      console.log(`Setting UI slider to: ${minNote}-${maxNote}`);
-      slider.noUiSlider.set([minNote, maxNote]);
-      
-      console.log('UI slider updated - now try Preview');
-    }
-  });
-}
-
-// Force refresh the voiceData to match your manual changes
-function forceRefreshMelodicRange() {
-  console.log('=== FORCING MELODIC RANGE REFRESH ===');
-  
-  // Clear all cached values
-  delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentNote;
-  delete voiceData[currentVoice].parameters['MELODIC RANGE'].currentValue;
-  
-  // Set clean C4-C5 range (MIDI 60-72)
-  voiceData[currentVoice].parameters['MELODIC RANGE'].min = 60;
-  voiceData[currentVoice].parameters['MELODIC RANGE'].max = 72;
-  
-  console.log('Set voiceData to:', voiceData[currentVoice].parameters['MELODIC RANGE']);
-  
-  // Update the UI slider to match
-  const parameterSection = document.getElementById('parameter-section');
-  const rows = parameterSection.querySelectorAll('.row-container');
-  
-  rows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    const slider = row.querySelector('.noUi-target');
-    
-    if (label && label.textContent.trim() === 'MELODIC RANGE' && slider) {
-      console.log('Updating UI slider to C4-C5...');
-      slider.noUiSlider.set(['C4', 'C5']);
-    }
-  });
-  
-  // Test that selectMidiNote now uses the new range
-  console.log('\nTesting note selection with new range:');
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`Note ${i+1}: ${note.noteName} (MIDI ${note.midiNote}) - should be 60-72`);
-  }
-  
-  console.log('\nNow try Preview - should hear C4-C5 notes only!');
-}
-
-// Permanently connect all sliders (the comprehensive fix)
-function connectAllSlidersForReal() {
-  console.log('=== CONNECTING ALL SLIDERS PERMANENTLY ===');
-  
-  const parameterSection = document.getElementById('parameter-section');
-  const allRows = parameterSection.querySelectorAll('.row-container');
-  
-  allRows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    const slider = row.querySelector('.noUi-target');
-    
-    if (label && slider && slider.noUiSlider) {
-      const paramName = label.textContent.trim();
       console.log(`Connecting: ${paramName}`);
       
-      // Remove any broken events
       slider.noUiSlider.off('update');
       
-      // Add the correct event handler
       slider.noUiSlider.on('update', function(values) {
         if (paramName === 'MELODIC RANGE') {
-          // Special handling for melodic range (note names → MIDI)
           const minMidi = convertNoteNameToMidi(values[0]);
           const maxMidi = convertNoteNameToMidi(values[1]);
           
@@ -2782,7 +2633,6 @@ function connectAllSlidersForReal() {
             console.log(`✅ ${paramName}: ${values[0]}-${values[1]} → MIDI ${minMidi}-${maxMidi}`);
           }
         } else {
-          // All other parameters (numeric values)
           const min = parseFloat(values[0]);
           const max = parseFloat(values[1]);
           
@@ -2790,14 +2640,31 @@ function connectAllSlidersForReal() {
             voiceData[currentVoice].parameters[paramName].min = min;
             voiceData[currentVoice].parameters[paramName].max = max;
             delete voiceData[currentVoice].parameters[paramName].currentValue;
-            console.log(`✅ ${paramName}: ${min} - ${max}`);
+            console.log(`✅ ${paramName}: ${min}-${max}`);
           }
         }
       });
     }
   });
   
-  console.log('🎉 All sliders connected! Try moving any slider - Preview should respond immediately!');
+  console.log('🎉 All sliders connected! Parameter system fully operational.');
 }
 
 
+// Test DELAY slider responsiveness
+function testDelaySliders() {
+  console.log('=== TESTING DELAY SLIDER RESPONSIVENESS ===');
+  
+  // Check current DELAY parameter values
+  const delayParam = voiceData[currentVoice].parameters['DELAY'];
+  console.log('Current DELAY parameter:', delayParam);
+  
+  console.log('Test sequence:');
+  console.log('1. Start Preview');
+  console.log('2. Move the DELAY sliders while Preview is playing');
+  console.log('3. Watch console for parameter updates');
+  console.log('4. You should see DELAY values change in real-time');
+  
+  console.log('\nExpected: DELAY values should update as you move sliders');
+  console.log('Next step: Implement actual audio delay effect');
+}
