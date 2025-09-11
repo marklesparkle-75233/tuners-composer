@@ -1429,23 +1429,17 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
   const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
   const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
   
-  // Professional ADSR envelope using attack velocity
-const velocityParam = voiceData[voiceIndex].parameters['ATTACK VELOCITY'];
-const currentVelocity = velocityParam.currentValue || (velocityParam.min + velocityParam.max) / 2;
-
-// Basic envelope (working version)
-const attackTime = 0.01; // 10ms attack  
-const releaseTime = 0.1;  // 100ms release
-const sustainLevel = gainValue * 0.8;
-
-gainNode.gain.setValueAtTime(0, startTime);
-gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
-gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
-gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-
-
-panNode.pan.setValueAtTime(panValue, startTime);
-
+  // Set up envelope (simple attack/release)
+  const attackTime = 0.01; // 10ms attack
+  const releaseTime = 0.1;  // 100ms release
+  const sustainLevel = gainValue * 0.8; // 80% of target volume
+  
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+  gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+  
+  panNode.pan.setValueAtTime(panValue, startTime);
   
   // Connect audio chain
   oscillator.connect(gainNode);
@@ -2673,90 +2667,4 @@ function testDelaySliders() {
   
   console.log('\nExpected: DELAY values should update as you move sliders');
   console.log('Next step: Implement actual audio delay effect');
-}
-
-
-// Test ADSR envelope integration
-function testADSRIntegration() {
-  console.log('=== TESTING ADSR ENVELOPE INTEGRATION ===');
-  
-  console.log('1. Set Attack Velocity to LOW range (20-40)');
-  console.log('2. Start Preview - should hear soft, gentle attacks');
-  console.log('3. Stop Preview');
-  console.log('4. Set Attack Velocity to HIGH range (100-127)');
-  console.log('5. Start Preview - should hear loud, aggressive attacks');
-  
-  console.log('\nExpected improvements:');
-  console.log('✅ Smoother note transitions (no clicking)');
-  console.log('✅ Velocity-sensitive dynamics (soft vs loud)');
-  console.log('✅ Professional ADSR envelope shaping');
-  console.log('✅ Musical attack/decay/sustain/release phases');
-}
-
-// Check Preview button functionality
-function checkPreviewButton() {
-  console.log('=== CHECKING PREVIEW BUTTON STATUS ===');
-  console.log('Audio manager exists:', typeof audioManager);
-  console.log('Audio initialized:', audioManager ? audioManager.isInitialized : 'No audioManager');
-  console.log('Preview function exists:', typeof previewVoice);
-  
-  // Check if button click handler is working
-  const voiceControls = document.querySelector('.voice-controls');
-  const previewButton = voiceControls ? voiceControls.querySelector('button') : null;
-  console.log('Preview button found:', !!previewButton);
-  console.log('Button text:', previewButton ? previewButton.textContent : 'Button not found');
-}
-
-// Force audio initialization
-audioManager.initialize().then(() => {
-  console.log('Audio manager force-initialized');
-  console.log('Now try Preview button');
-}).catch(error => {
-  console.log('Initialization failed:', error);
-});
-
-// Test Preview functionality after clean reload
-function testPreviewAfterReload() {
-  console.log('=== TESTING PREVIEW AFTER RELOAD ===');
-  console.log('Audio manager status:', audioManager ? audioManager.isInitialized : 'No audioManager');
-  
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('Audio needs first user interaction - click Preview button');
-  } else {
-    console.log('Audio ready - Preview should work');
-  }
-}
-
-// Session 6: ADSR Envelope System for professional note shaping
-class ADSREnvelope {
-  constructor(audioContext, gainNode) {
-    this.audioContext = audioContext;
-    this.gainNode = gainNode;
-  }
-  
-  trigger(startTime, duration, velocity) {
-    // Professional envelope timing
-    const attackTime = 0.02;    // 20ms attack
-    const decayTime = 0.1;      // 100ms decay
-    const sustainLevel = 0.7;   // 70% of peak
-    const releaseTime = 0.15;   // 150ms release
-    
-    // Convert velocity to gain level
-    const peakLevel = (velocity / 127) * 0.8;
-    const sustainGain = peakLevel * sustainLevel;
-    
-    const gain = this.gainNode.gain;
-    
-    // Clear any existing automation
-    gain.cancelScheduledValues(startTime);
-    
-    // ADSR phases
-    gain.setValueAtTime(0, startTime);
-    gain.linearRampToValueAtTime(peakLevel, startTime + attackTime);
-    gain.linearRampToValueAtTime(sustainGain, startTime + attackTime + decayTime);
-    gain.setValueAtTime(sustainGain, startTime + duration - releaseTime);
-    gain.linearRampToValueAtTime(0, startTime + duration);
-    
-    console.log(`ADSR: velocity=${velocity}, peak=${peakLevel.toFixed(2)}`);
-  }
 }
