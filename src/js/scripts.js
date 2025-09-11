@@ -176,12 +176,16 @@ function createVoiceTabs() {
   }
 }
 
-// Voice selection and management
 function selectVoice(voiceIndex) {
   if (currentVoice !== voiceIndex) {
     currentVoice = voiceIndex;
     updateVoiceTabs();
     renderParameters();
+    
+    // ADDED: Reconnect all sliders for the new voice
+    setTimeout(() => {
+      connectAllSliders();
+    }, 100);
   }
 }
 
@@ -584,11 +588,24 @@ function renderParameters() {
 // Voice-specific functions with Preview/Stop toggle
 function previewVoice(voiceIndex) {
   if (!audioManager || !audioManager.isInitialized) {
+    console.log('Audio manager not ready');
     return;
   }
   
   const voiceControls = document.querySelector('.voice-controls');
-  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
+  if (!voiceControls) {
+    console.log('Voice controls not found');
+    return;
+  }
+  
+  // More robust button selector
+  const previewButton = voiceControls.querySelector('button.control-btn') || 
+                       voiceControls.querySelector('button[onclick*="previewVoice"]');
+  
+  if (!previewButton) {
+    console.log('Preview button not found');
+    return;
+  }
   
   if (previewButton.textContent === 'STOP') {
     // Stop audio and parameter interpolation
@@ -598,6 +615,8 @@ function previewVoice(voiceIndex) {
     previewButton.textContent = 'PREVIEW';
     previewButton.style.backgroundColor = '';
     previewButton.style.color = '';
+    
+    console.log(`Voice ${voiceIndex + 1} preview stopped`);
   
   } else {
     // Start audio
@@ -622,13 +641,123 @@ function previewVoice(voiceIndex) {
     previewButton.textContent = 'STOP';
     previewButton.style.backgroundColor = '#ffcccc';
     previewButton.style.color = '#333';
+    
+    console.log(`Voice ${voiceIndex + 1} preview started with ${selectedSoundName}`);
   }
 }
+
   
 function toggleLockVoice(voiceIndex) {
   voiceData[voiceIndex].locked = !voiceData[voiceIndex].locked;
   renderParameters();
 }
+
+
+// Master multi-voice playback system - ADD THESE BEFORE DOMContentLoaded
+async function startMasterPlayback() {
+  console.log('=== STARTING MASTER MULTI-VOICE PLAYBACK ===');
+  
+  // Ensure audio system is initialized
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('Initializing audio system...');
+    if (!audioManager) {
+      audioManager = new AudioManager();
+    }
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('❌ Audio initialization failed');
+      return;
+    }
+  }
+  
+  // Create voice manager if it doesn't exist
+  if (!voiceManager) {
+    console.log('Creating VoiceManager...');
+    voiceManager = new VoiceManager(audioManager.audioContext, audioManager.masterGainNode);
+  }
+  
+  // Check which voices are enabled
+  const enabledVoices = [];
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i].enabled) {
+      enabledVoices.push(i + 1);
+    }
+  }
+  
+  console.log(`Enabled voices: ${enabledVoices.join(', ')}`);
+  
+  if (enabledVoices.length === 0) {
+    console.log('❌ No voices enabled! Please enable at least one voice.');
+    alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
+    return;
+  }
+  
+  // Stop any individual previews first
+  document.querySelectorAll('.voice-controls button').forEach(button => {
+    if (button.textContent === 'STOP') {
+      button.click(); // Stop individual previews
+    }
+  });
+  
+  // Start all enabled voices playing together
+  voiceManager.startAllVoices();
+  
+  // Update play button state
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  if (playButton) {
+    playButton.textContent = 'STOP';
+    playButton.style.backgroundColor = '#dc3545';
+    playButton.style.color = 'white';
+  }
+  
+  console.log('🎵 Multi-voice playback started!');
+}
+
+function stopMasterPlayback() {
+  console.log('=== STOPPING MASTER MULTI-VOICE PLAYBACK ===');
+  
+  if (voiceManager) {
+    voiceManager.stopAllVoices();
+  }
+  
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  if (playButton) {
+    playButton.textContent = 'PLAY';
+    playButton.style.backgroundColor = '';
+    playButton.style.color = '';
+  }
+  
+  console.log('🔇 Multi-voice playback stopped');
+}
+
+async function toggleMasterPlayback() {
+  console.log('🎯 PLAY button clicked!'); // Debug log
+  
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  
+  if (playButton && playButton.textContent === 'STOP') {
+    stopMasterPlayback();
+  } else {
+    await startMasterPlayback();
+  }
+}
+
+// NOW your DOMContentLoaded event...
+document.addEventListener('DOMContentLoaded', () => {
+  // ... existing code ...
+  
+  // Connect PLAY button
+  setTimeout(() => {
+    const playButton = document.querySelector('#file-controls button:nth-child(4)');
+    if (playButton) {
+      playButton.onclick = toggleMasterPlayback;
+      console.log('✅ Master PLAY button connected to toggleMasterPlayback');
+    }
+  }, 200);
+});
+
+
 
 // Initialize the application
 // Initialize the application
@@ -2601,23 +2730,23 @@ function permanentlyFixSliderEvents() {
 
 }
 
-
-// Core parameter connection system - connects all UI sliders to voiceData  
+// Enhanced parameter connection system - connects ALL UI controls to voiceData  
 function connectAllSliders() {
-  console.log('=== CONNECTING ALL SLIDERS ===');
+  console.log('=== CONNECTING ALL PARAMETER CONTROLS ===');
   
   const parameterSection = document.getElementById('parameter-section');
-  const allSliders = parameterSection.querySelectorAll('.noUi-target');
   
-  console.log(`Found ${allSliders.length} sliders to connect`);
+  // 1. Connect dual-range sliders (noUiSlider instances)
+  const dualSliders = parameterSection.querySelectorAll('.noUi-target');
+  console.log(`Found ${dualSliders.length} dual-range sliders to connect`);
   
-  allSliders.forEach((slider, index) => {
+  dualSliders.forEach((slider, index) => {
     if (slider.noUiSlider) {
       const row = slider.closest('.row-container');
       const label = row ? row.querySelector('.label-container') : null;
       const paramName = label ? label.textContent.trim() : `Unknown ${index}`;
       
-      console.log(`Connecting: ${paramName}`);
+      console.log(`Connecting dual-slider: ${paramName}`);
       
       slider.noUiSlider.off('update');
       
@@ -2647,8 +2776,314 @@ function connectAllSliders() {
     }
   });
   
-  console.log('🎉 All sliders connected! Parameter system fully operational.');
+  // 2. Connect behavior sliders (regular input[type="range"])
+  const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+  console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
+  
+  behaviorSliders.forEach((slider) => {
+    const row = slider.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
+    
+    console.log(`Connecting behavior slider: ${paramName}`);
+    
+    // Remove any existing event listeners
+    slider.oninput = null;
+    slider.onchange = null;
+    
+    // Add new event listener
+    slider.oninput = function(e) {
+      const value = parseInt(e.target.value);
+      
+      if (voiceData[currentVoice].parameters[paramName]) {
+        voiceData[currentVoice].parameters[paramName].behavior = value;
+        
+        // Update the tooltip
+        const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+        if (tooltip) {
+          tooltip.textContent = value + '%';
+          
+          // Update tooltip position
+          const percentage = (value - slider.min) / (slider.max - slider.min);
+          const offset = percentage * (slider.offsetWidth - 16);
+          tooltip.style.left = `${offset + 8}px`;
+        }
+        
+        console.log(`✅ ${paramName} behavior: ${value}%`);
+      }
+    };
+  });
+  
+  // 3. Connect dropdown selectors (Sound, Rhythms, Rests)
+  const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
+  console.log(`Found ${dropdowns.length} dropdowns to connect`);
+  
+  dropdowns.forEach((dropdown) => {
+    const row = dropdown.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Dropdown';
+    
+    // Determine if this is min/max dropdown or single dropdown
+    const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
+    const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
+    
+    console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
+    
+    // Remove existing event listeners
+    dropdown.onchange = null;
+    
+    // Add new event listener
+    dropdown.onchange = function(e) {
+      const value = parseInt(e.target.value);
+      
+      if (paramName === 'SOUND') {
+        // Single dropdown for sound selection
+        voiceData[currentVoice].parameters[paramName] = value;
+        console.log(`✅ ${paramName}: ${gmSounds[value]}`);
+      } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
+        // Dual dropdown (Rhythms/Rests)
+        if (dropdownLabel === 'Minimum') {
+          voiceData[currentVoice].parameters[paramName].min = value;
+        } else if (dropdownLabel === 'Maximum') {
+          voiceData[currentVoice].parameters[paramName].max = value;
+        }
+        console.log(`✅ ${paramName} ${dropdownLabel.toLowerCase()}: ${value}`);
+      }
+    };
+  });
+  
+  // 4. Connect multi-dual sliders (like DELAY with Speed/Depth)
+  const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
+  console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
+  
+  multiDualContainers.forEach((container) => {
+    const row = container.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Multi-Dual';
+    
+    // Skip if this is a regular dual slider (already handled above)
+    if (container.querySelectorAll('.slider-wrapper').length < 2) return;
+    
+    const speedSlider = container.querySelector('.slider-wrapper:first-child .noUi-target');
+    const depthSlider = container.querySelector('.slider-wrapper:last-child .noUi-target');
+    
+    if (speedSlider && speedSlider.noUiSlider) {
+      console.log(`Connecting multi-dual SPEED: ${paramName}`);
+      
+      speedSlider.noUiSlider.off('update');
+      speedSlider.noUiSlider.on('update', function(values) {
+        const min = parseFloat(values[0]);
+        const max = parseFloat(values[1]);
+        
+        if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]?.speed) {
+          voiceData[currentVoice].parameters[paramName].speed.min = min;
+          voiceData[currentVoice].parameters[paramName].speed.max = max;
+          console.log(`✅ ${paramName} speed: ${min}-${max}`);
+        }
+      });
+    }
+    
+    if (depthSlider && depthSlider.noUiSlider) {
+      console.log(`Connecting multi-dual DEPTH: ${paramName}`);
+      
+      depthSlider.noUiSlider.off('update');
+      depthSlider.noUiSlider.on('update', function(values) {
+        const min = parseFloat(values[0]);
+        const max = parseFloat(values[1]);
+        
+        if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]?.depth) {
+          voiceData[currentVoice].parameters[paramName].depth.min = min;
+          voiceData[currentVoice].parameters[paramName].depth.max = max;
+          console.log(`✅ ${paramName} depth: ${min}-${max}`);
+        }
+      });
+    }
+  });
+  
+  console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
+  console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
+  console.log(`   ✅ ${behaviorSliders.length} behavior sliders`);
+  console.log(`   ✅ ${dropdowns.length} dropdown controls`);
+  console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
 }
+
+// Enhanced parameter connection system - connects ALL UI controls to voiceData  
+function connectAllSliders() {
+  console.log('=== CONNECTING ALL PARAMETER CONTROLS ===');
+  
+  const parameterSection = document.getElementById('parameter-section');
+  
+  // 1. Connect dual-range sliders (noUiSlider instances)
+  const dualSliders = parameterSection.querySelectorAll('.noUi-target');
+  console.log(`Found ${dualSliders.length} dual-range sliders to connect`);
+  
+  dualSliders.forEach((slider, index) => {
+    if (slider.noUiSlider) {
+      const row = slider.closest('.row-container');
+      const label = row ? row.querySelector('.label-container') : null;
+      const paramName = label ? label.textContent.trim() : `Unknown ${index}`;
+      
+      console.log(`Connecting dual-slider: ${paramName}`);
+      
+      slider.noUiSlider.off('update');
+      
+      slider.noUiSlider.on('update', function(values) {
+        if (paramName === 'MELODIC RANGE') {
+          const minMidi = convertNoteNameToMidi(values[0]);
+          const maxMidi = convertNoteNameToMidi(values[1]);
+          
+          if (!isNaN(minMidi) && !isNaN(maxMidi)) {
+            voiceData[currentVoice].parameters[paramName].min = minMidi;
+            voiceData[currentVoice].parameters[paramName].max = maxMidi;
+            delete voiceData[currentVoice].parameters[paramName].currentNote;
+            console.log(`✅ ${paramName}: ${values[0]}-${values[1]} → MIDI ${minMidi}-${maxMidi}`);
+          }
+        } else {
+          const min = parseFloat(values[0]);
+          const max = parseFloat(values[1]);
+          
+          if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]) {
+            voiceData[currentVoice].parameters[paramName].min = min;
+            voiceData[currentVoice].parameters[paramName].max = max;
+            delete voiceData[currentVoice].parameters[paramName].currentValue;
+            console.log(`✅ ${paramName}: ${min}-${max}`);
+          }
+        }
+      });
+    }
+  });
+  
+  // 2. Connect behavior sliders (regular input[type="range"])
+  const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+  console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
+  
+  behaviorSliders.forEach((slider) => {
+    const row = slider.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
+    
+    console.log(`Connecting behavior slider: ${paramName}`);
+    
+    // Remove any existing event listeners
+    slider.oninput = null;
+    slider.onchange = null;
+    
+    // Add new event listener
+    slider.oninput = function(e) {
+      const value = parseInt(e.target.value);
+      
+      if (voiceData[currentVoice].parameters[paramName]) {
+        voiceData[currentVoice].parameters[paramName].behavior = value;
+        
+        // Update the tooltip
+        const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+        if (tooltip) {
+          tooltip.textContent = value + '%';
+          
+          // Update tooltip position
+          const percentage = (value - slider.min) / (slider.max - slider.min);
+          const offset = percentage * (slider.offsetWidth - 16);
+          tooltip.style.left = `${offset + 8}px`;
+        }
+        
+        console.log(`✅ ${paramName} behavior: ${value}%`);
+      }
+    };
+  });
+  
+  // 3. Connect dropdown selectors (Sound, Rhythms, Rests)
+  const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
+  console.log(`Found ${dropdowns.length} dropdowns to connect`);
+  
+  dropdowns.forEach((dropdown) => {
+    const row = dropdown.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Dropdown';
+    
+    // Determine if this is min/max dropdown or single dropdown
+    const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
+    const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
+    
+    console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
+    
+    // Remove existing event listeners
+    dropdown.onchange = null;
+    
+    // Add new event listener
+    dropdown.onchange = function(e) {
+      const value = parseInt(e.target.value);
+      
+      if (paramName === 'SOUND') {
+        // Single dropdown for sound selection
+        voiceData[currentVoice].parameters[paramName] = value;
+        console.log(`✅ ${paramName}: ${gmSounds[value]}`);
+      } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
+        // Dual dropdown (Rhythms/Rests)
+        if (dropdownLabel === 'Minimum') {
+          voiceData[currentVoice].parameters[paramName].min = value;
+        } else if (dropdownLabel === 'Maximum') {
+          voiceData[currentVoice].parameters[paramName].max = value;
+        }
+        console.log(`✅ ${paramName} ${dropdownLabel.toLowerCase()}: ${value}`);
+      }
+    };
+  });
+  
+  // 4. Connect multi-dual sliders (like DELAY with Speed/Depth)
+  const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
+  console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
+  
+  multiDualContainers.forEach((container) => {
+    const row = container.closest('.row-container');
+    const label = row ? row.querySelector('.label-container') : null;
+    const paramName = label ? label.textContent.trim() : 'Unknown Multi-Dual';
+    
+    // Skip if this is a regular dual slider (already handled above)
+    if (container.querySelectorAll('.slider-wrapper').length < 2) return;
+    
+    const speedSlider = container.querySelector('.slider-wrapper:first-child .noUi-target');
+    const depthSlider = container.querySelector('.slider-wrapper:last-child .noUi-target');
+    
+    if (speedSlider && speedSlider.noUiSlider) {
+      console.log(`Connecting multi-dual SPEED: ${paramName}`);
+      
+      speedSlider.noUiSlider.off('update');
+      speedSlider.noUiSlider.on('update', function(values) {
+        const min = parseFloat(values[0]);
+        const max = parseFloat(values[1]);
+        
+        if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]?.speed) {
+          voiceData[currentVoice].parameters[paramName].speed.min = min;
+          voiceData[currentVoice].parameters[paramName].speed.max = max;
+          console.log(`✅ ${paramName} speed: ${min}-${max}`);
+        }
+      });
+    }
+    
+    if (depthSlider && depthSlider.noUiSlider) {
+      console.log(`Connecting multi-dual DEPTH: ${paramName}`);
+      
+      depthSlider.noUiSlider.off('update');
+      depthSlider.noUiSlider.on('update', function(values) {
+        const min = parseFloat(values[0]);
+        const max = parseFloat(values[1]);
+        
+        if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]?.depth) {
+          voiceData[currentVoice].parameters[paramName].depth.min = min;
+          voiceData[currentVoice].parameters[paramName].depth.max = max;
+          console.log(`✅ ${paramName} depth: ${min}-${max}`);
+        }
+      });
+    }
+  });
+  
+  console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
+  console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
+  console.log(`   ✅ ${behaviorSliders.length} behavior sliders`);
+  console.log(`   ✅ ${dropdowns.length} dropdown controls`);
+  console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
+}
+
 
 
 // Test DELAY slider responsiveness
@@ -2668,3 +3103,336 @@ function testDelaySliders() {
   console.log('\nExpected: DELAY values should update as you move sliders');
   console.log('Next step: Implement actual audio delay effect');
 }
+
+// SESSION 6 ENDS HERE 
+
+
+
+// SESSION 7 START
+
+class VoiceManager {
+    constructor(audioContext, masterGainNode) {
+        this.audioContext = audioContext;
+        this.masterGainNode = masterGainNode;
+        this.voices = [];
+        this.isPlaying = false;
+        
+        // Create 16 independent voice instances
+        for (let i = 0; i < 16; i++) {
+            this.voices.push(new Voice(audioContext, i, masterGainNode));
+        }
+        
+        console.log('VoiceManager initialized with 16 voices');
+    }
+    
+/**
+ * Start all enabled voices playing together
+*/
+     startAllVoices() {
+        if (this.isPlaying) {
+            this.stopAllVoices();
+        }
+        
+        this.isPlaying = true;
+        
+        // Start each enabled voice
+        this.voices.forEach((voice, index) => {
+            if (voiceData[index].enabled) {
+                voice.startPlaying();
+                console.log(`Started voice ${index + 1}`);
+            }
+        });
+        
+        console.log('Multi-voice playback started');
+    }
+    
+    /**
+     * Stop all voices
+     */
+    stopAllVoices() {
+        this.isPlaying = false;
+        
+        this.voices.forEach((voice, index) => {
+            voice.stopPlaying();
+        });
+        
+        console.log('All voices stopped');
+    }
+    
+    /**
+     * Preview individual voice (for parameter adjustment)
+     */
+    previewVoice(voiceIndex) {
+        const voice = this.voices[voiceIndex];
+        
+        if (voice.isPreviewPlaying) {
+            voice.stopPreview();
+        } else {
+            // Stop any other voice previews first
+            this.voices.forEach(v => v.stopPreview());
+            voice.startPreview();
+        }
+    }
+    
+    /**
+     * Get enabled voices for coordination
+     */
+    getEnabledVoices() {
+        return this.voices.filter((voice, index) => voiceData[index].enabled);
+    }
+} 
+
+
+
+
+class Voice {
+    constructor(audioContext, voiceIndex, masterGainNode) {
+        this.audioContext = audioContext;
+        this.voiceIndex = voiceIndex;
+        this.masterGainNode = masterGainNode;
+        
+        // Voice state
+        this.isPlaying = false;
+        this.isPreviewPlaying = false;
+        this.currentlyPlayingNotes = [];
+        this.rhythmScheduler = null;
+        this.nextScheduledNoteTime = 0;
+        
+        // Audio chain for this voice
+        this.voiceGainNode = audioContext.createGain();
+        this.voicePanNode = audioContext.createStereoPanner();
+        
+        // Connect: voice gain -> voice pan -> master
+        this.voiceGainNode.connect(this.voicePanNode);
+        this.voicePanNode.connect(masterGainNode);
+        
+        // Set initial voice volume (prevent 16 voices from being too loud)
+        this.voiceGainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        
+        console.log(`Voice ${voiceIndex + 1} initialized`);
+    }
+    
+    /**
+     * Start this voice playing in multi-voice mode
+     */
+    startPlaying() {
+        if (this.isPlaying) return;
+        
+        this.isPlaying = true;
+        this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
+        
+        // Start rhythmic note scheduling for this voice
+        this.scheduleVoiceNotes();
+        
+        console.log(`Voice ${this.voiceIndex + 1} started playing`);
+    }
+    
+    /**
+     * Stop this voice
+     */
+    stopPlaying() {
+        this.isPlaying = false;
+        this.isPreviewPlaying = false;
+        
+        // Clear scheduler
+        if (this.rhythmScheduler) {
+            clearInterval(this.rhythmScheduler);
+            this.rhythmScheduler = null;
+        }
+        
+        // Stop all currently playing notes
+        this.currentlyPlayingNotes.forEach(note => {
+            try {
+                note.oscillator.stop();
+            } catch (e) {
+                // Already stopped
+            }
+        });
+        
+        this.currentlyPlayingNotes = [];
+        console.log(`Voice ${this.voiceIndex + 1} stopped`);
+    }
+    
+    /**
+     * Start individual voice preview (for parameter adjustment)
+     */
+    startPreview() {
+        this.stopPlaying(); // Stop multi-voice mode if active
+        
+        this.isPreviewPlaying = true;
+        this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
+        
+        // Start rhythmic playback and parameter evolution for this voice only
+        this.scheduleVoiceNotes();
+        this.startParameterEvolution();
+        
+        console.log(`Voice ${this.voiceIndex + 1} preview started`);
+    }
+    
+    /**
+     * Stop individual voice preview
+     */
+    stopPreview() {
+        this.isPreviewPlaying = false;
+        this.stopPlaying();
+        
+        console.log(`Voice ${this.voiceIndex + 1} preview stopped`);
+    }
+    
+    /**
+     * Schedule notes for this voice
+     */
+    scheduleVoiceNotes() {
+        if (!this.isPlaying && !this.isPreviewPlaying) return;
+        
+        const scheduleAhead = () => {
+            if (!this.isPlaying && !this.isPreviewPlaying) return;
+            
+            const currentTime = this.audioContext.currentTime;
+            const scheduleAheadTime = 0.5;
+            
+            // Schedule notes while within lookahead window
+            while (this.nextScheduledNoteTime < currentTime + scheduleAheadTime) {
+                this.nextScheduledNoteTime = this.scheduleNextNote(this.nextScheduledNoteTime);
+            }
+        };
+        
+        // Schedule first notes immediately
+        scheduleAhead();
+        
+        // Continue scheduling every 50ms
+        this.rhythmScheduler = setInterval(scheduleAhead, 50);
+    }
+    
+    /**
+     * Schedule a single note for this voice
+     */
+    scheduleNextNote(startTime) {
+        // Get current parameter values for this voice
+        const voiceParams = voiceData[this.voiceIndex].parameters;
+        
+        // Select rhythm and rest durations
+        const rhythmParam = voiceParams['RHYTHMS'];
+        const restParam = voiceParams['RESTS'];
+        
+        const rhythmIndex = this.selectValueInRange(rhythmParam);
+        const restIndex = this.selectValueInRange(restParam);
+        
+        const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
+        const restDuration = getRestDuration(restIndex, testTempo);
+        
+        // Select note frequency
+        const noteInfo = selectMidiNote(this.voiceIndex);
+        
+        // Schedule the note with this voice's audio chain
+        const scheduledNote = this.createScheduledNote(
+            noteInfo.frequency, 
+            noteDuration, 
+            startTime
+        );
+        
+        if (scheduledNote) {
+            this.currentlyPlayingNotes.push(scheduledNote);
+        }
+        
+        // Return next note timing
+        return startTime + noteDuration + restDuration;
+    }
+    
+    /**
+     * Create a scheduled note for this voice
+     */
+    createScheduledNote(frequency, duration, startTime) {
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        // Get voice sound type
+        const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+        const selectedSoundName = gmSounds[selectedSoundIndex];
+        const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+        
+        // Set up oscillator
+        oscillator.type = oscillatorType;
+        oscillator.frequency.setValueAtTime(frequency, startTime);
+        
+        // Apply current volume parameter
+        const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+        const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+        const gainValue = (currentVolume / 100) * 0.3; // Scale down for multi-voice
+        
+        // ADSR envelope
+        const attackTime = 0.01;
+        const releaseTime = 0.1;
+        const sustainLevel = gainValue * 0.8;
+        
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+        gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+        gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+        
+        // Connect through this voice's audio chain
+        oscillator.connect(gainNode);
+        gainNode.connect(this.voiceGainNode); // Connect to voice's gain, not master
+        
+        // Schedule playback
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+        
+        const noteInfo = {
+            oscillator,
+            gainNode,
+            startTime,
+            duration,
+            frequency
+        };
+        
+        // Clean up when note ends
+        oscillator.onended = () => {
+            const index = this.currentlyPlayingNotes.indexOf(noteInfo);
+            if (index > -1) {
+                this.currentlyPlayingNotes.splice(index, 1);
+            }
+            try {
+                oscillator.disconnect();
+                gainNode.disconnect();
+            } catch (e) {
+                // Already disconnected
+            }
+        };
+        
+        return noteInfo;
+    }
+    
+    /**
+     * Select a value within parameter range considering behavior
+     */
+    selectValueInRange(param) {
+        if (param.behavior > 0) {
+            return Math.floor(interpolateParameter(
+                (param.min + param.max) / 2,
+                param.min,
+                param.max,
+                param.behavior,
+                0.3
+            ));
+        } else {
+            return Math.floor((param.min + param.max) / 2);
+        }
+    }
+    
+    /**
+     * Start parameter evolution for preview mode
+     */
+    startParameterEvolution() {
+        if (this.isPreviewPlaying) {
+            // Use existing parameter evolution system
+            startTestClock();
+        }
+    }
+}
+
+// Global voice manager instance
+let voiceManager = null;
+
+// WORKING UNTIL HERE - 
+
