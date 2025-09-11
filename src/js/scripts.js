@@ -1332,7 +1332,7 @@ function previewVoiceWithInterpolation(voiceIndex) {
 
 // Rhythm duration mapping (beats relative to quarter note = 1 beat)
 const rhythmDurations = {
-  0: { name: "Select", beats: 1 }, // Default
+  0: { name: "Select", beats: 0 }, // Default
   1: { name: "Sixteenth Note Triplets", beats: 1/6 },
   2: { name: "Sixteenth Notes", beats: 0.25 },
   3: { name: "Eighth Note Triplets", beats: 1/3 },
@@ -2002,6 +2002,8 @@ function playChromaticScale() {
   console.log(`Playing ${endMidi - startMidi + 1} notes from MIDI ${startMidi} to ${endMidi}`);
   console.log('Note duration: 300ms, Gap: 50ms, Total time: ~31 seconds');
   
+
+
   function scheduleNextNote() {
     if (currentMidi > endMidi) {
       console.log('Chromatic scale complete!');
@@ -3182,8 +3184,7 @@ class VoiceManager {
     }
 } 
 
-
-
+// INSERT OSCILLATOR FIX HERE:
 
 class Voice {
     constructor(audioContext, voiceIndex, masterGainNode) {
@@ -3194,13 +3195,17 @@ class Voice {
         // Voice state
         this.isPlaying = false;
         this.isPreviewPlaying = false;
-        this.currentlyPlayingNotes = [];
+        this.currentlyPlayingNotes = []; // ← THIS IS MISSING!
         this.rhythmScheduler = null;
         this.nextScheduledNoteTime = 0;
         
         // Audio chain for this voice
         this.voiceGainNode = audioContext.createGain();
         this.voicePanNode = audioContext.createStereoPanner();
+        
+        // CONTINUOUS OSCILLATOR - never stops!
+        this.continuousOscillator = null;
+        this.noteGainNode = null;
         
         // Connect: voice gain -> voice pan -> master
         this.voiceGainNode.connect(this.voicePanNode);
@@ -3209,7 +3214,58 @@ class Voice {
         // Set initial voice volume (prevent 16 voices from being too loud)
         this.voiceGainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
         
-        console.log(`Voice ${voiceIndex + 1} initialized`);
+        console.log(`Voice ${voiceIndex + 1} initialized with continuous oscillator`);
+    }
+    
+    /**
+     * Initialize the continuous oscillator system
+     */
+    initializeContinuousOscillator() {
+        if (this.continuousOscillator) {
+            this.stopContinuousOscillator();
+        }
+        
+        // Create continuous oscillator
+        this.continuousOscillator = this.audioContext.createOscillator();
+        this.noteGainNode = this.audioContext.createGain();
+        
+        // Get voice sound type
+        const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+        const selectedSoundName = gmSounds[selectedSoundIndex];
+        const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+        
+        // Set up oscillator
+        this.continuousOscillator.type = oscillatorType;
+        this.continuousOscillator.frequency.setValueAtTime(220, this.audioContext.currentTime); // Start at A3
+        
+        // Connect: oscillator -> note gain -> voice gain -> voice pan -> master
+        this.continuousOscillator.connect(this.noteGainNode);
+        this.noteGainNode.connect(this.voiceGainNode);
+        
+        // Start with gain at 0 (silent)
+        this.noteGainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+        
+        // Start the oscillator and never stop it!
+        this.continuousOscillator.start();
+        
+        console.log(`Voice ${this.voiceIndex + 1} continuous oscillator started`);
+    }
+    
+    /**
+     * Stop the continuous oscillator
+     */
+    stopContinuousOscillator() {
+        if (this.continuousOscillator) {
+            try {
+                this.continuousOscillator.stop();
+                this.continuousOscillator.disconnect();
+                this.noteGainNode.disconnect();
+            } catch (e) {
+                // Already stopped
+            }
+            this.continuousOscillator = null;
+            this.noteGainNode = null;
+        }
     }
     
     /**
@@ -3217,6 +3273,8 @@ class Voice {
      */
     startPlaying() {
         if (this.isPlaying) return;
+        
+        this.initializeContinuousOscillator();
         
         this.isPlaying = true;
         this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
@@ -3240,16 +3298,9 @@ class Voice {
             this.rhythmScheduler = null;
         }
         
-        // Stop all currently playing notes
-        this.currentlyPlayingNotes.forEach(note => {
-            try {
-                note.oscillator.stop();
-            } catch (e) {
-                // Already stopped
-            }
-        });
+        // Stop continuous oscillator
+        this.stopContinuousOscillator();
         
-        this.currentlyPlayingNotes = [];
         console.log(`Voice ${this.voiceIndex + 1} stopped`);
     }
     
@@ -3258,6 +3309,8 @@ class Voice {
      */
     startPreview() {
         this.stopPlaying(); // Stop multi-voice mode if active
+        
+        this.initializeContinuousOscillator();
         
         this.isPreviewPlaying = true;
         this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
@@ -3307,100 +3360,184 @@ class Voice {
     /**
      * Schedule a single note for this voice
      */
+
+
+    // INSERT FOR TROUBLESHOOTING
+    // TEMPORARY - Old note scheduling method for testing
     scheduleNextNote(startTime) {
-        // Get current parameter values for this voice
-        const voiceParams = voiceData[this.voiceIndex].parameters;
-        
-        // Select rhythm and rest durations
-        const rhythmParam = voiceParams['RHYTHMS'];
-        const restParam = voiceParams['RESTS'];
-        
-        const rhythmIndex = this.selectValueInRange(rhythmParam);
-        const restIndex = this.selectValueInRange(restParam);
-        
-        const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
-        const restDuration = getRestDuration(restIndex, testTempo);
-        
-        // Select note frequency
-        const noteInfo = selectMidiNote(this.voiceIndex);
-        
-        // Schedule the note with this voice's audio chain
-        const scheduledNote = this.createScheduledNote(
-            noteInfo.frequency, 
-            noteDuration, 
-            startTime
-        );
-        
-        if (scheduledNote) {
-            this.currentlyPlayingNotes.push(scheduledNote);
-        }
-        
-        // Return next note timing
-        return startTime + noteDuration + restDuration;
+    // Get current parameter values for this voice
+    const voiceParams = voiceData[this.voiceIndex].parameters;
+    
+    // Select rhythm and rest durations
+    const rhythmParam = voiceParams['RHYTHMS'];
+    const restParam = voiceParams['RESTS'];
+    
+    const rhythmIndex = this.selectValueInRange(rhythmParam);
+    const restIndex = this.selectValueInRange(restParam);
+    
+    const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
+    const restDuration = getRestDuration(restIndex, testTempo);
+    
+    // Select note frequency
+    const noteInfo = selectMidiNote(this.voiceIndex);
+    
+    // USE OLD METHOD - create individual oscillator per note
+    const scheduledNote = this.createScheduledNote(
+        noteInfo.frequency, 
+        noteDuration, 
+        startTime
+    );
+    
+    if (scheduledNote) {
+        this.currentlyPlayingNotes.push(scheduledNote);
     }
     
+    // Return next note timing
+    return startTime + noteDuration + restDuration;
+}
+
+
+
+
+    // scheduleNextNote(startTime) {
+    //     if (!this.continuousOscillator || !this.noteGainNode) {
+    //         return startTime + 0.5; // Skip if oscillator not ready
+    //     }
+        
+    //     // Get current parameter values for this voice
+    //     const voiceParams = voiceData[this.voiceIndex].parameters;
+        
+    //     // Select rhythm and rest durations
+    //     const rhythmParam = voiceParams['RHYTHMS'];
+    //     const restParam = voiceParams['RESTS'];
+        
+    //     const rhythmIndex = this.selectValueInRange(rhythmParam);
+    //     const restIndex = this.selectValueInRange(restParam);
+        
+    //     const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
+    //     const restDuration = getRestDuration(restIndex, testTempo);
+        
+    //     // Select note frequency
+    //     const noteInfo = selectMidiNote(this.voiceIndex);
+        
+    //     // Schedule the note using continuous oscillator
+    //     this.scheduleNoteOnContinuousOscillator(noteInfo.frequency, noteDuration, startTime);
+        
+    //     // Return next note timing
+    //     return startTime + noteDuration + restDuration;
+    // }
+    
+
+/**
+ * Create a scheduled note for this voice (OLD METHOD - for testing)
+ */
+createScheduledNote(frequency, duration, startTime) {
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+    
+    // Get voice sound type
+    const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+    const selectedSoundName = gmSounds[selectedSoundIndex];
+    const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+    
+    // Set up oscillator
+    oscillator.type = oscillatorType;
+    oscillator.frequency.setValueAtTime(frequency, startTime);
+    
+    // Apply current volume parameter
+    const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+    const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+    const gainValue = (currentVolume / 100) * 3.0; // Scale down for multi-voice
+    
+    // ADSR envelope
+    const attackTime = 0.01;
+    const releaseTime = 0.1;
+    const sustainLevel = gainValue * 0.8;
+    
+    gainNode.gain.setValueAtTime(0, startTime);
+    gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+    gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+    gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+    
+    // Connect through this voice's audio chain
+    oscillator.connect(gainNode);
+    gainNode.connect(this.voiceGainNode);
+    
+    // Schedule playback
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration);
+    
+    const noteInfo = {
+        oscillator,
+        gainNode,
+        startTime,
+        duration,
+        frequency
+    };
+    
+    // Clean up when note ends
+    oscillator.onended = () => {
+        const index = this.currentlyPlayingNotes.indexOf(noteInfo);
+        if (index > -1) {
+            this.currentlyPlayingNotes.splice(index, 1);
+        }
+        try {
+            oscillator.disconnect();
+            gainNode.disconnect();
+        } catch (e) {
+            // Already disconnected
+        }
+    };
+    
+    return noteInfo;
+}
+
+
+
     /**
-     * Create a scheduled note for this voice
+     * Schedule a note on the continuous oscillator (NO GAPS!)
      */
-    createScheduledNote(frequency, duration, startTime) {
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-        
-        // Get voice sound type
-        const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
-        const selectedSoundName = gmSounds[selectedSoundIndex];
-        const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
-        
-        // Set up oscillator
-        oscillator.type = oscillatorType;
-        oscillator.frequency.setValueAtTime(frequency, startTime);
+    scheduleNoteOnContinuousOscillator(frequency, duration, startTime) {
+        if (!this.continuousOscillator || !this.noteGainNode) return;
         
         // Apply current volume parameter
         const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
         const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
         const gainValue = (currentVolume / 100) * 0.3; // Scale down for multi-voice
         
-        // ADSR envelope
-        const attackTime = 0.01;
-        const releaseTime = 0.1;
+        // SEAMLESS frequency change
+        this.continuousOscillator.frequency.setValueAtTime(frequency, startTime);
+        
+        // SEAMLESS gain envelope (ADSR)
+        const attackTime = 0.01;  // 10ms attack
+        const releaseTime = 0.05; // 50ms release (shorter for faster notes)
         const sustainLevel = gainValue * 0.8;
         
-        gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
-        gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
-        gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+        const gain = this.noteGainNode.gain;
         
-        // Connect through this voice's audio chain
-        oscillator.connect(gainNode);
-        gainNode.connect(this.voiceGainNode); // Connect to voice's gain, not master
+        // Note ON envelope
+        gain.setValueAtTime(gain.value, startTime); // Start from current level
+        gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+        gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
         
-        // Schedule playback
-        oscillator.start(startTime);
-        oscillator.stop(startTime + duration);
+        // Note OFF envelope
+        gain.linearRampToValueAtTime(0, startTime + duration);
         
-        const noteInfo = {
-            oscillator,
-            gainNode,
-            startTime,
-            duration,
-            frequency
-        };
-        
-        // Clean up when note ends
-        oscillator.onended = () => {
-            const index = this.currentlyPlayingNotes.indexOf(noteInfo);
-            if (index > -1) {
-                this.currentlyPlayingNotes.splice(index, 1);
-            }
-            try {
-                oscillator.disconnect();
-                gainNode.disconnect();
-            } catch (e) {
-                // Already disconnected
-            }
-        };
-        
-        return noteInfo;
+        console.log(`Voice ${this.voiceIndex + 1}: ${midiNoteNames[Math.round(midiToFrequency(frequency))] || 'Note'} @ ${frequency.toFixed(1)}Hz for ${duration.toFixed(3)}s`);
+    }
+    
+    /**
+     * Update oscillator type when sound changes
+     */
+    updateOscillatorType() {
+        if (this.continuousOscillator) {
+            const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+            const selectedSoundName = gmSounds[selectedSoundIndex];
+            const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+            
+            this.continuousOscillator.type = oscillatorType;
+            console.log(`Voice ${this.voiceIndex + 1} oscillator type changed to: ${oscillatorType}`);
+        }
     }
     
     /**
@@ -3431,8 +3568,336 @@ class Voice {
     }
 }
 
+
+
+// END OSCILLATOR FIX HERE
+
+
+// Original working class Voice
+// class Voice {
+//     constructor(audioContext, voiceIndex, masterGainNode) {
+//         this.audioContext = audioContext;
+//         this.voiceIndex = voiceIndex;
+//         this.masterGainNode = masterGainNode;
+        
+//         // Voice state
+//         this.isPlaying = false;
+//         this.isPreviewPlaying = false;
+//         this.currentlyPlayingNotes = [];
+//         this.rhythmScheduler = null;
+//         this.nextScheduledNoteTime = 0;
+        
+//         // Audio chain for this voice
+//         this.voiceGainNode = audioContext.createGain();
+//         this.voicePanNode = audioContext.createStereoPanner();
+        
+//         // Connect: voice gain -> voice pan -> master
+//         this.voiceGainNode.connect(this.voicePanNode);
+//         this.voicePanNode.connect(masterGainNode);
+        
+//         // Set initial voice volume (prevent 16 voices from being too loud)
+//         this.voiceGainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        
+//         console.log(`Voice ${voiceIndex + 1} initialized`);
+//     }
+    
+//     /**
+//      * Start this voice playing in multi-voice mode
+//      */
+//     startPlaying() {
+//         if (this.isPlaying) return;
+        
+//         this.isPlaying = true;
+//         this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
+        
+//         // Start rhythmic note scheduling for this voice
+//         this.scheduleVoiceNotes();
+        
+//         console.log(`Voice ${this.voiceIndex + 1} started playing`);
+//     }
+    
+//     /**
+//      * Stop this voice
+//      */
+//     stopPlaying() {
+//         this.isPlaying = false;
+//         this.isPreviewPlaying = false;
+        
+//         // Clear scheduler
+//         if (this.rhythmScheduler) {
+//             clearInterval(this.rhythmScheduler);
+//             this.rhythmScheduler = null;
+//         }
+        
+//         // Stop all currently playing notes
+//         this.currentlyPlayingNotes.forEach(note => {
+//             try {
+//                 note.oscillator.stop();
+//             } catch (e) {
+//                 // Already stopped
+//             }
+//         });
+        
+//         this.currentlyPlayingNotes = [];
+//         console.log(`Voice ${this.voiceIndex + 1} stopped`);
+//     }
+    
+//     /**
+//      * Start individual voice preview (for parameter adjustment)
+//      */
+//     startPreview() {
+//         this.stopPlaying(); // Stop multi-voice mode if active
+        
+//         this.isPreviewPlaying = true;
+//         this.nextScheduledNoteTime = this.audioContext.currentTime + 0.1;
+        
+//         // Start rhythmic playback and parameter evolution for this voice only
+//         this.scheduleVoiceNotes();
+//         this.startParameterEvolution();
+        
+//         console.log(`Voice ${this.voiceIndex + 1} preview started`);
+//     }
+    
+//     /**
+//      * Stop individual voice preview
+//      */
+//     stopPreview() {
+//         this.isPreviewPlaying = false;
+//         this.stopPlaying();
+        
+//         console.log(`Voice ${this.voiceIndex + 1} preview stopped`);
+//     }
+    
+//     /**
+//      * Schedule notes for this voice
+//      */
+//     scheduleVoiceNotes() {
+//         if (!this.isPlaying && !this.isPreviewPlaying) return;
+        
+//         const scheduleAhead = () => {
+//             if (!this.isPlaying && !this.isPreviewPlaying) return;
+            
+//             const currentTime = this.audioContext.currentTime;
+//             const scheduleAheadTime = 0.5;
+            
+//             // Schedule notes while within lookahead window
+//             while (this.nextScheduledNoteTime < currentTime + scheduleAheadTime) {
+//                 this.nextScheduledNoteTime = this.scheduleNextNote(this.nextScheduledNoteTime);
+//             }
+//         };
+        
+//         // Schedule first notes immediately
+//         scheduleAhead();
+        
+//         // Continue scheduling every 50ms
+//         this.rhythmScheduler = setInterval(scheduleAhead, 50);
+//     }
+    
+//     /**
+//      * Schedule a single note for this voice
+//      */
+//     scheduleNextNote(startTime) {
+//         // Get current parameter values for this voice
+//         const voiceParams = voiceData[this.voiceIndex].parameters;
+        
+//         // Select rhythm and rest durations
+//         const rhythmParam = voiceParams['RHYTHMS'];
+//         const restParam = voiceParams['RESTS'];
+        
+//         const rhythmIndex = this.selectValueInRange(rhythmParam);
+//         const restIndex = this.selectValueInRange(restParam);
+        
+//         const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
+//         const restDuration = getRestDuration(restIndex, testTempo);
+        
+//         // Select note frequency
+//         const noteInfo = selectMidiNote(this.voiceIndex);
+        
+//         // Schedule the note with this voice's audio chain
+//         const scheduledNote = this.createScheduledNote(
+//             noteInfo.frequency, 
+//             noteDuration, 
+//             startTime
+//         );
+        
+//         if (scheduledNote) {
+//             this.currentlyPlayingNotes.push(scheduledNote);
+//         }
+        
+//         // Return next note timing
+//         return startTime + noteDuration + restDuration;
+//     }
+    
+//     /**
+//      * Create a scheduled note for this voice
+//      */
+//     createScheduledNote(frequency, duration, startTime) {
+//         const oscillator = this.audioContext.createOscillator();
+//         const gainNode = this.audioContext.createGain();
+        
+//         // Get voice sound type
+//         const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+//         const selectedSoundName = gmSounds[selectedSoundIndex];
+//         const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
+        
+//         // Set up oscillator
+//         oscillator.type = oscillatorType;
+//         oscillator.frequency.setValueAtTime(frequency, startTime);
+        
+//         // Apply current volume parameter
+//         const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+//         const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+//         const gainValue = (currentVolume / 100) * 0.3; // Scale down for multi-voice
+        
+//         // ADSR envelope
+//         const attackTime = 0.01;
+//         const releaseTime = 0.1;
+//         const sustainLevel = gainValue * 0.8;
+        
+//         gainNode.gain.setValueAtTime(0, startTime);
+//         gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
+//         gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+//         gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+        
+//         // Connect through this voice's audio chain
+//         oscillator.connect(gainNode);
+//         gainNode.connect(this.voiceGainNode); // Connect to voice's gain, not master
+        
+//         // Schedule playback
+//         oscillator.start(startTime);
+//         oscillator.stop(startTime + duration);
+        
+//         const noteInfo = {
+//             oscillator,
+//             gainNode,
+//             startTime,
+//             duration,
+//             frequency
+//         };
+        
+//         // Clean up when note ends
+//         oscillator.onended = () => {
+//             const index = this.currentlyPlayingNotes.indexOf(noteInfo);
+//             if (index > -1) {
+//                 this.currentlyPlayingNotes.splice(index, 1);
+//             }
+//             try {
+//                 oscillator.disconnect();
+//                 gainNode.disconnect();
+//             } catch (e) {
+//                 // Already disconnected
+//             }
+//         };
+        
+//         return noteInfo;
+//     }
+    
+//     /**
+//      * Select a value within parameter range considering behavior
+//      */
+//     selectValueInRange(param) {
+//         if (param.behavior > 0) {
+//             return Math.floor(interpolateParameter(
+//                 (param.min + param.max) / 2,
+//                 param.min,
+//                 param.max,
+//                 param.behavior,
+//                 0.3
+//             ));
+//         } else {
+//             return Math.floor((param.min + param.max) / 2);
+//         }
+//     }
+    
+//     /**
+//      * Start parameter evolution for preview mode
+//      */
+//     startParameterEvolution() {
+//         if (this.isPreviewPlaying) {
+//             // Use existing parameter evolution system
+//             startTestClock();
+//         }
+//     }
+// }
+
+
+
 // Global voice manager instance
 let voiceManager = null;
 
 // WORKING UNTIL HERE - 
+// END OF SESSION 7
+
+
+// FIXING THE OSCILLATOR GAPS DEBUG CODE
+
+// =============================================================================
+// DEBUG FUNCTIONS - Development & Troubleshooting Tools
+// =============================================================================
+
+/**
+ * Debug voice system implementation and status
+ * Usage: debugVoiceSystem() - Check if continuous oscillators are working
+ */
+function debugVoiceSystem() {
+  console.log('=== VOICE SYSTEM DEBUG ===');
+  console.log('voiceManager exists:', !!voiceManager);
+  
+  if (voiceManager) {
+    console.log('Number of voices:', voiceManager.voices.length);
+    
+    const voice0 = voiceManager.voices[0];
+    console.log('Voice 0 methods:', {
+      hasInitializeContinuous: typeof voice0.initializeContinuousOscillator,
+      hasScheduleNote: typeof voice0.scheduleNoteOnContinuousOscillator,
+      hasContinuousOsc: !!voice0.continuousOscillator,
+      hasNoteGain: !!voice0.noteGainNode
+    });
+  }
+  
+  // Check if we're using old or new Voice class
+  const testVoice = new Voice(audioManager.audioContext, 99, audioManager.masterGainNode);
+  console.log('New Voice class methods:', {
+    hasInitializeContinuous: typeof testVoice.initializeContinuousOscillator,
+    hasScheduleNote: typeof testVoice.scheduleNoteOnContinuousOscillator
+  });
+}
+
+/**
+ * Force initialize the complete voice system
+ * Usage: forceInitializeVoiceSystem() - Reset voice system if needed
+ */
+async function forceInitializeVoiceSystem() {
+  console.log('=== FORCE INITIALIZING VOICE SYSTEM ===');
+  
+  if (!audioManager) {
+    audioManager = new AudioManager();
+    await audioManager.initialize();
+  }
+  
+  if (!audioManager.isInitialized) {
+    console.log('Initializing audio...');
+    await audioManager.initialize();
+  }
+  
+  if (audioManager.isInitialized) {
+    voiceManager = new VoiceManager(audioManager.audioContext, audioManager.masterGainNode);
+    console.log('✅ VoiceManager created with continuous oscillators');
+    console.log('Voice count:', voiceManager.voices.length);
+    
+    const voice0 = voiceManager.voices[0];
+    console.log('Voice 0 has continuous methods:', {
+      initContinuous: typeof voice0.initializeContinuousOscillator,
+      scheduleOnContinuous: typeof voice0.scheduleNoteOnContinuousOscillator
+    });
+  }
+  
+  return voiceManager;
+}
+
+// =============================================================================
+// END DEBUG FUNCTIONS
+// =============================================================================
+
+
 
