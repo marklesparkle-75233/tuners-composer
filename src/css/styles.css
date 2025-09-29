@@ -339,6 +339,9 @@ padding: 1rem;
 background: #f8f9fa;
 border-bottom: 1px solid #dee2e6;
 margin: 1rem 0;
+/* gradient background? */
+background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+border: 1px solid rgba(0, 0, 0, 0.1); /* Hairline border */
 }
 
 .voice-label {
@@ -390,7 +393,7 @@ box-sizing: border-box;
 .row-container {
 display: flex;
 flex-direction: column;
-background: #fff;
+/* background: #c6dbf5; */
 border-radius: 8px;
 box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 min-height: 80px;
@@ -400,6 +403,9 @@ width: 100%;
 box-sizing: border-box;
 position: relative;
 margin-bottom: 4px;
+/* gradient background? */
+background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+border: 1px solid rgba(0, 0, 0, 0.1); /* Hairline border */
 }
 
 .label-container {
