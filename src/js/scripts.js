@@ -1,22 +1,34 @@
 // Parameter definitions
 const parameterDefinitions = [
-  { name: "SOUND", type: "dropdown", options: "gm-sounds" },
-  { name: "TEMPO (BPM)", type: "single-dual", min: 40, max: 240 },
-  { name: "VOLUME", type: "single-dual", min: 0, max: 100 },
-  { name: "STEREO BALANCE", type: "single-dual", min: -100, max: 100 },
-  { name: "MELODIC RANGE", type: "single-dual", min: 21, max: 108 },
-  { name: "ATTACK VELOCITY", type: "single-dual", min: 0, max: 127 },
-  { name: "RHYTHMS", type: "dual-dropdown", options: "rhythms" },
-  { name: "RESTS", type: "dual-dropdown", options: "rests" },
-  { name: "POLYPHONY", type: "single-dual", min: 1, max: 16 },
-  { name: "PORTAMENTO GLIDE TIME", type: "single-dual", min: 0, max: 100 },
-  { name: "REVERB", type: "single-dual", min: 0, max: 100 },
-  { name: "DELAY", type: "multi-dual", min: 0, max: 2000 },  // NEW: Time (ms) and Feedback (%),
-  { name: "DETUNING", type: "single-dual", min: -50, max: 50 },
-  { name: "TREMOLO", type: "multi-dual", min: 0, max: 100 },
-  { name: "CHORUS", type: "multi-dual", min: 0, max: 100 },
-  { name: "PHASER", type: "multi-dual", min: 0, max: 100 }
+  // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
+  { name: "SOUND", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
+  { name: "MELODIC RANGE", type: "single-dual", min: 21, max: 108, rollup: "instrument" },
+  { name: "POLYPHONY", type: "single-dual", min: 1, max: 16, rollup: "instrument" },
+  { name: "ATTACK VELOCITY", type: "single-dual", min: 0, max: 127, rollup: "instrument" },
+  { name: "DETUNING", type: "single-dual", min: -50, max: 50, rollup: "instrument" },
+  { name: "PORTAMENTO GLIDE TIME", type: "single-dual", min: 0, max: 100, rollup: "instrument" },
+  
+  // RHYTHM & TIMING ROLLUP (unchanged)
+  { name: "TEMPO (BPM)", type: "single-dual", min: 40, max: 240, rollup: "rhythm" },
+  { name: "RHYTHMS", type: "dual-dropdown", options: "rhythms", rollup: "rhythm" },
+  { name: "RESTS", type: "dual-dropdown", options: "rests", rollup: "rhythm" },
+  { name: "LIFE SPAN", type: "timing-controls", min: 0, max: 100, rollup: "rhythm" },
+  
+  // MIXING & LEVELS ROLLUP (unchanged)
+  { name: "VOLUME", type: "single-dual", min: 0, max: 100, rollup: "mixing" },
+  { name: "STEREO BALANCE", type: "single-dual", min: -100, max: 100, rollup: "mixing" },
+  
+  // MODULATION EFFECTS ROLLUP (unchanged)
+  { name: "TREMOLO", type: "multi-dual", min: 0, max: 100, rollup: "modulation" },
+  { name: "CHORUS", type: "multi-dual", min: 0, max: 100, rollup: "modulation" },
+  { name: "PHASER", type: "multi-dual", min: 0, max: 100, rollup: "modulation" },
+  
+  // SPATIAL EFFECTS ROLLUP (unchanged)
+  { name: "REVERB", type: "single-dual", min: 0, max: 100, rollup: "spatial" },
+  { name: "DELAY", type: "multi-dual", min: 0, max: 2000, rollup: "spatial" }
 ];
+
+
 
 // GM Sounds list
 const gmSounds = [
@@ -114,6 +126,7 @@ let voiceData = [];
 
 // INSERT THE COMPLETE FUNCTION HERE:
 // Initialize voice data structure - WITH SENSIBLE DEFAULTS
+// NEW TIMING PARAMETER ROW
 function initializeVoices() {
   voiceData = [];
   for (let i = 0; i < 16; i++) {
@@ -159,24 +172,11 @@ function initializeVoices() {
         
         // Set sensible defaults for single-dual parameters
         if (param.name === 'MELODIC RANGE') {
-          // Create piano keyboard for desktop
-          const pianoContainer = document.createElement('div');
-          pianoContainer.className = 'piano-container';
-          pianoContainer.style.width = '100%'; // Ensure container takes full width
-
-    // Create piano keys
-    for (let i = 0; i < 88; i++) {
-      const key = document.createElement('div');
-      key.className = 'piano-key';
-      key.dataset.note = i + 21; // MIDI note number
-      pianoContainer.appendChild(key);
-    }
-
-    voice.parameters[param.name] = {
-      min: 60,  // Middle C (C4)
-      max: 60,  // Middle C (will be updated by piano to show single note)
-      behavior: 50,
-      selectedNotes: [60] // Piano will load this as Middle C selected
+          voice.parameters[param.name] = {
+            min: 60,  // Middle C (C4)
+            max: 60,  // Middle C (will be updated by piano to show single note)
+            behavior: 50,
+            selectedNotes: [60] // Piano will load this as Middle C selected
           };
         } else {
           // Use 25%-75% range for other parameters (existing logic)
@@ -191,6 +191,7 @@ function initializeVoices() {
           console.error(`Missing min/max for parameter: ${param.name}`);
         }
         
+        // THIS WAS MISSING - add the actual parameter assignment for multi-dual
         voice.parameters[param.name] = {
           speed: {
             min: param.min + (param.max - param.min) * 0.25,
@@ -201,6 +202,14 @@ function initializeVoices() {
             max: param.min + (param.max - param.min) * 0.75
           },
           behavior: 50
+        };
+      } else if (param.type === 'timing-controls') {
+        // FIXED - only one parameter assignment for timing controls
+        voice.parameters[param.name] = {
+          duration: 50,    // Default values
+          entrance: 25,
+          exit: 25,
+          repeat: false
         };
       }
     });
@@ -219,7 +228,13 @@ function initializeVoices() {
   // TEMPORARY: Test what DELAY looks like
   console.log('DELAY parameter for voice 0:', voiceData[0].parameters['DELAY']);
 }
- 
+
+
+
+
+
+
+
 // Create voice tabs
 function createVoiceTabs() {
   const voiceTabs = document.getElementById('voice-tabs');
@@ -743,6 +758,108 @@ function createBehaviorSlider(param, voiceIndex) {
 }
 
 
+function createTimingControls(param, voiceIndex) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'timing-controls-container';
+  
+  // Get current voice data for initial values
+  const currentTimingData = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  // Container 1: Repeat label and checkbox
+  const repeatContainer = document.createElement('div');
+  repeatContainer.className = 'timing-repeat-container';
+  
+  const repeatLabel = document.createElement('span');
+  repeatLabel.className = 'timing-repeat-label';
+  repeatLabel.textContent = 'Repeat Y/N';
+  
+  const repeatCheckbox = document.createElement('input');
+  repeatCheckbox.type = 'checkbox';
+  repeatCheckbox.checked = currentTimingData.repeat; // Load from voiceData
+  repeatCheckbox.className = 'timing-checkbox';
+  
+  repeatContainer.appendChild(repeatLabel);
+  repeatContainer.appendChild(repeatCheckbox);
+  
+  // Container 2: Duration
+  const durationContainer = document.createElement('div');
+  durationContainer.className = 'timing-control-container duration-container';
+  
+  const durationLabel = document.createElement('div');
+  durationLabel.className = 'timing-control-label';
+  durationLabel.textContent = 'Duration';
+  
+  const durationFormatLabel = document.createElement('div');
+  durationFormatLabel.className = 'timing-format-label';
+  durationFormatLabel.textContent = 'mm:ss';
+  
+  const durationSlider = document.createElement('input');
+  durationSlider.type = 'range';
+  durationSlider.min = param.min;
+  durationSlider.max = param.max;
+  durationSlider.value = currentTimingData.duration; // Load from voiceData
+  durationSlider.className = 'timing-slider';
+  
+  durationContainer.appendChild(durationLabel);
+  durationContainer.appendChild(durationFormatLabel);
+  durationContainer.appendChild(durationSlider);
+  
+  // Container 3: Entrance
+  const entranceContainer = document.createElement('div');
+  entranceContainer.className = 'timing-control-container entrance-container';
+  
+  const entranceLabel = document.createElement('div');
+  entranceLabel.className = 'timing-control-label';
+  entranceLabel.textContent = 'Entrance';
+  
+  const entranceFormatLabel = document.createElement('div');
+  entranceFormatLabel.className = 'timing-format-label';
+  entranceFormatLabel.textContent = 'mm:ss';
+  
+  const entranceSlider = document.createElement('input');
+  entranceSlider.type = 'range';
+  entranceSlider.min = param.min;
+  entranceSlider.max = param.max;
+  entranceSlider.value = currentTimingData.entrance; // Load from voiceData
+  entranceSlider.className = 'timing-slider';
+  
+  entranceContainer.appendChild(entranceLabel);
+  entranceContainer.appendChild(entranceFormatLabel);
+  entranceContainer.appendChild(entranceSlider);
+  
+  // Container 4: Exit
+  const exitContainer = document.createElement('div');
+  exitContainer.className = 'timing-control-container exit-container';
+  
+  const exitLabel = document.createElement('div');
+  exitLabel.className = 'timing-control-label';
+  exitLabel.textContent = 'Exit';
+  
+  const exitFormatLabel = document.createElement('div');
+  exitFormatLabel.className = 'timing-format-label';
+  exitFormatLabel.textContent = 'mm:ss';
+  
+  const exitSlider = document.createElement('input');
+  exitSlider.type = 'range';
+  exitSlider.min = param.min;
+  exitSlider.max = param.max;
+  exitSlider.value = currentTimingData.exit; // Load from voiceData
+  exitSlider.className = 'timing-slider';
+  
+  exitContainer.appendChild(exitLabel);
+  exitContainer.appendChild(exitFormatLabel);
+  exitContainer.appendChild(exitSlider);
+  
+  // Add all containers to wrapper
+  wrapper.appendChild(repeatContainer);
+  wrapper.appendChild(durationContainer);
+  wrapper.appendChild(entranceContainer);
+  wrapper.appendChild(exitContainer);
+  
+  return wrapper;
+}
+
+
 function createRow(param, voiceIndex) {
   const row = document.createElement('div');
   row.className = 'row-container';
@@ -751,6 +868,11 @@ function createRow(param, voiceIndex) {
   if (param.name === 'MELODIC RANGE') {
     row.classList.add('melodic-range-row');
   }
+  
+  // Add special class for timing controls (full width, no behavior section)
+  if (param.name === 'LIFE SPAN') {
+    row.classList.add('timing-controls-row');
+  }
 
   // Label section (top)
   const label = document.createElement('div');
@@ -758,7 +880,16 @@ function createRow(param, voiceIndex) {
   label.textContent = param.name;
   row.appendChild(label);
 
-  // Controls section (bottom) - NEW STRUCTURE
+  // For timing controls, create a different structure (no controls-container wrapper)
+  if (param.type === 'timing-controls') {
+    const timingWrapper = document.createElement('div');
+    timingWrapper.className = 'timing-wrapper';
+    timingWrapper.appendChild(createTimingControls(param, voiceIndex));
+    row.appendChild(timingWrapper);
+    return row;
+  }
+
+  // Controls section (bottom) - NORMAL STRUCTURE for other parameters
   const controlsContainer = document.createElement('div');
   controlsContainer.className = 'controls-container';
 
@@ -797,6 +928,11 @@ function createRow(param, voiceIndex) {
 function renderParameters() {
   const parameterSection = document.getElementById('parameter-section');
   
+  // Initialize rollup state if needed
+  if (Object.keys(rollupState).length === 0) {
+    initializeRollupState();
+  }
+  
   // Properly destroy all existing noUiSlider instances before clearing
   const existingSliders = parameterSection.querySelectorAll('[data-nouislider]');
   existingSliders.forEach(slider => {
@@ -811,6 +947,7 @@ function renderParameters() {
   
   parameterSection.innerHTML = '';
   
+  // Voice controls
   const voiceControls = document.createElement('div');
   voiceControls.className = 'voice-controls';
   voiceControls.innerHTML = `
@@ -822,11 +959,32 @@ function renderParameters() {
   `;
   parameterSection.appendChild(voiceControls);
   
+  // Group parameters by rollup
+  const rollupGroups = {};
   parameterDefinitions.forEach(param => {
-    parameterSection.appendChild(createRow(param, currentVoice));
+    const rollupKey = param.rollup;
+    if (!rollupGroups[rollupKey]) {
+      rollupGroups[rollupKey] = [];
+    }
+    rollupGroups[rollupKey].push(param);
   });
+  
+  // Create rollups in specific order
+  const rollupOrder = ['instrument', 'mixing', 'rhythm', 'modulation', 'spatial'];
+  rollupOrder.forEach(rollupKey => {
+    if (rollupGroups[rollupKey]) {
+      const rollup = createRollup(rollupKey, rollupConfig[rollupKey], rollupGroups[rollupKey], currentVoice);
+      parameterSection.appendChild(rollup);
+    }
+  });
+  
+  // Reconnect all sliders after rendering
+  setTimeout(() => {
+    connectAllSliders();
+  }, 100);
 }
 
+  
 // Voice-specific functions with Preview/Stop toggle
 function previewVoice(voiceIndex) {
   if (!audioManager || !audioManager.isInitialized) {
@@ -2864,11 +3022,12 @@ function clearMelodicRangeConflict(parameterName, voiceIndex) {
   }
 }
 
+
 /**
  * Enhanced parameter connection system - connects ALL UI controls to voiceData
  */
 function connectAllSliders() {
-  console.log('=== CONNECTING ALL PARAMETER CONTROLS (with mobile melodic range fix) ===');
+  console.log('=== CONNECTING ALL PARAMETER CONTROLS (including timing controls) ===');
   
   const parameterSection = document.getElementById('parameter-section');
   
@@ -2963,43 +3122,65 @@ function connectAllSliders() {
     };
   });
   
-  // 3. Connect dropdown selectors (Sound, Rhythms, Rests)
-  const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
-  console.log(`Found ${dropdowns.length} dropdowns to connect`);
+ // 3. Connect dropdown selectors (Sound, Rhythms, Rests) - WITH VALIDATION
+const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
+console.log(`Found ${dropdowns.length} dropdowns to connect`);
+
+dropdowns.forEach((dropdown) => {
+  const row = dropdown.closest('.row-container');
+  const label = row ? row.querySelector('.label-container') : null;
+  const paramName = label ? label.textContent.trim() : 'Unknown Dropdown';
   
-  dropdowns.forEach((dropdown) => {
-    const row = dropdown.closest('.row-container');
-    const label = row ? row.querySelector('.label-container') : null;
-    const paramName = label ? label.textContent.trim() : 'Unknown Dropdown';
+  // Determine if this is min/max dropdown or single dropdown
+  const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
+  const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
+  
+  console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
+  
+  // Remove existing event listeners
+  dropdown.onchange = null;
+  
+  // Add new event listener WITH VALIDATION
+  dropdown.onchange = function(e) {
+    const value = parseInt(e.target.value);
     
-    // Determine if this is min/max dropdown or single dropdown
-    const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
-    const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
-    
-    console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
-    
-    // Remove existing event listeners
-    dropdown.onchange = null;
-    
-    // Add new event listener
-    dropdown.onchange = function(e) {
-      const value = parseInt(e.target.value);
+    if (paramName === 'SOUND') {
+      // Single dropdown for sound selection
+      voiceData[currentVoice].parameters[paramName] = value;
+      console.log(`✅ ${paramName}: ${gmSounds[value]}`);
       
-      if (paramName === 'SOUND') {
-        // Single dropdown for sound selection
-        voiceData[currentVoice].parameters[paramName] = value;
-        console.log(`✅ ${paramName}: ${gmSounds[value]}`);
-      } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
-        // Dual dropdown (Rhythms/Rests)
-        if (dropdownLabel === 'Minimum') {
-          voiceData[currentVoice].parameters[paramName].min = value;
-        } else if (dropdownLabel === 'Maximum') {
-          voiceData[currentVoice].parameters[paramName].max = value;
+    } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
+      // Dual dropdown (Rhythms/Rests) WITH VALIDATION
+      const paramData = voiceData[currentVoice].parameters[paramName];
+      
+      if (dropdownLabel === 'Minimum') {
+        // Check if new minimum is <= current maximum
+        if (value <= paramData.max) {
+          paramData.min = value;
+          console.log(`✅ ${paramName} minimum: ${value}`);
+        } else {
+          // Invalid: minimum > maximum
+          dropdown.value = paramData.min; // Reset to previous valid value
+          console.warn(`❌ VALIDATION ERROR: ${paramName} minimum (${value}) cannot be greater than maximum (${paramData.max})`);
+          alert('Minimum must be less than Maximum.');
         }
-        console.log(`✅ ${paramName} ${dropdownLabel.toLowerCase()}: ${value}`);
+        
+      } else if (dropdownLabel === 'Maximum') {
+        // Check if new maximum is >= current minimum
+        if (value >= paramData.min) {
+          paramData.max = value;
+          console.log(`✅ ${paramName} maximum: ${value}`);
+        } else {
+          // Invalid: maximum < minimum
+          dropdown.value = paramData.max; // Reset to previous valid value
+          console.warn(`❌ VALIDATION ERROR: ${paramName} maximum (${value}) cannot be less than minimum (${paramData.min})`);
+          alert('Minimum must be less than Maximum.');
+        }
       }
-    };
-  });
+    }
+  };
+});
+
   
   // 4. Connect multi-dual sliders (like DELAY with Speed/Depth)
   const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
@@ -3070,12 +3251,64 @@ function connectAllSliders() {
     }
   });
   
+  // 6. Connect Timing Control Sliders (Duration, Entrance, Exit)
+  const timingSliders = parameterSection.querySelectorAll('.timing-slider');
+  console.log(`Found ${timingSliders.length} timing control sliders to connect`);
+  
+  timingSliders.forEach((slider) => {
+    const timingContainer = slider.closest('.timing-control-container');
+    const controlLabel = timingContainer ? timingContainer.querySelector('.timing-control-label') : null;
+    const controlType = controlLabel ? controlLabel.textContent.trim().toLowerCase() : 'unknown';
+    
+    console.log(`Connecting timing slider: ${controlType}`);
+    
+    // Remove existing event listeners
+    slider.oninput = null;
+    slider.onchange = null;
+    
+    // Add new event listeners with tooltips
+    slider.oninput = function(e) {
+      const value = parseInt(e.target.value);
+      
+      // Update voiceData
+      if (voiceData[currentVoice].parameters['LIFE SPAN']) {
+        voiceData[currentVoice].parameters['LIFE SPAN'][controlType] = value;
+        console.log(`✅ LIFE SPAN ${controlType}: ${value}`);
+      }
+      
+      // Update tooltip
+      updateTimingTooltip(slider, value);
+    };
+    
+    // Initialize tooltip
+    const initialValue = parseInt(slider.value);
+    updateTimingTooltip(slider, initialValue);
+  });
+  
+  // 7. Connect Timing Repeat Checkbox
+  const timingCheckbox = parameterSection.querySelector('.timing-checkbox');
+  if (timingCheckbox) {
+    console.log('Connecting timing repeat checkbox');
+    
+    timingCheckbox.onchange = function(e) {
+      const checked = e.target.checked;
+      
+      if (voiceData[currentVoice].parameters['LIFE SPAN']) {
+        voiceData[currentVoice].parameters['LIFE SPAN'].repeat = checked;
+        console.log(`✅ LIFE SPAN repeat: ${checked}`);
+      }
+    };
+  }
+  
   console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
   console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
   console.log(`   ✅ ${behaviorSliders.length} behavior sliders`);
   console.log(`   ✅ ${dropdowns.length} dropdown controls`);
   console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
+  console.log(`   ✅ ${timingSliders.length} timing control sliders`);
+  console.log(`   ✅ Timing repeat checkbox`);
 }
+
 
 // =============================================================================
 // VOICE MANAGEMENT SYSTEM
@@ -3798,4 +4031,314 @@ function testDelaySliders() {
   
   console.log('\nExpected: DELAY values should update as you move sliders');
   console.log('Next step: Implement actual audio delay effect');
+}
+
+
+
+// =============================================================================
+// ROLLUP CODE PROPER TAB NAMES
+// =============================================================================  // Rollup configuration with proper tab names
+const rollupConfig = {
+  instrument: {
+    title: "INSTRUMENT & SOUND",
+    icon: "🎹",
+    expanded: true // Start expanded
+  },
+    mixing: {
+    title: "MIXING & LEVELS",
+    icon: "🎚️", 
+    expanded: true // Start expanded
+  },
+  rhythm: {
+    title: "RHYTHM & TIMING", 
+    icon: "🥁",
+    expanded: true // Start expanded
+  },
+  modulation: {
+    title: "MODULATION EFFECTS",
+    icon: "🌊",
+    expanded: false // Start collapsed
+  },
+  spatial: {
+    title: "SPATIAL EFFECTS",
+    icon: "🏛️",
+    expanded: false // Start collapsed
+  }
+};
+
+// =============================================================================
+// ROLL UP CODE
+// =============================================================================
+// Global rollup state
+let rollupState = {};
+
+// Initialize rollup state
+function initializeRollupState() {
+  Object.keys(rollupConfig).forEach(key => {
+    rollupState[key] = rollupConfig[key].expanded;
+  });
+}
+
+
+// Create a rollup section
+function createRollup(rollupKey, rollupInfo, parameters, voiceIndex) {
+  const rollupContainer = document.createElement('div');
+  rollupContainer.className = 'rollup-container';
+  rollupContainer.dataset.rollup = rollupKey;
+  
+  // Rollup header (clickable tab)
+  const rollupHeader = document.createElement('div');
+  rollupHeader.className = 'rollup-header';
+  rollupHeader.onclick = () => toggleRollup(rollupKey);
+  
+  // Expand/collapse arrow
+  const rollupArrow = document.createElement('span');
+  rollupArrow.className = 'rollup-arrow';
+  rollupArrow.textContent = rollupState[rollupKey] ? '▼' : '▶';
+  
+  // Tab title
+  const rollupTitle = document.createElement('span');
+  rollupTitle.className = 'rollup-title';
+  rollupTitle.textContent = rollupInfo.title;
+  
+  // Tab icon/emoji
+  const rollupIcon = document.createElement('span');
+  rollupIcon.className = 'rollup-icon';
+  rollupIcon.textContent = rollupInfo.icon;
+  
+  rollupHeader.appendChild(rollupArrow);
+  rollupHeader.appendChild(rollupTitle);
+  rollupHeader.appendChild(rollupIcon);
+  
+  // Rollup content (collapsible)
+  const rollupContent = document.createElement('div');
+  rollupContent.className = 'rollup-content';
+  rollupContent.style.display = rollupState[rollupKey] ? 'block' : 'none';
+  
+  // Add parameters to this rollup
+  parameters.forEach(param => {
+    const parameterRow = createRow(param, voiceIndex);
+    rollupContent.appendChild(parameterRow);
+  });
+  
+  rollupContainer.appendChild(rollupHeader);
+  rollupContainer.appendChild(rollupContent);
+  
+  return rollupContainer;
+}
+
+// Toggle rollup expand/collapse
+function toggleRollup(rollupKey) {
+  const rollupContainer = document.querySelector(`[data-rollup="${rollupKey}"]`);
+  const rollupArrow = rollupContainer.querySelector('.rollup-arrow');
+  const rollupContent = rollupContainer.querySelector('.rollup-content');
+  
+  // Toggle state
+  rollupState[rollupKey] = !rollupState[rollupKey];
+  
+  if (rollupState[rollupKey]) {
+    // Expand
+    rollupContent.style.display = 'block';
+    rollupArrow.textContent = '▼';
+    rollupContainer.classList.add('expanded');
+    rollupContainer.classList.remove('collapsed');
+  } else {
+    // Collapse
+    rollupContent.style.display = 'none';
+    rollupArrow.textContent = '▶';
+    rollupContainer.classList.add('collapsed');
+    rollupContainer.classList.remove('expanded');
+  }
+  
+  console.log(`${rollupConfig[rollupKey].title} ${rollupState[rollupKey] ? 'expanded' : 'collapsed'}`);
+}
+
+// Expand all rollups
+function expandAllRollups() {
+  Object.keys(rollupConfig).forEach(key => {
+    if (!rollupState[key]) {
+      toggleRollup(key);
+    }
+  });
+}
+
+// Collapse all rollups
+function collapseAllRollups() {
+  Object.keys(rollupConfig).forEach(key => {
+    if (rollupState[key]) {
+      toggleRollup(key);
+    }
+  });
+}
+
+// END ROLL UP CODE
+// =============================================================================
+
+// =============================================================================
+// BEBUGGING TIMING SLIDERS AND TOOLTIPS
+// =============================================================================
+
+/**
+ * Update tooltip for timing controls (converts value to mm:ss format)
+ */
+function updateTimingTooltip(slider, value) {
+  // Convert 0-100 range to reasonable time values
+  // 0 = 0:00, 100 = 5:00 (5 minutes max)
+  const totalSeconds = Math.floor((value / 100) * 300); // 0 to 300 seconds
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  // Find or create tooltip - attach it directly to the slider's parent wrapper
+  const sliderWrapper = slider.parentElement; // This should be the timing-slider-wrapper
+  let tooltip = sliderWrapper.querySelector('.timing-tooltip');
+  
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'timing-tooltip';
+    
+    // Insert tooltip right after the slider in the DOM
+    slider.parentNode.insertBefore(tooltip, slider.nextSibling);
+  }
+  
+  tooltip.textContent = timeString;
+  
+  // Position tooltip directly above the slider handle
+  const percentage = (value - slider.min) / (slider.max - slider.min);
+  const sliderWidth = slider.offsetWidth;
+  const thumbWidth = 16;
+  const offset = percentage * (sliderWidth - thumbWidth) + (thumbWidth / 2);
+  
+  tooltip.style.left = `${offset}px`;
+  
+  console.log(`📊 ${slider.closest('.timing-control-container').querySelector('.timing-control-label').textContent} tooltip: ${timeString} (value: ${value})`);
+}
+
+
+/**
+ * Debug timing tooltip positioning step by step
+ */
+function debugTimingTooltips() {
+  console.log('=== TIMING TOOLTIP POSITIONING DEBUG ===');
+  
+  // Find all timing sliders
+  const timingSliders = document.querySelectorAll('.timing-slider');
+  console.log(`Found ${timingSliders.length} timing sliders`);
+  
+  timingSliders.forEach((slider, index) => {
+    const container = slider.closest('.timing-control-container');
+    const label = container ? container.querySelector('.timing-control-label') : null;
+    const controlType = label ? label.textContent.trim() : `slider-${index}`;
+    
+    console.log(`\n--- SLIDER ${index + 1}: ${controlType} ---`);
+    
+    // Check DOM structure
+    console.log('DOM Structure:');
+    console.log('  slider.parentElement:', slider.parentElement.className);
+    console.log('  slider.parentElement.parentElement:', slider.parentElement.parentElement.className);
+    
+    // Check current positioning
+    console.log('Slider positioning:');
+    console.log('  slider.style.position:', getComputedStyle(slider).position);
+    console.log('  slider.offsetWidth:', slider.offsetWidth);
+    console.log('  slider.offsetLeft:', slider.offsetLeft);
+    
+    // Check if tooltip exists
+    const tooltip = slider.parentElement.querySelector('.timing-tooltip');
+    console.log('Tooltip exists:', !!tooltip);
+    
+    if (tooltip) {
+      console.log('Tooltip positioning:');
+      console.log('  tooltip.style.position:', getComputedStyle(tooltip).position);
+      console.log('  tooltip.style.left:', tooltip.style.left);
+      console.log('  tooltip.style.bottom:', getComputedStyle(tooltip).bottom);
+      console.log('  tooltip.offsetLeft:', tooltip.offsetLeft);
+      console.log('  tooltip.offsetTop:', tooltip.offsetTop);
+      
+      // Check tooltip's positioning context
+      console.log('Tooltip positioning context:');
+      console.log('  tooltip.offsetParent:', tooltip.offsetParent ? tooltip.offsetParent.className : 'null');
+    }
+    
+    // Check container positioning
+    console.log('Container positioning:');
+    console.log('  container.style.position:', getComputedStyle(container).position);
+    console.log('  container.style.overflow:', getComputedStyle(container).overflow);
+  });
+  
+  console.log('\n=== EXPECTED vs ACTUAL ===');
+  console.log('Expected: Tooltip should be positioned above slider handle');
+  console.log('Expected: Tooltip should move with slider handle');
+  console.log('Expected: Tooltip should stay within container bounds');
+}
+
+
+
+
+
+
+
+/**
+ * Diagnostic function to test timing controls connection
+ */
+function testTimingControls() {
+  console.log('=== TIMING CONTROLS DIAGNOSTIC ===');
+  
+  // Check if LIFE SPAN parameter exists in current voice
+  console.log('Current voice:', currentVoice + 1);
+  console.log('LIFE SPAN parameter exists:', !!voiceData[currentVoice].parameters['LIFE SPAN']);
+  console.log('Current LIFE SPAN values:', voiceData[currentVoice].parameters['LIFE SPAN']);
+  
+  // Find timing sliders in DOM
+  const parameterSection = document.getElementById('parameter-section');
+  const timingSliders = parameterSection.querySelectorAll('.timing-slider');
+  console.log(`Found ${timingSliders.length} timing sliders in DOM`);
+  
+  // Test each slider
+  timingSliders.forEach((slider, index) => {
+    const container = slider.closest('.timing-control-container');
+    const label = container ? container.querySelector('.timing-control-label') : null;
+    const controlType = label ? label.textContent.trim() : `slider-${index}`;
+    
+    console.log(`Slider ${index + 1}: ${controlType}`);
+    console.log(`  - Current value: ${slider.value}`);
+    console.log(`  - Has oninput handler: ${typeof slider.oninput === 'function'}`);
+    console.log(`  - Min: ${slider.min}, Max: ${slider.max}`);
+  });
+  
+  // Test checkbox
+  const checkbox = parameterSection.querySelector('.timing-checkbox');
+  if (checkbox) {
+    console.log('Repeat checkbox found:');
+    console.log(`  - Checked: ${checkbox.checked}`);
+    console.log(`  - Has onchange handler: ${typeof checkbox.onchange === 'function'}`);
+  } else {
+    console.log('❌ Repeat checkbox NOT found');
+  }
+  
+  console.log('\n📝 INSTRUCTIONS:');
+  console.log('1. Run this function: testTimingControls()');
+  console.log('2. Move the Duration slider');
+  console.log('3. Watch console for "✅ LIFE SPAN duration: X" messages');
+  console.log('4. Check values again: voiceData[currentVoice].parameters["LIFE SPAN"]');
+}
+
+/**
+ * Monitor timing control changes in real-time
+ */
+function monitorTimingChanges() {
+  console.log('🔍 MONITORING TIMING CHANGES - Move sliders now!');
+  
+  const interval = setInterval(() => {
+    const currentValues = voiceData[currentVoice].parameters['LIFE SPAN'];
+    console.log('Current LIFE SPAN values:', currentValues);
+  }, 2000); // Log every 2 seconds
+  
+  // Stop monitoring after 30 seconds
+  setTimeout(() => {
+    clearInterval(interval);
+    console.log('⏹️ Stopped monitoring timing changes');
+  }, 30000);
+  
+  return interval;
 }
