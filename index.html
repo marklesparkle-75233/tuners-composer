@@ -14,10 +14,11 @@
 </head>
 <body>
 
-  <!-- Top Navigation Header Modified for Responsiveness-->
+  <!-- Top Navigation Header Modified for Three Levels of  Responsiveness-->
 
-<div id="top-header">
-  <div id="header-left">
+  <div id="top-header">
+  <!-- Desktop Layout Elements -->
+  <div id="header-left" class="desktop-only">
     <div class="logo-tagline-container">
       <div id="site-logo">tuners.com</div>
       <div id="tagline"><strong>create<br>evolving<br>musical<br>landscapes</strong></div>
@@ -29,7 +30,8 @@
       </div>
     </div>
   </div>
-  <div id="header-right">
+  
+  <div id="header-right" class="desktop-only">
     <div id="login-panel">
       <button id="login-btn">Login</button>
       <input type="text" class="login-input" placeholder="Username">
@@ -38,7 +40,50 @@
       <a href="#" class="login-link">Account Settings</a>
     </div>
   </div>
+  
+  <!-- Medium Layout Elements -->
+  <div class="medium-layout-container medium-only">
+    <div class="medium-top-row">
+      <div class="logo-tagline-container">
+        <div id="site-logo-medium">tuners.com</div>
+        <div id="tagline-medium"><strong>create<br>evolving<br>musical<br>landscapes</strong></div>
+      </div>
+      <div id="nav-buttons-medium">
+        <button class="nav-btn">SEARCH</button>
+        <button class="nav-btn">PUBLIC NESTS</button>
+      </div>
+    </div>
+    <div class="medium-bottom-row">
+      <div id="login-panel-medium">
+        <button class="login-btn">Login</button>
+        <input type="text" class="login-input" placeholder="Username">
+        <input type="password" class="login-input" placeholder="Password">
+        <a href="#" class="login-link">Create an account</a>
+        <a href="#" class="login-link">Account Settings</a>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Mobile Layout Elements -->
+  <div class="mobile-layout-container mobile-only">
+    <div class="logo-tagline-container">
+      <div id="site-logo-mobile">tuners.com</div>
+      <div id="tagline-mobile"><strong>create<br>evolving<br>musical<br>landscapes</strong></div>
+    </div>
+    <div id="nav-buttons-mobile">
+      <button class="nav-btn">SEARCH</button>
+      <button class="nav-btn">PUBLIC NESTS</button>
+    </div>
+    <div id="login-panel-mobile">
+      <button class="login-btn">Login</button>
+      <input type="text" class="login-input" placeholder="Username">
+      <input type="password" class="login-input" placeholder="Password">
+      <a href="#" class="login-link">Create an account</a>
+      <a href="#" class="login-link">Account Settings</a>
+    </div>
+  </div>
 </div>
+
 
   
   <!-- Social Sharing Bar -->
@@ -52,7 +97,7 @@
     </div>
   </div>
 
-  <h1>The Tuners' Nest</h1>
+  <h1>The Nest Builder</h1>
   
   <!-- Top File Management Bar -->
   <div id="file-management-bar">

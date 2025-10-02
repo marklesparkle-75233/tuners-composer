@@ -1,197 +1,424 @@
 /* ===============================================================
-TUNER'S COMPOSER - OPTIMIZED CSS
+TUNER'S COMPOSER - CORRECTED HEADER CSS
 Clean, organized, and fully responsive
 =============================================================== */
 
 /* BASE STYLES */
 body {
-max-width: 1200px;
-font-family: 'Segoe UI', sans-serif;
-background: #4a90e2;
-padding: 1rem;
-margin: 0 auto;
+  max-width: 1200px;
+  font-family: 'Segoe UI', sans-serif;
+  background: #4a90e2;
+  padding: 1rem;
+  margin: 0 auto;
 }
 
 h1 {
-text-align: center;
-color: white;
-font-family: 'Georgia', 'Times New Roman', serif;
-font-size: 2.5rem;
-font-weight: 300;
-letter-spacing: 2px;
-margin-bottom: 1rem;
-text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  text-align: center;
+  color: white;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 2.5rem;
+  font-weight: 300;
+  letter-spacing: 2px;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 /* ===============================================================
-HEADER COMPONENTS
+THREE-STAGE RESPONSIVE HEADER SYSTEM
 =============================================================== */
 
-/* TOP NAVIGATION HEADER */
+/* Hide all layouts by default */
+.desktop-only, .medium-only, .mobile-only {
+  display: none;
+}
+
+/* TOP NAVIGATION HEADER - Base Styles */
 #top-header {
-display: flex;
-justify-content: space-between;
-align-items: flex-start;
-max-width: 1400px;
-margin: 0 auto 0.5rem auto;
-background: white;
-border-radius: 8px;
-padding: 0.75rem 1rem;
-box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  max-width: 1400px;
+  margin: 0 auto 0.5rem auto;
+  background: white;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
-
-
-#site-logo {
-order: 1;
-display: flex;
-align-items: center;
-font-size: 2rem;
-font-weight: 600;
-color: #333;
-}
-
-#tagline {
-    order: 2;
+/* DESKTOP LAYOUT (1200px+) */
+@media (min-width: 1200px) {
+  .desktop-only {
+    display: flex !important;
   }
-
-
-/* Logo image styling */
-#site-logo img {
-height: 45px;
-width: auto;
-max-width: 250px;
-margin-right: 8px;
-vertical-align: middle;
+  .medium-only, .mobile-only {
+    display: none !important;
+  }
+  
+  #top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  
+  #header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  
+  .logo-tagline-container {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  
+  #site-logo {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  #tagline {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: #666;
+  }
+  
+  .nav-buttons-container {
+    display: flex;
+  }
+  
+  #nav-buttons {
+    display: flex;
+    gap: 0.75rem;
+  }
+  
+  .nav-btn {
+    padding: 8px 16px;
+    background: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  
+  .nav-btn:hover {
+    background: #357abd;
+  }
+  
+  #header-right {
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  #login-panel {
+    background: #f8f9fa;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  #login-btn {
+    background: white;
+    border: 2px solid #333;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+  
+  #login-btn:hover {
+    background: #333;
+    color: white;
+  }
+  
+  .login-input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .login-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  }
+  
+  .login-link {
+    color: #4a90e2;
+    text-decoration: none;
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  
+  .login-link:hover {
+    color: #357abd;
+    text-decoration: underline;
+  }
 }
 
-#site-logo.logo-only {
-font-size: 0;
+/* MEDIUM LAYOUT (769px - 1199px) */
+@media (min-width: 769px) and (max-width: 1199px) {
+  .medium-only {
+    display: block !important;
+  }
+  .desktop-only, .mobile-only {
+    display: none !important;
+  }
+  
+  .medium-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  
+  .medium-top-row .logo-tagline-container {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  
+  #site-logo-medium {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  #tagline-medium {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: #666;
+  }
+  
+  #nav-buttons-medium {
+    display: flex;
+    gap: 0.75rem;
+  }
+  
+  .medium-bottom-row {
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  #login-panel-medium {
+    background: #f8f9fa;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  #login-panel-medium .login-btn {
+    background: white;
+    border: 2px solid #333;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+  
+  #login-panel-medium .login-btn:hover {
+    background: #333;
+    color: white;
+  }
+  
+  #login-panel-medium .login-input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  #login-panel-medium .login-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  }
+  
+  #login-panel-medium .login-link {
+    color: #4a90e2;
+    text-decoration: none;
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  
+  #login-panel-medium .login-link:hover {
+    color: #357abd;
+    text-decoration: underline;
+  }
 }
 
-#site-logo.logo-only img {
-margin-right: 0;
+/* MOBILE LAYOUT (≤768px) */
+@media (max-width: 768px) {
+  .mobile-only {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    text-align: center;
+  }
+  .desktop-only, .medium-only {
+    display: none !important;
+  }
+  
+  body {
+    padding: 0.5rem;
+  }
+  
+  #top-header {
+    margin-top: 0rem;
+  }
+  
+  .mobile-layout-container .logo-tagline-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  #site-logo-mobile {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  #tagline-mobile {
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: #666;
+  }
+  
+  #nav-buttons-mobile {
+    display: flex;
+    gap: 0.75rem;
+  }
+  
+  #nav-buttons-mobile .nav-btn {
+    font-size: 0.8rem;
+    padding: 8px 16px;
+  }
+  
+  #login-panel-mobile {
+    background: #f8f9fa;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  #login-panel-mobile .login-btn {
+    background: white;
+    border: 2px solid #333;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+  
+  #login-panel-mobile .login-btn:hover {
+    background: #333;
+    color: white;
+  }
+  
+  #login-panel-mobile .login-input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  #login-panel-mobile .login-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  }
+  
+  #login-panel-mobile .login-link {
+    color: #4a90e2;
+    text-decoration: none;
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  
+  #login-panel-mobile .login-link:hover {
+    color: #357abd;
+    text-decoration: underline;
+  }
 }
 
-#nav-buttons {
-display: flex;
-gap: 0.75rem;
-}
-
-.nav-btn {
-padding: 8px 16px;
-background: #4a90e2;
-color: white;
-border: none;
-border-radius: 4px;
-font-weight: 500;
-font-size: 0.8rem;
-cursor: pointer;
-transition: background 0.2s ease;
-}
-
-.nav-btn:hover {
-background: #357abd;
-}
-
-/* LOGIN PANEL */
-#header-right {
-display: flex;
-align-items: flex-start;
-}
-
-#login-panel {
-background: #f8f9fa;
-border: 2px solid #333;
-border-radius: 8px;
-padding: 12px;
-min-width: 180px;
-display: flex;
-flex-direction: column;
-gap: 8px;
-}
-
-#login-btn {
-background: white;
-border: 2px solid #333;
-border-radius: 4px;
-padding: 6px 12px;
-font-weight: 600;
-font-size: 0.9rem;
-cursor: pointer;
-text-align: center;
-transition: all 0.2s ease;
-}
-
-#login-btn:hover {
-background: #333;
-color: white;
-}
-
-.login-input {
-padding: 6px 8px;
-border: 1px solid #ccc;
-border-radius: 3px;
-font-size: 0.85rem;
-width: 100%;
-box-sizing: border-box;
-}
-
-.login-input:focus {
-outline: none;
-border-color: #4a90e2;
-box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-}
-
-.login-link {
-color: #4a90e2;
-text-decoration: none;
-font-size: 0.8rem;
-text-align: center;
-cursor: pointer;
-transition: color 0.2s ease;
-}
-
-.login-link:hover {
-color: #357abd;
-text-decoration: underline;
-}
-
-/* SOCIAL SHARING BAR */
+/* ===============================================================
+SOCIAL SHARING BAR
+=============================================================== */
 #social-bar {
-display: flex;
-align-items: center;
-max-width: 1200px;
-margin: 0 auto 0.5rem auto;
-background: #f8f9fa;
-border-radius: 4px;
-padding: 0.5rem 1rem;
-border: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto 0.5rem auto;
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border: 1px solid #dee2e6;
 }
 
 #share-text {
-font-size: 0.85rem;
-font-weight: 500;
-color: #333;
-margin-right: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #333;
+  margin-right: 0.75rem;
 }
 
 #social-icons {
-display: flex;
-gap: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
 }
 
 .social-icon {
-font-size: 0.8rem;
-color: #4a90e2;
-cursor: pointer;
-text-decoration: underline;
-transition: color 0.2s ease;
+  font-size: 0.8rem;
+  color: #4a90e2;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s ease;
 }
 
 .social-icon:hover {
-color: #357abd;
+  color: #357abd;
 }
+
+
+
 
 /* FILE MANAGEMENT BAR */
 #file-management-bar {
@@ -792,8 +1019,15 @@ font-style: italic;
 RESPONSIVE DESIGN
 =============================================================== */
 
-/* Mobile devices */
-@media (max-width: 768px) {
+/* Mobile devices - MODIFIED BREAKPOINT */
+@media (max-width: 1080px) {
+  .mobile-only {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    text-align: center;
+  }
 
   body {
     padding: 0.5rem;
@@ -809,10 +1043,18 @@ RESPONSIVE DESIGN
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: .5rem;
+    gap: 1.5rem;
     width: 100%;
   }
   
+  /* ADD this desktop-specific rule */
+@media (min-width: 1200px) {
+  #header-left.desktop-only {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+}
   .logo-tagline-container {
     display: flex;
     align-items: center;
@@ -1213,6 +1455,7 @@ FOOTER
 /* END TOOLTIPS FOR TIMING SLIDERS /
 
 
+
 /* Narrow width: Stack all 4 containers vertically */
 @media (max-width: 768px) {
   .timing-controls-container {
@@ -1293,6 +1536,24 @@ FOOTER
   font-size: 30px;          /* ← CHANGE THIS for icon size */
   margin-left: 10px;
 }
+
+/* ===============================================================
+
+ END OF ROLLUPS
+
+ =============================================================== 
+
+// ===============================================================
+//
+// OCT 2 25  RESPONSIVE STYLES CORRECTIONS AND ADDL FUNCTIONS
+//
+// =============================================================== 
+/* ===============================================================
+THREE-STAGE RESPONSIVE HEADER CONTROLS - ADD THIS SECTION
+=============================================================== */
+
+
+
 
 
 
