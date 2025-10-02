@@ -100,20 +100,29 @@
   <h1>The Nest Builder</h1>
   
   <!-- Top File Management Bar -->
-  <div id="file-management-bar">
-    <div id="user-info">
-      <div id="welcome-text">Welcome back, Bob</div>
-      <div id="current-filename">[Current Filename]</div>
-    </div>
-    <div id="file-controls">
-      <button class="file-btn">NEW</button>
-      <button class="file-btn">OPEN</button>
-      <button class="file-btn">SAVE</button>
-      <button class="file-btn">PLAY</button>
-      <button class="file-btn">POST</button>
-    </div>
+<div id="file-management-bar">
+  <div id="user-info">
+    <div id="welcome-text">Welcome back, Bob</div>
+    <div id="current-filename">[Current Filename]</div>
   </div>
   
+  <!-- NEW: Master Clock Settings -->
+  <div id="master-clock-settings">
+    <div class="clock-label">Master Tempo:</div>
+    <button id="tempo-down" class="tempo-btn">−</button>
+    <div id="master-tempo-display">120 BPM</div>
+    <button id="tempo-up" class="tempo-btn">+</button>
+  </div>
+  
+  <div id="file-controls">
+    <button class="file-btn">NEW</button>
+    <button class="file-btn">OPEN</button>
+    <button class="file-btn">SAVE</button>
+    <button class="file-btn">PLAY</button>
+    <button class="file-btn">POST</button>
+  </div>
+</div>
+
   <div id="composer-container">
     <!-- Left Sidebar - Voice Tabs -->
     <div id="voice-sidebar">

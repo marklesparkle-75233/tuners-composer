@@ -120,6 +120,21 @@ const midiNoteNames = {
   105: "A7", 106: "A♯7", 107: "B7", 108: "C8"
 };
 
+
+
+// Master Clock System Variables
+let testTempo = 120; // ADD THIS LINE FIRST
+let masterTempo = 120; // Default master tempo
+let masterClockInterval = null;
+let isClockRunning = false;
+
+// Tempo scrolling variables - ADD THESE
+let tempoScrollInterval = null;
+let tempoScrollDirection = 0; // -1 for down, +1 for up, 0 for stopped
+
+console.log('Master Clock System initialized at', masterTempo, 'BPM');
+// End Master Clock
+
 // Global state
 let currentVoice = 0;
 let voiceData = [];
@@ -1143,23 +1158,100 @@ async function toggleMasterPlayback() {
   }
 }
 
-// NOW your DOMContentLoaded event...
-document.addEventListener('DOMContentLoaded', () => {
-  // ... existing code ...
+// Master multi-voice playback system
+async function startMasterPlayback() {
+  console.log('=== STARTING MASTER MULTI-VOICE PLAYBACK ===');
   
-  // Connect PLAY button
-  setTimeout(() => {
-    const playButton = document.querySelector('#file-controls button:nth-child(4)');
-    if (playButton) {
-      playButton.onclick = toggleMasterPlayback;
-      console.log('✅ Master PLAY button connected to toggleMasterPlayback');
+  // Ensure audio system is initialized
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('Initializing audio system...');
+    if (!audioManager) {
+      audioManager = new AudioManager();
     }
-  }, 200);
-});
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('❌ Audio initialization failed');
+      return;
+    }
+  }
+  
+  // Create voice manager if it doesn't exist
+  if (!voiceManager) {
+    console.log('Creating VoiceManager...');
+    voiceManager = new VoiceManager(audioManager.audioContext, audioManager.masterGainNode);
+  }
+  
+  // Check which voices are enabled
+  const enabledVoices = [];
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i].enabled) {
+      enabledVoices.push(i + 1);
+    }
+  }
+  
+  console.log(`Enabled voices: ${enabledVoices.join(', ')}`);
+  
+  if (enabledVoices.length === 0) {
+    console.log('❌ No voices enabled! Please enable at least one voice.');
+    alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
+    return;
+  }
+  
+  // Stop any individual previews first
+  document.querySelectorAll('.voice-controls button').forEach(button => {
+    if (button.textContent === 'STOP') {
+      button.click(); // Stop individual previews
+    }
+  });
+  
+  // Start all enabled voices playing together
+  voiceManager.startAllVoices();
+  
+  // Update play button state
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  if (playButton) {
+    playButton.textContent = 'STOP';
+    playButton.style.backgroundColor = '#dc3545';
+    playButton.style.color = 'white';
+  }
+  
+  console.log('🎵 Multi-voice playback started!');
+}
+
+function stopMasterPlayback() {
+  console.log('=== STOPPING MASTER MULTI-VOICE PLAYBACK ===');
+  
+  if (voiceManager) {
+    voiceManager.stopAllVoices();
+  }
+  
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  if (playButton) {
+    playButton.textContent = 'PLAY';
+    playButton.style.backgroundColor = '';
+    playButton.style.color = '';
+  }
+  
+  console.log('🔇 Multi-voice playback stopped');
+}
+
+async function toggleMasterPlayback() {
+  console.log('🎯 PLAY button clicked!');
+  
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  
+  if (playButton && playButton.textContent === 'STOP') {
+    stopMasterPlayback();
+  } else {
+    await startMasterPlayback();
+  }
+}
 
 
 
-// Initialize the application
+
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   audioManager = new AudioManager();
@@ -1168,23 +1260,123 @@ document.addEventListener('DOMContentLoaded', () => {
   createVoiceTabs();
   renderParameters();
   
-  // Automatically connect sliders after UI is ready
+  // Connect sliders and PLAY button after UI is ready
   setTimeout(() => {
     connectAllSliders();
-  }, 100);
+  
+    // Connect PLAY button
+    const playButton = document.querySelector('#file-controls button:nth-child(4)');
+    if (playButton) {
+      playButton.onclick = toggleMasterPlayback;
+      console.log('✅ Master PLAY button connected to toggleMasterPlayback');
+    } else {
+      console.log('❌ PLAY button not found during connection');
+    }
+  }, 200);
+
   
   document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
+
+
+
+  
+// Connect Master Clock tempo buttons with click-and-hold
+setTimeout(() => {
+  const tempoUpBtn = document.getElementById('tempo-up');
+  const tempoDownBtn = document.getElementById('tempo-down');
+  
+  if (tempoUpBtn) {
+    // Remove old onclick
+    tempoUpBtn.onclick = null;
+    
+    // Add new mouse events for click-and-hold
+    tempoUpBtn.addEventListener('mousedown', () => startTempoScroll(1));
+    tempoUpBtn.addEventListener('mouseup', stopTempoScroll);
+    tempoUpBtn.addEventListener('mouseleave', stopTempoScroll);
+    
+    // Add touch events for mobile
+    tempoUpBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startTempoScroll(1);
+    });
+    tempoUpBtn.addEventListener('touchend', stopTempoScroll);
+    
+    console.log('✅ Master tempo UP button connected with click-and-hold');
+  }
+  
+  if (tempoDownBtn) {
+    // Remove old onclick
+    tempoDownBtn.onclick = null;
+    
+    // Add new mouse events for click-and-hold
+    tempoDownBtn.addEventListener('mousedown', () => startTempoScroll(-1));
+    tempoDownBtn.addEventListener('mouseup', stopTempoScroll);
+    tempoDownBtn.addEventListener('mouseleave', stopTempoScroll);
+    
+    // Add touch events for mobile
+    tempoDownBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startTempoScroll(-1);
+    });
+    tempoDownBtn.addEventListener('touchend', stopTempoScroll);
+    
+    console.log('✅ Master tempo DOWN button connected with click-and-hold');
+  }
+  
+  // Initialize display
+  updateMasterTempoDisplay();
+}, 200);
+
 });
 
 
-// Initialize audio on first user click
+/**
+ * Get tempo for a specific voice (uses voice's TEMPO parameter range)
+ */
+function getVoiceTempo(voiceIndex) {
+  const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+  
+  if (tempoParam && tempoParam.behavior > 0) {
+    // Voice has its own evolving tempo
+    if (!tempoParam.currentValue) {
+      tempoParam.currentValue = (tempoParam.min + tempoParam.max) / 2;
+    }
+    
+    // Apply behavior-controlled tempo evolution
+    tempoParam.currentValue = interpolateParameter(
+      tempoParam.currentValue,
+      tempoParam.min,
+      tempoParam.max,
+      tempoParam.behavior,
+      0.1 // Slower tempo evolution
+    );
+    
+    return Math.round(tempoParam.currentValue);
+  } else {
+    // Voice uses static tempo (average of min/max)
+    return Math.round((tempoParam.min + tempoParam.max) / 2);
+  }
+}
+
+
+
+
+
+
+
 async function initializeAudioOnFirstClick() {
+  console.log('🎵 Initializing audio on first click...');
   await audioManager.initialize();
   
   if (audioManager.isInitialized) {
-    audioManager.createTestOscillator();
+    console.log('✅ Audio manager initialized successfully');
+    // Don't auto-create test oscillator - let preview handle it
+    // audioManager.createTestOscillator(); // REMOVE THIS LINE
+  } else {
+    console.log('❌ Audio manager initialization failed');
   }
 }
+
 
 // GM Sound mapping function
 function getOscillatorTypeForGMSound(gmSoundName) {
@@ -1491,7 +1683,121 @@ function testInterpolation() {
 // Simple test timing variables
 let testClockInterval = null;
 let testBeatCount = 0;
-let testTempo = 120; // Fixed test tempo for now
+// Master tempo with fallback for audio system compatibility
+function getCurrentTempo() {
+  return typeof masterTempo !== 'undefined' ? masterTempo : 120;
+}
+
+
+
+
+
+/* MASTER TEMPO CONTROLS */
+/* Update Master Tempo Display */
+
+
+function updateMasterTempoDisplay() {
+  const display = document.getElementById('master-tempo-display');
+  if (display) {
+    display.textContent = `${masterTempo} BPM`;
+    console.log(`Master tempo updated to: ${masterTempo} BPM`);
+  }
+}
+
+/**
+ * Increase Master Tempo
+ */
+/**
+ * Increase Master Tempo
+ */
+function increaseMasterTempo() {
+  if (masterTempo < 240) { // Max tempo limit
+    masterTempo += 1; // Update master tempo
+    testTempo = masterTempo; // Keep testTempo in sync
+    updateMasterTempoDisplay();
+    console.log(`Both tempos updated to: ${masterTempo} BPM`);
+  } else {
+    console.log('Maximum tempo reached (240 BPM)');
+  }
+}
+
+/**
+ * Decrease Master Tempo
+ */
+function decreaseMasterTempo() {
+  if (masterTempo > 40) { // Min tempo limit
+    masterTempo -= 1; // Update master tempo
+    testTempo = masterTempo; // Keep testTempo in sync
+    updateMasterTempoDisplay();
+    console.log(`Both tempos updated to: ${masterTempo} BPM`);
+  } else {
+    console.log('Minimum tempo reached (40 BPM)');
+  }
+}
+
+/**
+ * Update Master Tempo Display
+ */
+function updateMasterTempoDisplay() {
+  const display = document.getElementById('master-tempo-display');
+  if (display) {
+    display.textContent = `${masterTempo} BPM`;
+    console.log(`Master tempo updated to: ${masterTempo} BPM`);
+  }
+}
+
+// ADD THE NEW FUNCTIONS HERE:
+/**
+ * Start tempo scrolling in specified direction
+ */
+function startTempoScroll(direction) {
+  // Stop any existing scroll
+  stopTempoScroll();
+  
+  tempoScrollDirection = direction;
+  
+  // Initial change (immediate response)
+  if (direction > 0) {
+    increaseMasterTempo();
+  } else {
+    decreaseMasterTempo();
+  }
+  
+  // Start continuous scrolling after 500ms delay
+  setTimeout(() => {
+    if (tempoScrollDirection !== 0) {
+      tempoScrollInterval = setInterval(() => {
+        if (tempoScrollDirection > 0) {
+          increaseMasterTempo();
+        } else if (tempoScrollDirection < 0) {
+          decreaseMasterTempo();
+        }
+      }, 100); // Change every 100ms for smooth scrolling
+    }
+  }, 500); // 500ms delay before continuous scrolling starts
+}
+
+/**
+ * Stop tempo scrolling
+ */
+function stopTempoScroll() {
+  tempoScrollDirection = 0;
+  if (tempoScrollInterval) {
+    clearInterval(tempoScrollInterval);
+    tempoScrollInterval = null;
+  }
+}
+
+
+
+
+
+
+
+
+
+/* END MASTER TEMPO CONTROLS
+
 
 /**
  * Simple test clock - just to make parameter evolution visible
@@ -1503,9 +1809,10 @@ function startTestClock() {
   }
   
   testBeatCount = 0;
-  const beatDuration = (60 / testTempo) * 1000; // Convert to milliseconds
+  const currentTempo = getCurrentTempo(); // Use the safe tempo function
+  const beatDuration = (60 / currentTempo) * 1000;
   
-  console.log(`Test clock started: ${testTempo} BPM (${beatDuration}ms per beat)`);
+  console.log(`Test clock started: ${currentTempo} BPM (${beatDuration}ms per beat)`);
   
   testClockInterval = setInterval(() => {
     testBeatCount++;
@@ -1518,8 +1825,8 @@ function startTestClock() {
   }, beatDuration);
 }
 
-/**
- * Stop the test clock
+
+ /* Stop the test clock
  */
 function stopTestClock() {
   if (testClockInterval) {
@@ -1758,38 +2065,37 @@ let isRhythmicPlaybackActive = false;
 /**
  * Convert rhythm dropdown index to actual duration in seconds
  */
-function getRhythmDuration(rhythmIndex, currentTempo) {
-  const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[4]; // Default to eighth notes
-  const beatDuration = 60 / currentTempo; // Seconds per quarter note beat
+function getRhythmDuration(rhythmIndex, currentTempo = null) {
+  const tempo = currentTempo || getCurrentTempo();
+  const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[4];
+  const beatDuration = 60 / tempo;
   const noteDuration = rhythmInfo.beats * beatDuration;
   
-  console.log(`Rhythm: ${rhythmInfo.name} = ${rhythmInfo.beats} beats = ${noteDuration.toFixed(3)}s at ${currentTempo} BPM`);
+  console.log(`Rhythm: ${rhythmInfo.name} = ${rhythmInfo.beats} beats = ${noteDuration.toFixed(3)}s at ${tempo} BPM`);
   return noteDuration;
 }
 
-/**
- * Convert rest dropdown index to actual duration in seconds
- */
-function getRestDuration(restIndex, currentTempo) {
-  // Handle "No Rests" option (index 0)
+function getRestDuration(restIndex, currentTempo = null) {
+  const tempo = currentTempo || getCurrentTempo();
+  
   if (restIndex === 0) {
     console.log('No Rests selected = 0s rest');
-    return 0; // No rest between notes
+    return 0;
   }
   
-  // Use same duration mapping as rhythms for rests 1-15
-  const restInfo = rhythmDurations[restIndex - 1]; // Offset by 1 since rests start at index 1
+  const restInfo = rhythmDurations[restIndex - 1];
   if (!restInfo) {
     console.warn(`Invalid rest index ${restIndex}, defaulting to quarter note rest`);
-    return 60 / currentTempo; // Quarter note rest fallback
+    return 60 / tempo;
   }
   
-  const beatDuration = 60 / currentTempo;
+  const beatDuration = 60 / tempo;
   const restDuration = restInfo.beats * beatDuration;
   
-  console.log(`Rest: ${restInfo.name} = ${restInfo.beats} beats = ${restDuration.toFixed(3)}s at ${currentTempo} BPM`);
+  console.log(`Rest: ${restInfo.name} = ${restInfo.beats} beats = ${restDuration.toFixed(3)}s at ${tempo} BPM`);
   return restDuration;
 }
+
 
 /**
  * MIDI note to frequency conversion
@@ -2103,16 +2409,17 @@ function scheduleRhythmPattern(voiceIndex, startTime) {
     }
     
     // In scheduleRhythmPattern, update the valid ranges:
-// Rhythms: 0-14 (no invalid index 0 anymore)
-rhythmIndex = Math.max(0, Math.min(14, rhythmIndex));
-// Rests: 0-15 (index 0 is valid "No Rests")
-restIndex = Math.max(0, Math.min(15, restIndex));
+    // Rhythms: 0-14 (no invalid index 0 anymore)
+      rhythmIndex = Math.max(0, Math.min(14, rhythmIndex));
+    // Rests: 0-15 (index 0 is valid "No Rests")
+      restIndex = Math.max(0, Math.min(15, restIndex));
 
-    
-    // Get durations
-    const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
-    const restDuration = getRestDuration(restIndex, testTempo);
-    
+    // Get durations using individual voice tempo
+    const voiceTempo = getVoiceTempo(voiceIndex);
+    const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
+    const restDuration = getRestDuration(restIndex, voiceTempo);
+
+
     // ERROR HANDLING: Validate durations
     if (isNaN(noteDuration) || noteDuration <= 0) {
         console.error(`Invalid note duration for rhythm index ${rhythmIndex}`);
@@ -2293,10 +2600,10 @@ function testAllRhythmOptions() {
   // Test extreme cases
   console.log('=== EXTREME DURATION EXAMPLES ===');
   
-  const shortestDuration = getRhythmDuration(1, testTempo); // 16th note triplets
+  const shortestDuration = getRhythmDuration(0, testTempo); // 32nd notes
   const longestDuration = getRhythmDuration(10, testTempo); // 4 whole notes
-  
-  console.log(`Shortest: ${rhythmDurations[1].name} = ${shortestDuration.toFixed(3)}s`);
+
+  console.log(`Shortest: ${rhythmDurations[0].name} = ${shortestDuration.toFixed(3)}s`);
   console.log(`Longest: ${rhythmDurations[10].name} = ${longestDuration.toFixed(3)}s`);
   console.log(`Duration ratio: ${(longestDuration / shortestDuration).toFixed(1)}x difference`);
   
@@ -3561,36 +3868,39 @@ class Voice {
    * Schedule a single note for this voice
    */
   scheduleNextNote(startTime) {
-    // Get current parameter values for this voice
-    const voiceParams = voiceData[this.voiceIndex].parameters;
-    
-    // Select rhythm and rest durations
-    const rhythmParam = voiceParams['RHYTHMS'];
-    const restParam = voiceParams['RESTS'];
-    
-    const rhythmIndex = this.selectValueInRange(rhythmParam);
-    const restIndex = this.selectValueInRange(restParam);
-    
-    const noteDuration = getRhythmDuration(rhythmIndex, testTempo);
-    const restDuration = getRestDuration(restIndex, testTempo);
-    
-    // Select note frequency
-    const noteInfo = selectMidiNote(this.voiceIndex);
-    
-    // Create scheduled note
-    const scheduledNote = this.createScheduledNote(
-      noteInfo.frequency,
-      noteDuration,
-      startTime
-    );
-    
-    if (scheduledNote) {
-      this.currentlyPlayingNotes.push(scheduledNote);
-    }
-    
-    // Return next note timing
-    return startTime + noteDuration + restDuration;
+  // Get current parameter values for this voice
+  const voiceParams = voiceData[this.voiceIndex].parameters;
+  
+  // Select rhythm and rest durations
+  const rhythmParam = voiceParams['RHYTHMS'];
+  const restParam = voiceParams['RESTS'];
+  
+  const rhythmIndex = this.selectValueInRange(rhythmParam);
+  const restIndex = this.selectValueInRange(restParam);
+  
+  // Use this voice's individual tempo instead of shared tempo
+const voiceTempo = getVoiceTempo(this.voiceIndex);
+const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
+const restDuration = getRestDuration(restIndex, voiceTempo);
+  
+  // Select note frequency
+  const noteInfo = selectMidiNote(this.voiceIndex);
+  
+  // Create scheduled note
+  const scheduledNote = this.createScheduledNote(
+    noteInfo.frequency,
+    noteDuration,
+    startTime
+  );
+  
+  if (scheduledNote) {
+    this.currentlyPlayingNotes.push(scheduledNote);
   }
+  
+  // Return next note timing
+  return startTime + noteDuration + restDuration;
+}
+
   
   /**
    * Create a scheduled note for this voice

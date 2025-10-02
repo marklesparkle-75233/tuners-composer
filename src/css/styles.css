@@ -421,17 +421,130 @@ SOCIAL SHARING BAR
 
 
 /* FILE MANAGEMENT BAR */
+/* ===============================================================
+FOUR-STAGE RESPONSIVE FILE MANAGEMENT BAR
+=============================================================== */
+
 #file-management-bar {
-display: flex;
-justify-content: space-between;
-align-items: center;
-max-width: 1400px;
-margin: 0 auto 1rem auto;
-background: white;
-border-radius: 8px;
-padding: 0.75rem 1rem;
-box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 1400px;
+  margin: 0 auto 1rem auto;
+  background: white;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
+
+#user-info {
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+
+#master-clock-settings {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  min-width: 200px;
+  padding: 0 1rem;
+  background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+#file-controls {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Stage 1: Wide screens (1000px+) - All horizontal */
+@media (min-width: 1000px) {
+  #file-management-bar {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+/* Stage 2: Medium-wide (800px - 999px) - Horizontal but tighter */
+@media (min-width: 800px) and (max-width: 999px) {
+  #file-management-bar {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  
+  #user-info {
+    min-width: 140px;
+  }
+  
+  #master-clock-settings {
+    min-width: 180px;
+    padding: 0 0.75rem;
+  }
+}
+
+/* Stage 3: Medium-narrow (600px - 799px) - YOUR PREFERRED LAYOUT */
+@media (min-width: 600px) and (max-width: 799px) {
+  #file-management-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  /* User info on top row, centered */
+  #user-info {
+    text-align: center;
+    min-width: auto;
+    order: 1;
+  }
+  
+  /* Master tempo + file controls on bottom row, horizontal */
+  .bottom-controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    order: 2;
+  }
+  
+  #master-clock-settings {
+    order: 2;
+    margin: 0;
+  }
+  
+  #file-controls {
+    order: 3;
+  }
+}
+
+/* Stage 4: Mobile (≤599px) - Full vertical stacking */
+@media (max-width: 599px) {
+  #file-management-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  #user-info {
+    text-align: center;
+    min-width: auto;
+  }
+  
+  #master-clock-settings {
+    justify-content: center;
+    margin: 0;
+  }
+  
+  #file-controls {
+    justify-content: center;
+  }
+}
+
 
 #user-info {
 display: flex;
@@ -1543,14 +1656,70 @@ FOOTER
 
  =============================================================== 
 
-// ===============================================================
-//
-// OCT 2 25  RESPONSIVE STYLES CORRECTIONS AND ADDL FUNCTIONS
-//
-// =============================================================== 
-/* ===============================================================
-THREE-STAGE RESPONSIVE HEADER CONTROLS - ADD THIS SECTION
-=============================================================== */
+/* OCT 2 25  DEBUG FILE MENU LAYOUT CONFLICTS */
+#master-clock-settings {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  min-width: 200px;
+  padding: 0 1rem;
+  border-left: 1px solid #dee2e6;
+  border-right: 1px solid #dee2e6;
+  /* Add the same gradient background as parameter rows */
+  background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.clock-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #333;
+}
+
+#master-tempo-display {
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: #f8f9fa;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+  min-width: 60px;
+  text-align: center;
+}
+
+.tempo-btn {
+  flex-shrink: 0;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tempo-btn:hover {
+  background: #5a6268;
+}
+
+
+
+
+
 
 
 
