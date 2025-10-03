@@ -391,6 +391,7 @@ SOCIAL SHARING BAR
   border-radius: 4px;
   padding: 0.5rem 1rem;
   border: 1px solid #dee2e6;
+  gap: 10px
 }
 
 #share-text {
@@ -402,7 +403,7 @@ SOCIAL SHARING BAR
 
 #social-icons {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.8rem;
 }
 
 .social-icon {
@@ -417,6 +418,18 @@ SOCIAL SHARING BAR
   color: #357abd;
 }
 
+#user-guide-btn {
+  background-color: #FF7F50; /* Coral color */
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: auto; /* Right-justify */
+  transition: background-color 0.3s;
+}
 
 
 
@@ -1716,6 +1729,7 @@ FOOTER
   background: #5a6268;
 }
 
+/* ADD USER'S GUIDE DOWNLOAD BUTTON
 
 
 

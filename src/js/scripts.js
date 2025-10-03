@@ -4652,3 +4652,27 @@ function monitorTimingChanges() {
   
   return interval;
 }
+
+/****************************************************************
+ * Open User Guide in new window
+ ****************************************************************/
+function openUserGuide() {
+  // Open in new window with specific dimensions
+  const userGuideWindow = window.open(
+    'user-guide.html',
+    'userGuide',
+    'width=900,height=700,scrollbars=yes,resizable=yes,menubar=yes,toolbar=yes'
+  );
+  
+  // Focus the new window
+  if (userGuideWindow) {
+    userGuideWindow.focus();
+  } else {
+    // Fallback if popup blocked
+    alert('Please allow popups to view the User Guide, or navigate to user-guide.html directly.');
+  }
+}
+
+
+
+
