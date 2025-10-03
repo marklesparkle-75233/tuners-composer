@@ -943,9 +943,12 @@ function createRow(param, voiceIndex) {
 function renderParameters() {
   const parameterSection = document.getElementById('parameter-section');
   
-  // Initialize rollup state if needed
+  // Initialize rollup states if needed
   if (Object.keys(rollupState).length === 0) {
     initializeRollupState();
+  }
+  if (Object.keys(parameterRollupState).length === 0) {
+    initializeParameterRollupState();
   }
   
   // Properly destroy all existing noUiSlider instances before clearing
@@ -969,6 +972,7 @@ function renderParameters() {
     <div class="voice-label">Voice ${currentVoice + 1}</div>
     <div class="control-buttons">
       <button class="control-btn" onclick="previewVoice(${currentVoice})">PREVIEW</button>
+      <button class="control-btn sync-btn" onclick="syncVoiceToOthers(${currentVoice})" title="Copy this voice's tempo to all other voices">SYNC</button>
       <button class="control-btn" onclick="toggleLockVoice(${currentVoice})">${voiceData[currentVoice].locked ? 'UNLOCK' : 'LOCK'}</button>
     </div>
   `;
@@ -984,12 +988,12 @@ function renderParameters() {
     rollupGroups[rollupKey].push(param);
   });
   
-  // Create rollups in specific order
+  // Create nested rollup structure (groups containing parameter rollups)
   const rollupOrder = ['instrument', 'mixing', 'rhythm', 'modulation', 'spatial'];
   rollupOrder.forEach(rollupKey => {
     if (rollupGroups[rollupKey]) {
-      const rollup = createRollup(rollupKey, rollupConfig[rollupKey], rollupGroups[rollupKey], currentVoice);
-      parameterSection.appendChild(rollup);
+      const groupRollup = createNestedGroupRollup(rollupKey, rollupConfig[rollupKey], rollupGroups[rollupKey], currentVoice);
+      parameterSection.appendChild(groupRollup);
     }
   });
   
@@ -997,6 +1001,73 @@ function renderParameters() {
   setTimeout(() => {
     connectAllSliders();
   }, 100);
+}
+
+
+// ADDING SYNC BUTTON FUNCTION
+/**
+ * Copy this voice's tempo settings to all other voices
+ */
+function syncVoiceToOthers(sourceVoiceIndex) {
+  console.log(`=== SYNCING ALL VOICES TO VOICE ${sourceVoiceIndex + 1} TEMPO ===`);
+  
+  const sourceTempo = voiceData[sourceVoiceIndex].parameters['TEMPO (BPM)'];
+  
+  if (!sourceTempo) {
+    console.warn('Source voice has no tempo parameter');
+    alert('Error: Source voice has no tempo settings to copy.');
+    return;
+  }
+  
+  console.log(`Source tempo: ${sourceTempo.min}-${sourceTempo.max} BPM (behavior: ${sourceTempo.behavior}%)`);
+  
+  // Copy this voice's tempo settings to all other voices
+  let syncedCount = 0;
+  for (let i = 0; i < 16; i++) {
+    if (i !== sourceVoiceIndex && voiceData[i].parameters['TEMPO (BPM)']) {
+      // Copy all tempo properties
+      voiceData[i].parameters['TEMPO (BPM)'].min = sourceTempo.min;
+      voiceData[i].parameters['TEMPO (BPM)'].max = sourceTempo.max;
+      voiceData[i].parameters['TEMPO (BPM)'].behavior = sourceTempo.behavior;
+      
+      // Reset any current tempo evolution
+      delete voiceData[i].parameters['TEMPO (BPM)'].currentTempo;
+      delete voiceData[i].parameters['TEMPO (BPM)'].currentValue;
+      
+      syncedCount++;
+    }
+  }
+  
+  console.log(`✅ Synced ${syncedCount} voices to Voice ${sourceVoiceIndex + 1} tempo settings`);
+  
+  // Update UI if we're viewing a different voice
+  if (currentVoice !== sourceVoiceIndex) {
+    renderParameters();
+    setTimeout(() => {
+      connectAllSliders();
+    }, 100);
+  }
+  
+  // Visual feedback on the SYNC button
+  const syncButton = document.querySelector('.sync-btn');
+  if (syncButton) {
+    const originalText = syncButton.textContent;
+    const originalColor = syncButton.style.backgroundColor;
+    
+    // Flash green to show success
+    syncButton.style.backgroundColor = '#28a745';
+    syncButton.style.color = 'white';
+    syncButton.textContent = 'SYNCED!';
+    
+    setTimeout(() => {
+      syncButton.style.backgroundColor = originalColor;
+      syncButton.style.color = '';
+      syncButton.textContent = originalText;
+    }, 1500);
+  }
+  
+  // Show user feedback
+  alert(`✅ Success!\n\nCopied Voice ${sourceVoiceIndex + 1} tempo settings to ${syncedCount} other voices.\n\nTempo: ${sourceTempo.min}-${sourceTempo.max} BPM\nBehavior: ${sourceTempo.behavior}%`);
 }
 
   
@@ -1333,30 +1404,54 @@ setTimeout(() => {
 /**
  * Get tempo for a specific voice (uses voice's TEMPO parameter range)
  */
+// Replace the getVoiceTempo function with this enhanced version
 function getVoiceTempo(voiceIndex) {
   const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
   
-  if (tempoParam && tempoParam.behavior > 0) {
-    // Voice has its own evolving tempo
-    if (!tempoParam.currentValue) {
-      tempoParam.currentValue = (tempoParam.min + tempoParam.max) / 2;
+  if (!tempoParam) {
+    console.warn(`Voice ${voiceIndex + 1}: No TEMPO parameter found`);
+    return masterTempo;
+  }
+  
+  // Get the voice's base tempo (average of min/max)
+  let baseTempo = (tempoParam.min + tempoParam.max) / 2;
+  console.log(`🔍 BASE TEMPO CALCULATION: min=${tempoParam.min}, max=${tempoParam.max}, average=${baseTempo}`);
+  
+  // Apply behavior evolution if active
+  if (tempoParam.behavior > 0) {
+    if (!tempoParam.currentTempo) {
+      tempoParam.currentTempo = baseTempo;
     }
     
-    // Apply behavior-controlled tempo evolution
-    tempoParam.currentValue = interpolateParameter(
-      tempoParam.currentValue,
+    baseTempo = interpolateParameter(
+      tempoParam.currentTempo,
       tempoParam.min,
       tempoParam.max,
       tempoParam.behavior,
-      0.1 // Slower tempo evolution
+      0.1
     );
     
-    return Math.round(tempoParam.currentValue);
-  } else {
-    // Voice uses static tempo (average of min/max)
-    return Math.round((tempoParam.min + tempoParam.max) / 2);
+    tempoParam.currentTempo = baseTempo;
+    console.log(`🔍 AFTER BEHAVIOR: baseTempo=${baseTempo}`);
   }
+  
+  // *** FIXED: Proper master tempo scaling ***
+  console.log(`🔍 MASTER SCALING: masterTempo=${masterTempo}, baseTempo=${baseTempo}`);
+  
+  // NEW APPROACH: Master tempo acts as a multiplier
+  // 120 BPM master = 1.0x, 60 BPM master = 0.5x, 240 BPM master = 2.0x
+  const masterMultiplier = masterTempo / 120;  // 120 as reference tempo
+  const finalTempo = baseTempo * masterMultiplier;
+  
+  console.log(`🔍 MASTER MULTIPLIER: ${masterTempo} / 120 = ${masterMultiplier.toFixed(3)}`);
+  console.log(`🔍 SCALED RESULT: ${baseTempo} × ${masterMultiplier.toFixed(3)} = ${finalTempo.toFixed(1)}`);
+  
+  const clampedTempo = Math.round(Math.max(40, Math.min(240, finalTempo)));
+  console.log(`🔍 FINAL CLAMPED: ${clampedTempo} BPM`);
+  
+  return clampedTempo;
 }
+
 
 
 
@@ -1750,6 +1845,9 @@ function updateMasterTempoDisplay() {
 /**
  * Start tempo scrolling in specified direction
  */
+/**
+ * Start tempo scrolling in specified direction - IMPROVED DEBOUNCING
+ */
 function startTempoScroll(direction) {
   // Stop any existing scroll
   stopTempoScroll();
@@ -1763,7 +1861,7 @@ function startTempoScroll(direction) {
     decreaseMasterTempo();
   }
   
-  // Start continuous scrolling after 500ms delay
+  // IMPROVED TIMING: Less sensitive click-and-hold
   setTimeout(() => {
     if (tempoScrollDirection !== 0) {
       tempoScrollInterval = setInterval(() => {
@@ -1772,10 +1870,11 @@ function startTempoScroll(direction) {
         } else if (tempoScrollDirection < 0) {
           decreaseMasterTempo();
         }
-      }, 100); // Change every 100ms for smooth scrolling
+      }, 120); // CHANGED: Slower repeat from 100ms to 120ms
     }
-  }, 500); // 500ms delay before continuous scrolling starts
+  }, 750); // CHANGED: Longer delay from 500ms to 750ms - must hold longer before rapid scrolling starts
 }
+
 
 /**
  * Stop tempo scrolling
@@ -2280,6 +2379,10 @@ let rhythmScheduler = null;
  * Create and schedule a single note with envelope
  */
 function scheduleNote(frequency, duration, startTime, voiceIndex) {
+  
+  // ADD THIS LINE FIRST
+  recordNoteForTempoTest();
+
   if (!audioManager || !audioManager.isInitialized) {
     return null;
   }
@@ -2359,8 +2462,6 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
   return noteInfo;
 }
 
-
-
 /**
  * Schedule a rhythm pattern for a voice - WITH ERROR HANDLING
  */
@@ -2368,6 +2469,13 @@ function scheduleRhythmPattern(voiceIndex, startTime) {
     const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
     const restParam = voiceData[voiceIndex].parameters['RESTS'];
     
+    // DEBUGGING THE CLOCKS:
+    console.log(`=== SCHEDULING NOTE FOR VOICE ${voiceIndex + 1} ===`);
+    const voiceTempo = getVoiceTempo(voiceIndex);
+    console.log(`Voice tempo calculated: ${voiceTempo} BPM`);
+    console.log(`Master tempo: ${masterTempo} BPM`);
+    // END DEBUG CLOCK
+
     // ERROR HANDLING: Check for valid rhythm/rest selections
     if (rhythmParam.min === 0 && rhythmParam.max === 0) {
         console.warn(`Voice ${voiceIndex + 1}: No rhythm selected, using default eighth notes`);
@@ -2408,17 +2516,19 @@ function scheduleRhythmPattern(voiceIndex, startTime) {
         restIndex = Math.floor((restParam.min + restParam.max) / 2);
     }
     
-    // In scheduleRhythmPattern, update the valid ranges:
+    // Ensure valid ranges:
     // Rhythms: 0-14 (no invalid index 0 anymore)
-      rhythmIndex = Math.max(0, Math.min(14, rhythmIndex));
+    rhythmIndex = Math.max(0, Math.min(14, rhythmIndex));
     // Rests: 0-15 (index 0 is valid "No Rests")
-      restIndex = Math.max(0, Math.min(15, restIndex));
+    restIndex = Math.max(0, Math.min(15, restIndex));
 
-    // Get durations using individual voice tempo
-    const voiceTempo = getVoiceTempo(voiceIndex);
+    // Get durations using the already-calculated voice tempo
     const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
     const restDuration = getRestDuration(restIndex, voiceTempo);
 
+    // Add more detailed logging
+    console.log(`Rhythm index: ${rhythmIndex}, Rest index: ${restIndex}`);
+    console.log(`Note duration: ${noteDuration.toFixed(3)}s, Rest duration: ${restDuration.toFixed(3)}s`);
 
     // ERROR HANDLING: Validate durations
     if (isNaN(noteDuration) || noteDuration <= 0) {
@@ -2443,11 +2553,13 @@ function scheduleRhythmPattern(voiceIndex, startTime) {
     // Schedule the note with current parameter values
     const scheduledNote = scheduleNote(noteInfo.frequency, noteDuration, startTime, voiceIndex);
     
-    console.log(`Scheduled: ${noteInfo.noteName} for ${noteDuration.toFixed(3)}s, rest ${restDuration.toFixed(3)}s`);
+    console.log(`✅ Scheduled: ${noteInfo.noteName} for ${noteDuration.toFixed(3)}s, rest ${restDuration.toFixed(3)}s`);
     
     // Return when the next note should be scheduled
     return startTime + noteDuration + restDuration;
 }
+
+
 
 
 /**
@@ -3392,42 +3504,63 @@ function connectAllSliders() {
   });
   
   // 2. Connect behavior sliders (regular input[type="range"])
-  const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
-  console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
+const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
+
+behaviorSliders.forEach((slider) => {
+  const row = slider.closest('.parameter-rollup') || slider.closest('.row-container');
+  const label = row ? (row.querySelector('.parameter-rollup-title') || row.querySelector('.label-container')) : null;
+  const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
   
-  behaviorSliders.forEach((slider) => {
-    const row = slider.closest('.row-container');
-    const label = row ? row.querySelector('.label-container') : null;
-    const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
+  console.log(`Connecting behavior slider: ${paramName}`);
+  
+  // Remove any existing event listeners
+  slider.oninput = null;
+  slider.onchange = null;
+  
+  // Add new event listener with FIXED TOOLTIP
+  slider.oninput = function(e) {
+    const value = parseInt(e.target.value);
     
-    console.log(`Connecting behavior slider: ${paramName}`);
-    
-    // Remove any existing event listeners
-    slider.oninput = null;
-    slider.onchange = null;
-    
-    // Add new event listener
-    slider.oninput = function(e) {
-      const value = parseInt(e.target.value);
+    if (voiceData[currentVoice].parameters[paramName]) {
+      voiceData[currentVoice].parameters[paramName].behavior = value;
       
-      if (voiceData[currentVoice].parameters[paramName]) {
-        voiceData[currentVoice].parameters[paramName].behavior = value;
+      // FIXED: Update the tooltip properly
+      const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+      if (tooltip) {
+        tooltip.textContent = value + '%';
         
-        // Update the tooltip
-        const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
-        if (tooltip) {
-          tooltip.textContent = value + '%';
-          
-          // Update tooltip position
-          const percentage = (value - slider.min) / (slider.max - slider.min);
-          const offset = percentage * (slider.offsetWidth - 16);
-          tooltip.style.left = `${offset + 8}px`;
-        }
+        // FIXED: Better tooltip position calculation
+        const percentage = (value - parseInt(slider.min)) / (parseInt(slider.max) - parseInt(slider.min));
+        const sliderWidth = slider.offsetWidth;
+        const thumbWidth = 16;
+        const offset = percentage * (sliderWidth - thumbWidth) + (thumbWidth / 2);
         
-        console.log(`✅ ${paramName} behavior: ${value}%`);
+        tooltip.style.left = `${offset}px`;
       }
-    };
-  });
+      
+      console.log(`✅ ${paramName} behavior: ${value}%`);
+    }
+  };
+  // FIXED: Wait for rollup animation and layout to fully complete
+const initializeTooltipWhenReady = () => {
+  // Check if slider is visible and has dimensions
+  if (slider.offsetWidth > 0 && slider.offsetHeight > 0) {
+    const event = { target: slider };
+    slider.oninput(event);
+    console.log(`📍 Initialized tooltip for ${paramName} after layout ready`);
+  } else {
+    // Not ready yet, try again
+    setTimeout(initializeTooltipWhenReady, 100);
+  }
+};
+
+// Wait longer for rollup animation to complete
+setTimeout(initializeTooltipWhenReady, 500);
+
+});
+
+
   
  // 3. Connect dropdown selectors (Sound, Rhythms, Rests) - WITH VALIDATION
 const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
@@ -3863,11 +3996,12 @@ class Voice {
     // Continue scheduling every 50ms
     this.rhythmScheduler = setInterval(scheduleAhead, 50);
   }
-  
   /**
-   * Schedule a single note for this voice
-   */
-  scheduleNextNote(startTime) {
+ * Schedule a single note for this voice
+ */
+scheduleNextNote(startTime) {
+  console.log(`=== VOICE MANAGER: SCHEDULING NOTE FOR VOICE ${this.voiceIndex + 1} ===`);
+  
   // Get current parameter values for this voice
   const voiceParams = voiceData[this.voiceIndex].parameters;
   
@@ -3879,9 +4013,13 @@ class Voice {
   const restIndex = this.selectValueInRange(restParam);
   
   // Use this voice's individual tempo instead of shared tempo
-const voiceTempo = getVoiceTempo(this.voiceIndex);
-const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
-const restDuration = getRestDuration(restIndex, voiceTempo);
+  const voiceTempo = getVoiceTempo(this.voiceIndex);
+  console.log(`VoiceManager Voice ${this.voiceIndex + 1} tempo: ${voiceTempo} BPM (Master: ${masterTempo} BPM)`);
+  
+  const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
+  const restDuration = getRestDuration(restIndex, voiceTempo);
+  
+  console.log(`VoiceManager Note: ${noteDuration.toFixed(3)}s, Rest: ${restDuration.toFixed(3)}s`);
   
   // Select note frequency
   const noteInfo = selectMidiNote(this.voiceIndex);
@@ -4382,12 +4520,13 @@ const rollupConfig = {
 // Global rollup state
 let rollupState = {};
 
-// Initialize rollup state
+// Initialize rollup state - START ALL COLLAPSED
 function initializeRollupState() {
   Object.keys(rollupConfig).forEach(key => {
-    rollupState[key] = rollupConfig[key].expanded;
+    rollupState[key] = false; // CHANGED: All groups start collapsed
   });
 }
+
 
 
 // Create a rollup section
@@ -4672,6 +4811,398 @@ function openUserGuide() {
     alert('Please allow popups to view the User Guide, or navigate to user-guide.html directly.');
   }
 }
+/*******************************************************************
+//
+// Oct 3, 25  TROUBLESHOOTING MASTER CLOCK AND VOICES TEMPOS
+// Add this test function to scripts.js */
+function testMasterTempoTracking() {
+  console.log('=== TESTING MASTER TEMPO TRACKING ===');
+  console.log(`Master Tempo: ${masterTempo} BPM`);
+  console.log(`Current Voice: ${currentVoice + 1}`);
+  
+  // Test the current voice
+  const voiceTempo = getVoiceTempo(currentVoice);
+  console.log(`Voice ${currentVoice + 1} tempo: ${voiceTempo} BPM`);
+  
+  // Check the voice's parameter settings
+  const tempoParam = voiceData[currentVoice].parameters['TEMPO (BPM)'];
+  console.log('Voice tempo parameter:', tempoParam);
+  
+  // Test a few different master tempos
+  console.log('\n--- Testing different master tempos ---');
+  const originalMaster = masterTempo;
+  
+  [80, 120, 160, 200].forEach(testTempo => {
+    masterTempo = testTempo;
+    const result = getVoiceTempo(currentVoice);
+    console.log(`Master: ${testTempo} → Voice: ${result} BPM`);
+  });
+  
+  // Restore original
+  masterTempo = originalMaster;
+  updateMasterTempoDisplay();
+}
+
+// Add this diagnostic function
+function debugAudioSources() {
+  console.log('=== AUDIO SOURCES DIAGNOSTIC ===');
+  console.log('audioManager.isPlaying:', audioManager?.isPlaying);
+  console.log('isRhythmicPlaybackActive:', isRhythmicPlaybackActive);
+  console.log('currentlyPlayingNotes.length:', currentlyPlayingNotes?.length);
+  
+  // Check if the old continuous oscillator is still running
+  if (audioManager && audioManager.testOscillator) {
+    console.log('❌ OLD CONTINUOUS OSCILLATOR STILL RUNNING!');
+    console.log('This is the sound you hear - it ignores tempo changes');
+  }
+  
+  if (isRhythmicPlaybackActive) {
+    console.log('✅ Rhythmic system is active (this responds to tempo)');
+  }
+}
+
+// INNDER ROLLUP SCRIPTS
+// Global rollup state for individual parameters
+let parameterRollupState = {};
+
+/**
+ * Initialize parameter rollup state - START ALL COLLAPSED
+ */
+function initializeParameterRollupState() {
+  // CHANGED: Start everything collapsed for clean UI
+  parameterDefinitions.forEach(param => {
+    parameterRollupState[param.name] = false; // All parameters start collapsed
+  });
+  
+  console.log('📕 All parameter rollups initialized as collapsed');
+}
+
+
+/**
+ * Create individual parameter rollup
+ */
+function createParameterRollup(param, voiceIndex) {
+  // Initialize state if needed
+  if (Object.keys(parameterRollupState).length === 0) {
+    initializeParameterRollupState();
+  }
+  
+  const rollupContainer = document.createElement('div');
+  rollupContainer.className = `parameter-rollup ${parameterRollupState[param.name] ? 'expanded' : 'collapsed'}`;
+  rollupContainer.dataset.parameter = param.name;
+  
+  // Rollup header (parameter name as clickable tab)
+  const rollupHeader = document.createElement('div');
+  rollupHeader.className = `parameter-rollup-header ${parameterRollupState[param.name] ? '' : 'collapsed'}`;
+  rollupHeader.onclick = () => toggleParameterRollup(param.name);
+  
+  const rollupTitle = document.createElement('span');
+  rollupTitle.className = 'parameter-rollup-title';
+  rollupTitle.textContent = param.name;
+  
+  const rollupArrow = document.createElement('span');
+  rollupArrow.className = 'parameter-rollup-arrow';
+  rollupArrow.textContent = '▶';
+  
+  rollupHeader.appendChild(rollupTitle);
+  rollupHeader.appendChild(rollupArrow);
+  
+  // Rollup content (parameter controls)
+  const rollupContent = document.createElement('div');
+  rollupContent.className = 'parameter-rollup-content';
+  
+  // Create the parameter controls without the main label
+  const parameterContent = createParameterContent(param, voiceIndex);
+  rollupContent.appendChild(parameterContent);
+  
+  rollupContainer.appendChild(rollupHeader);
+  rollupContainer.appendChild(rollupContent);
+  
+  return rollupContainer;
+}
+
+/**
+ * Create parameter content (controls without the main row wrapper)
+ */
+function createParameterContent(param, voiceIndex) {
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'row-container-content';
+  
+  // Handle timing controls specially
+  if (param.type === 'timing-controls') {
+    const timingWrapper = document.createElement('div');
+    timingWrapper.className = 'timing-wrapper';
+    timingWrapper.appendChild(createTimingControls(param, voiceIndex));
+    return timingWrapper;
+  }
+  
+  // Controls container for other parameter types
+  const controlsContainer = document.createElement('div');
+  controlsContainer.className = 'controls-container';
+  
+  // Range controls
+  const range = document.createElement('div');
+  range.className = 'range-container';
+  
+  if (param.type === 'dropdown') {
+    range.appendChild(createDropdown(param.options, param.name, voiceIndex));
+  } else if (param.type === 'dual-dropdown') {
+    range.appendChild(createDualDropdown(param.options, param.name, voiceIndex));
+  } else if (param.type === 'single-dual') {
+    range.appendChild(createDualSlider(param, voiceIndex));
+  } else if (param.type === 'multi-dual') {
+    range.appendChild(createMultiDualSlider(param, voiceIndex));
+  }
+  
+  controlsContainer.appendChild(range);
+  
+  // Behavior controls - only for non-dropdown params
+  if (param.type !== 'dropdown') {
+    const behaviorContainer = createBehaviorSlider(param, voiceIndex);
+    controlsContainer.appendChild(behaviorContainer);
+  } else {
+    const emptyBehavior = document.createElement('div');
+    emptyBehavior.className = 'behavior-container';
+    controlsContainer.appendChild(emptyBehavior);
+  }
+  
+  contentDiv.appendChild(controlsContainer);
+  return contentDiv;
+}
+
+/**
+ * Toggle individual parameter rollup
+ */
+function toggleParameterRollup(parameterName) {
+  const rollup = document.querySelector(`[data-parameter="${parameterName}"]`);
+  if (!rollup) return;
+  
+  const header = rollup.querySelector('.parameter-rollup-header');
+  const arrow = rollup.querySelector('.parameter-rollup-arrow');
+  const content = rollup.querySelector('.parameter-rollup-content');
+  
+  // Toggle state
+  parameterRollupState[parameterName] = !parameterRollupState[parameterName];
+  
+  if (parameterRollupState[parameterName]) {
+    // Expand
+    rollup.classList.add('expanded');
+    rollup.classList.remove('collapsed');
+    header.classList.remove('collapsed');
+    content.style.display = 'block';
+    arrow.textContent = '▼';
+    console.log(`📖 Expanded: ${parameterName}`);
+  } else {
+    // Collapse
+    rollup.classList.remove('expanded');
+    rollup.classList.add('collapsed');
+    header.classList.add('collapsed');
+    content.style.display = 'none';
+    arrow.textContent = '▶';
+    console.log(`📕 Collapsed: ${parameterName}`);
+  }
+}
+
+/**
+ * Expand all parameters
+ */
+function expandAllParameters() {
+  parameterDefinitions.forEach(param => {
+    if (!parameterRollupState[param.name]) {
+      toggleParameterRollup(param.name);
+    }
+  });
+  console.log('📖 All parameters expanded');
+}
+
+/**
+ * Collapse all parameters
+ */
+function collapseAllParameters() {
+  parameterDefinitions.forEach(param => {
+    if (parameterRollupState[param.name]) {
+      toggleParameterRollup(param.name);
+    }
+  });
+  console.log('📕 All parameters collapsed');
+}
+
+/**
+ * Create nested group rollup containing individual parameter rollups
+ */
+function createNestedGroupRollup(rollupKey, rollupInfo, parameters, voiceIndex) {
+  const rollupContainer = document.createElement('div');
+  rollupContainer.className = 'rollup-container';
+  rollupContainer.dataset.rollup = rollupKey;
+  
+  // Group rollup header (main category)
+  const rollupHeader = document.createElement('div');
+  rollupHeader.className = 'rollup-header';
+  rollupHeader.onclick = () => toggleRollup(rollupKey);
+  
+  // Group expand/collapse arrow
+  const rollupArrow = document.createElement('span');
+  rollupArrow.className = 'rollup-arrow';
+  rollupArrow.textContent = rollupState[rollupKey] ? '▼' : '▶';
+  
+  // Group title
+  const rollupTitle = document.createElement('span');
+  rollupTitle.className = 'rollup-title';
+  rollupTitle.textContent = rollupInfo.title;
+  
+  // Group icon/emoji
+  const rollupIcon = document.createElement('span');
+  rollupIcon.className = 'rollup-icon';
+  rollupIcon.textContent = rollupInfo.icon;
+  
+  rollupHeader.appendChild(rollupArrow);
+  rollupHeader.appendChild(rollupTitle);
+  rollupHeader.appendChild(rollupIcon);
+  
+  // Group rollup content (contains individual parameter rollups)
+  const rollupContent = document.createElement('div');
+  rollupContent.className = 'rollup-content';
+  rollupContent.style.display = rollupState[rollupKey] ? 'block' : 'none';
+  
+  // Add individual parameter rollups to this group
+  parameters.forEach(param => {
+    const parameterRollup = createParameterRollup(param, voiceIndex);
+    rollupContent.appendChild(parameterRollup);
+  });
+  
+  rollupContainer.appendChild(rollupHeader);
+  rollupContainer.appendChild(rollupContent);
+  
+  return rollupContainer;
+}
+
+/**
+ * Quick access functions for testing
+ */
+function expandInstrumentGroup() {
+  if (!rollupState['instrument']) toggleRollup('instrument');
+  if (!parameterRollupState['SOUND']) toggleParameterRollup('SOUND');
+  if (!parameterRollupState['MELODIC RANGE']) toggleParameterRollup('MELODIC RANGE');
+  console.log('🎹 Instrument group expanded');
+}
+
+function expandMixingGroup() {
+  if (!rollupState['mixing']) toggleRollup('mixing');
+  if (!parameterRollupState['VOLUME']) toggleParameterRollup('VOLUME');
+  if (!parameterRollupState['STEREO BALANCE']) toggleParameterRollup('STEREO BALANCE');
+  console.log('🎚️ Mixing group expanded');
+}
+
+function collapseEverything() {
+  collapseAllParameters();
+  Object.keys(rollupState).forEach(key => {
+    if (rollupState[key]) toggleRollup(key);
+  });
+  console.log('📕 Everything collapsed - clean slate!');
+}
+
+// Add these variables at the top of scripts.js
+let tempoTestData = {
+  noteTimestamps: [],
+  isTestingTempo: false,
+  testStartTime: null,
+  expectedTempo: null
+};
+
+/**
+ * Start precise tempo testing - measures actual note timing
+ */
+function startTempoTest(expectedTempo) {
+  console.log(`🎵 STARTING TEMPO TEST - Expected: ${expectedTempo} BPM`);
+  
+  tempoTestData = {
+    noteTimestamps: [],
+    isTestingTempo: true,
+    testStartTime: Date.now(),
+    expectedTempo: expectedTempo
+  };
+  
+  console.log('📊 Tempo test active - will measure next 10 notes');
+}
+
+/**
+ * Record each note timing for tempo analysis
+ */
+function recordNoteForTempoTest() {
+  if (!tempoTestData.isTestingTempo) return;
+  
+  const now = Date.now();
+  tempoTestData.noteTimestamps.push(now);
+  
+  console.log(`🎵 Note ${tempoTestData.noteTimestamps.length} at ${now}ms`);
+  
+  // After 10 notes, calculate actual tempo
+  if (tempoTestData.noteTimestamps.length >= 10) {
+    calculateActualTempo();
+  }
+}
+
+/**
+ * Calculate actual tempo from recorded note timings
+ */
+function calculateActualTempo() {
+  const timestamps = tempoTestData.noteTimestamps;
+  const expectedTempo = tempoTestData.expectedTempo;
+  
+  if (timestamps.length < 2) {
+    console.log('❌ Not enough notes recorded for tempo analysis');
+    return;
+  }
+  
+  // Calculate intervals between notes
+  const intervals = [];
+  for (let i = 1; i < timestamps.length; i++) {
+    intervals.push(timestamps[i] - timestamps[i - 1]);
+  }
+  
+  // Calculate average interval
+  const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+  
+  // Convert to BPM (assuming quarter notes)
+  const actualTempo = 60000 / avgInterval; // 60,000 ms per minute
+  
+  console.log('🎵 ===== TEMPO TEST RESULTS =====');
+  console.log(`Expected Tempo: ${expectedTempo} BPM`);
+  console.log(`Actual Tempo: ${actualTempo.toFixed(1)} BPM`);
+  console.log(`Difference: ${(actualTempo - expectedTempo).toFixed(1)} BPM`);
+  console.log(`Accuracy: ${((actualTempo / expectedTempo) * 100).toFixed(1)}%`);
+  console.log(`Average interval: ${avgInterval.toFixed(1)}ms`);
+  console.log(`All intervals:`, intervals.map(i => i.toFixed(0) + 'ms'));
+  
+  // Reset test
+  tempoTestData.isTestingTempo = false;
+  
+  return {
+    expected: expectedTempo,
+    actual: actualTempo,
+    difference: actualTempo - expectedTempo,
+    accuracy: (actualTempo / expectedTempo) * 100
+  };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
