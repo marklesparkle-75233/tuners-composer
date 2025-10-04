@@ -170,7 +170,7 @@ THREE-STAGE RESPONSIVE HEADER SYSTEM
 }
 /* SYNC Button Styling */
 .sync-btn {
-  background: #17a2b8 !important;
+  background:#6c757d !important;
   color: white !important;
   position: relative;
 }
@@ -1657,7 +1657,7 @@ FOOTER
   flex: 1;
   font-size: 18px;          /* Larger font size */
   font-weight: 600;         /* Font weight: normal, bold, 600, 700, etc. */
-  color: #0d0d0e;           /* Color: hex, rgb, or named colors */
+  color:#6c757d;           /* Color: hex, rgb, or named colors */
   text-transform: uppercase; /* uppercase, lowercase, capitalize, none */
   letter-spacing: 1px;      /* Space between letters */
   font-family: 'Arial', sans-serif; /* Font family */
@@ -1668,7 +1668,7 @@ FOOTER
 .rollup-arrow {
   font-size: 30px;          
   margin-right: 12px;       
-  color: hsl(244, 94%, 48%);              
+  color:#4a90e2;              
   transition: transform 0.2s;
   font-weight: bold;        
   line-height: 1;           
@@ -1676,7 +1676,7 @@ FOOTER
 
 /* Optional: Add hover effect */
 .rollup-header:hover .rollup-arrow {
-  color: #000;              /* Darker on hover */
+  color: #06448b;              /* Darker on hover */
   transform: scale(1.1);    /* Slightly bigger on hover */
 }
 

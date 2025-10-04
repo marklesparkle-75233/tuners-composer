@@ -121,12 +121,159 @@ const midiNoteNames = {
 };
 
 
+// NEW MASTER CLOCK SYSTEM
+// =============================================================================
+// MASTER CLOCK SYSTEM - High Resolution Parameter Evolution
+// =============================================================================
+
+/**
+ * High-resolution Master Clock - Continuously evolves all parameters
+ * Runs at ~100Hz (10ms intervals) for smooth parameter evolution
+ */
+class MasterClock {
+  constructor() {
+    this.resolution = 10; // 10ms = 100Hz update rate for smooth evolution
+    this.isRunning = false;
+    this.intervalId = null;
+    this.startTime = 0;
+    this.lastUpdateTime = 0;
+    
+    console.log('Master Clock initialized - 100Hz parameter evolution');
+  }
+  
+  start() {
+    if (this.isRunning) {
+      this.stop(); // Stop existing clock first
+    }
+    
+    this.isRunning = true;
+    this.startTime = Date.now();
+    this.lastUpdateTime = this.startTime;
+    
+    this.intervalId = setInterval(() => {
+      this.updateAllParameters();
+    }, this.resolution);
+    
+    console.log('🕐 Master Clock started - continuous parameter evolution active');
+  }
+  
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.isRunning = false;
+    
+    console.log('🕐 Master Clock stopped');
+  }
+  
+  updateAllParameters() {
+    const currentTime = Date.now();
+    const deltaTime = Math.min((currentTime - this.lastUpdateTime) / 1000, 0.05);
+    
+    for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
+      if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
+        this.updateVoiceParameters(voiceIndex, deltaTime);
+      }
+    }
+    
+    this.lastUpdateTime = currentTime;
+  }
+  
+  updateVoiceParameters(voiceIndex, deltaTime) {
+    const voice = voiceData[voiceIndex];
+    if (!voice) return;
+    
+    // Update all parameters continuously
+    this.updateParameter(voice.parameters['VOLUME'], deltaTime);
+    this.updateParameter(voice.parameters['STEREO BALANCE'], deltaTime);
+    this.updateParameter(voice.parameters['MELODIC RANGE'], deltaTime);
+    this.updateParameter(voice.parameters['ATTACK VELOCITY'], deltaTime);
+    this.updateParameter(voice.parameters['DETUNING'], deltaTime);
+    this.updateParameter(voice.parameters['PORTAMENTO GLIDE TIME'], deltaTime);
+    this.updateParameter(voice.parameters['TEMPO (BPM)'], deltaTime);
+    this.updateParameter(voice.parameters['REVERB'], deltaTime);
+    
+    // Update multi-parameter effects
+    this.updateEffectParameter(voice.parameters['TREMOLO'], deltaTime);
+    this.updateEffectParameter(voice.parameters['CHORUS'], deltaTime);
+    this.updateEffectParameter(voice.parameters['PHASER'], deltaTime);
+    this.updateEffectParameter(voice.parameters['DELAY'], deltaTime);
+    
+    // Apply real-time audio changes for preview voice
+    if (voiceIndex === currentVoice && audioManager && audioManager.isPlaying) {
+      this.applyAudioChanges(voiceIndex);
+    }
+  }
+  
+  updateParameter(param, deltaTime) {
+    if (!param || param.behavior <= 0) return;
+    
+    if (param.currentValue === undefined) {
+      param.currentValue = (param.min + param.max) / 2;
+    }
+    
+    param.currentValue = interpolateParameter(
+      param.currentValue,
+      param.min,
+      param.max,
+      param.behavior,
+      deltaTime * 2
+    );
+  }
+  
+  updateEffectParameter(param, deltaTime) {
+    if (!param || param.behavior <= 0) return;
+    
+    if (param.speed) {
+      if (param.speed.currentValue === undefined) {
+        param.speed.currentValue = (param.speed.min + param.speed.max) / 2;
+      }
+      param.speed.currentValue = interpolateParameter(
+        param.speed.currentValue,
+        param.speed.min,
+        param.speed.max,
+        param.behavior,
+        deltaTime * 2
+      );
+    }
+    
+    if (param.depth) {
+      if (param.depth.currentValue === undefined) {
+        param.depth.currentValue = (param.depth.min + param.depth.max) / 2;
+      }
+      param.depth.currentValue = interpolateParameter(
+        param.depth.currentValue,
+        param.depth.min,
+        param.depth.max,
+        param.behavior,
+        deltaTime * 2
+      );
+    }
+  }
+  
+  applyAudioChanges(voiceIndex) {
+    const voice = voiceData[voiceIndex];
+    
+    if (voice.parameters['VOLUME'].currentValue !== undefined && audioManager.setVolumeRealTime) {
+      audioManager.setVolumeRealTime(voice.parameters['VOLUME'].currentValue);
+    }
+    
+    if (voice.parameters['STEREO BALANCE'].currentValue !== undefined && audioManager.setBalanceRealTime) {
+      audioManager.setBalanceRealTime(voice.parameters['STEREO BALANCE'].currentValue);
+    }
+  }
+}
+
+// Global master clock instance
+let masterClock = null;
+
+
+
+
 
 // Master Clock System Variables
-let testTempo = 120; // ADD THIS LINE FIRST
 let masterTempo = 120; // Default master tempo
-let masterClockInterval = null;
-let isClockRunning = false;
 
 // Tempo scrolling variables - ADD THESE
 let tempoScrollInterval = null;
@@ -1413,9 +1560,8 @@ function getVoiceTempo(voiceIndex) {
     return masterTempo;
   }
   
-  // Get the voice's base tempo (average of min/max)
+  // Get the voice's base tempo (average of min/max range)
   let baseTempo = (tempoParam.min + tempoParam.max) / 2;
-  console.log(`🔍 BASE TEMPO CALCULATION: min=${tempoParam.min}, max=${tempoParam.max}, average=${baseTempo}`);
   
   // Apply behavior evolution if active
   if (tempoParam.behavior > 0) {
@@ -1432,24 +1578,9 @@ function getVoiceTempo(voiceIndex) {
     );
     
     tempoParam.currentTempo = baseTempo;
-    console.log(`🔍 AFTER BEHAVIOR: baseTempo=${baseTempo}`);
   }
   
-  // *** FIXED: Proper master tempo scaling ***
-  console.log(`🔍 MASTER SCALING: masterTempo=${masterTempo}, baseTempo=${baseTempo}`);
-  
-  // NEW APPROACH: Master tempo acts as a multiplier
-  // 120 BPM master = 1.0x, 60 BPM master = 0.5x, 240 BPM master = 2.0x
-  const masterMultiplier = masterTempo / 120;  // 120 as reference tempo
-  const finalTempo = baseTempo * masterMultiplier;
-  
-  console.log(`🔍 MASTER MULTIPLIER: ${masterTempo} / 120 = ${masterMultiplier.toFixed(3)}`);
-  console.log(`🔍 SCALED RESULT: ${baseTempo} × ${masterMultiplier.toFixed(3)} = ${finalTempo.toFixed(1)}`);
-  
-  const clampedTempo = Math.round(Math.max(40, Math.min(240, finalTempo)));
-  console.log(`🔍 FINAL CLAMPED: ${clampedTempo} BPM`);
-  
-  return clampedTempo;
+  return Math.round(Math.max(40, Math.min(240, baseTempo)));
 }
 
 
@@ -1748,41 +1879,6 @@ function enableParameterInterpolation() {
   console.log('Parameter interpolation timer started');
 }
 
-// Also add this test function to manually check the interpolation
-function testInterpolation() {
-  console.log('=== TESTING INTERPOLATION ===');
-  
-  // Test the core algorithm
-  const testResult = interpolateParameter(50, 20, 80, 75, 0.1);
-  console.log('Interpolation test - Input: 50, Range: 20-80, Behavior: 75%, Result:', testResult);
-  
-  // Check if voices are enabled
-  for (let i = 0; i < 16; i++) {
-    if (voiceData[i] && voiceData[i].enabled) {
-      console.log(`Voice ${i + 1} is enabled`);
-    }
-  }
-  
-  // Check current voice behavior settings
-  const volumeParam = voiceData[currentVoice].parameters['VOLUME'];
-  const balanceParam = voiceData[currentVoice].parameters['STEREO BALANCE'];
-  
-  console.log('Current voice volume behavior:', volumeParam.behavior);
-  console.log('Current voice balance behavior:', balanceParam.behavior);
-}
-
-// Updated previewVoice with more debugging
-// Replace the previewVoice function with this fixed version
-// Simple test clock for Session 4 - Add to scripts.js
-
-// Simple test timing variables
-let testClockInterval = null;
-let testBeatCount = 0;
-// Master tempo with fallback for audio system compatibility
-function getCurrentTempo() {
-  return typeof masterTempo !== 'undefined' ? masterTempo : 120;
-}
-
 
 
 
@@ -1802,15 +1898,11 @@ function updateMasterTempoDisplay() {
 /**
  * Increase Master Tempo
  */
-/**
- * Increase Master Tempo
- */
 function increaseMasterTempo() {
   if (masterTempo < 240) { // Max tempo limit
-    masterTempo += 1; // Update master tempo
-    testTempo = masterTempo; // Keep testTempo in sync
+    masterTempo += 1;
     updateMasterTempoDisplay();
-    console.log(`Both tempos updated to: ${masterTempo} BPM`);
+    console.log(`Master tempo updated to: ${masterTempo} BPM`);
   } else {
     console.log('Maximum tempo reached (240 BPM)');
   }
@@ -1821,10 +1913,9 @@ function increaseMasterTempo() {
  */
 function decreaseMasterTempo() {
   if (masterTempo > 40) { // Min tempo limit
-    masterTempo -= 1; // Update master tempo
-    testTempo = masterTempo; // Keep testTempo in sync
+    masterTempo -= 1;
     updateMasterTempoDisplay();
-    console.log(`Both tempos updated to: ${masterTempo} BPM`);
+    console.log(`Master tempo updated to: ${masterTempo} BPM`);
   } else {
     console.log('Minimum tempo reached (40 BPM)');
   }
@@ -1899,101 +1990,15 @@ function stopTempoScroll() {
 
 
 /**
- * Simple test clock - just to make parameter evolution visible
- * This will be replaced with proper multi-voice timing in Session 5
- */
-function startTestClock() {
-  if (testClockInterval) {
-    clearInterval(testClockInterval);
-  }
-  
-  testBeatCount = 0;
-  const currentTempo = getCurrentTempo(); // Use the safe tempo function
-  const beatDuration = (60 / currentTempo) * 1000;
-  
-  console.log(`Test clock started: ${currentTempo} BPM (${beatDuration}ms per beat)`);
-  
-  testClockInterval = setInterval(() => {
-    testBeatCount++;
-    console.log(`--- TEST BEAT ${testBeatCount} ---`);
-    
-    // Update parameters for current voice only (for testing)
-    if (voiceData[currentVoice] && voiceData[currentVoice].enabled) {
-      updateParametersOnTestBeat(currentVoice);
-    }
-  }, beatDuration);
-}
-
-
- /* Stop the test clock
- */
-function stopTestClock() {
-  if (testClockInterval) {
-    clearInterval(testClockInterval);
-    testClockInterval = null;
-  }
-  testBeatCount = 0;
-  console.log('Test clock stopped');
-}
-
-/**
- * Updated parameter update function with amplified changes
- * Replace the updateParametersOnTestBeat function
- */
-function updateParametersOnTestBeat(voiceIndex) {
-  // Update VOLUME parameter with much more dramatic changes
-  const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-  if (volumeParam && volumeParam.behavior > 0) {
-    if (!volumeParam.currentValue) {
-      volumeParam.currentValue = (volumeParam.min + volumeParam.max) / 2;
-    }
-    
-    // AMPLIFIED: Much larger delta scaling for dramatic changes
-    const scaledDelta = (volumeParam.behavior / 100) * 0.8; // Increased from 0.3 to 0.8
-    
-    const newVolume = interpolateParameter(
-      volumeParam.currentValue,
-      volumeParam.min,
-      volumeParam.max,
-      volumeParam.behavior,
-      scaledDelta
-    );
-    
-    volumeParam.currentValue = newVolume;
-    
-    console.log(`Volume: ${Math.round(newVolume)}% (behavior: ${volumeParam.behavior}%, delta: ${scaledDelta.toFixed(2)})`);
-  }
-  
-  // Update BALANCE parameter with much more dramatic changes
-  const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
-  if (balanceParam && balanceParam.behavior > 0) {
-    if (!balanceParam.currentValue) {
-      balanceParam.currentValue = (balanceParam.min + balanceParam.max) / 2;
-    }
-    
-    // AMPLIFIED: Much larger delta scaling for dramatic changes
-    const scaledDelta = (balanceParam.behavior / 100) * 0.8; // Increased from 0.3 to 0.8
-    
-    const newBalance = interpolateParameter(
-      balanceParam.currentValue,
-      balanceParam.min,
-      balanceParam.max,
-      balanceParam.behavior,
-      scaledDelta
-    );
-    
-    balanceParam.currentValue = newBalance;
-    
-    console.log(`Balance: ${Math.round(newBalance)}% (behavior: ${balanceParam.behavior}%, delta: ${scaledDelta.toFixed(2)})`);
-  }
-}
-/**
  * Updated preview function using simple test clock
  // Replace the existing previewVoice function with this unified version
  */
 
+/**
+ * Updated preview function using Master Clock architecture
+ */
 async function previewVoice(voiceIndex) {
-  console.log('=== PREVIEW VOICE (unified rhythmic system) ===', voiceIndex);
+  console.log('=== PREVIEW VOICE (Master Clock system) ===', voiceIndex);
   
   if (!audioManager || !audioManager.isInitialized) {
     if (!audioManager) {
@@ -2008,6 +2013,11 @@ async function previewVoice(voiceIndex) {
     console.log('Audio manager ready');
   }
   
+  // Initialize master clock if needed
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
   const voiceControls = document.querySelector('.voice-controls');
   const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
   
@@ -2017,8 +2027,8 @@ async function previewVoice(voiceIndex) {
     // Stop rhythmic playback
     stopRhythmicPlayback();
     
-    // Stop test clock
-    stopTestClock();
+    // Stop master clock
+    masterClock.stop();
     
     // Stop any old continuous tone
     if (audioManager.isPlaying) {
@@ -2035,11 +2045,11 @@ async function previewVoice(voiceIndex) {
     console.log('All playback stopped');
   
   } else {
-    console.log('Starting unified rhythmic preview...');
+    console.log('Starting Master Clock preview...');
     
     // Stop any existing playback first
     stopRhythmicPlayback();
-    stopTestClock();
+    masterClock.stop();
     if (audioManager.isPlaying) {
       audioManager.stopTestOscillator();
     }
@@ -2059,8 +2069,8 @@ async function previewVoice(voiceIndex) {
       balance: `${balanceParam.min}-${balanceParam.max}% (behavior: ${balanceParam.behavior}%)`
     });
     
-    // Start parameter interpolation for volume/balance evolution
-    startTestClock();
+    // Start Master Clock for continuous parameter evolution
+    masterClock.start();
     
     // Start rhythmic note patterns
     startRhythmicPlayback(voiceIndex);
@@ -2069,9 +2079,13 @@ async function previewVoice(voiceIndex) {
     previewButton.style.backgroundColor = '#ffcccc';
     previewButton.style.color = '#333';
     
-    console.log('Unified rhythmic preview started');
+    console.log('Master Clock preview started');
   }
 }
+
+
+
+
 
 
 /**
@@ -2165,7 +2179,7 @@ let isRhythmicPlaybackActive = false;
  * Convert rhythm dropdown index to actual duration in seconds
  */
 function getRhythmDuration(rhythmIndex, currentTempo = null) {
-  const tempo = currentTempo || getCurrentTempo();
+  const tempo = currentTempo || getCurrentTempo(voiceIndex);
   const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[4];
   const beatDuration = 60 / tempo;
   const noteDuration = rhythmInfo.beats * beatDuration;
@@ -2175,7 +2189,7 @@ function getRhythmDuration(rhythmIndex, currentTempo = null) {
 }
 
 function getRestDuration(restIndex, currentTempo = null) {
-  const tempo = currentTempo || getCurrentTempo();
+  const tempo = currentTempo || getCurrentTempo(voiceIndex);
   
   if (restIndex === 0) {
     console.log('No Rests selected = 0s rest');
@@ -2410,14 +2424,14 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
   const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
   const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
   
-  // Set up envelope (simple attack/release)
-  const attackTime = 0.01; // 10ms attack
-  const releaseTime = 0.1;  // 100ms release
-  const sustainLevel = gainValue * 0.8; // 80% of target volume
+  // *** NEW: Dynamic envelope based on note duration ***
+  const envelope = getEnvelopeForDuration(duration);
+  const sustainLevel = gainValue * envelope.sustain;
   
+  // Set up dynamic envelope
   gainNode.gain.setValueAtTime(0, startTime);
-  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackTime);
-  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - releaseTime);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + envelope.attack);
+  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - envelope.release);
   gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
   
   panNode.pan.setValueAtTime(panValue, startTime);
@@ -2462,6 +2476,7 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
   return noteInfo;
 }
 
+
 /**
  * Schedule a rhythm pattern for a voice - WITH ERROR HANDLING
  */
@@ -2483,11 +2498,14 @@ function scheduleRhythmPattern(voiceIndex, startTime) {
         rhythmParam.max = 4;
     }
     
-    if (restParam.min === 0 && restParam.max === 0) {
-        console.warn(`Voice ${voiceIndex + 1}: No rest selected, using default eighth notes`);
-        restParam.min = 4; // Eighth notes  
-        restParam.max = 4;
-    }
+   // Only handle truly invalid values
+if (restParam.min < 0 || restParam.max < 0 || 
+    restParam.min > 15 || restParam.max > 15) {
+    console.warn(`Voice ${voiceIndex + 1}: Invalid rest range, using no rests`);
+    restParam.min = 0; // No rests
+    restParam.max = 0;
+}
+
     
     // Select rhythm and rest within behavior ranges
     let rhythmIndex, restIndex;
@@ -2646,7 +2664,7 @@ async function previewVoiceRhythmic(voiceIndex) {
   if (previewButton.textContent === 'STOP') {
     console.log('Stopping rhythmic preview...');
     stopRhythmicPlayback();
-    stopTestClock();
+    // ← stopTestClock() DELETED
     resetParameterValues();
     
     previewButton.textContent = 'PREVIEW';
@@ -2667,8 +2685,7 @@ async function previewVoiceRhythmic(voiceIndex) {
       melodic: `${melodicParam.min}-${melodicParam.max} (behavior: ${melodicParam.behavior}%)`
     });
     
-    // Start parameter interpolation (for volume/balance evolution)
-    startTestClock();
+    // ← startTestClock(voiceIndex) DELETED
     
     // Start rhythmic note pattern
     startRhythmicPlayback(voiceIndex);
@@ -2680,6 +2697,7 @@ async function previewVoiceRhythmic(voiceIndex) {
     console.log('Rhythmic preview started');
   }
 }
+
 
 
 
@@ -3456,10 +3474,12 @@ function connectAllSliders() {
   
   dualSliders.forEach((slider, index) => {
     if (slider.noUiSlider) {
-      const row = slider.closest('.row-container');
-      const label = row ? row.querySelector('.label-container') : null;
-      const paramName = label ? label.textContent.trim() : `Unknown ${index}`;
-      
+      // CORRECT - look for .row-container-content  
+      const row = slider.closest('.row-container-content');
+      const rollup = row ? row.closest('.parameter-rollup') : null;
+      const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+      const paramName = rollupTitle ? rollupTitle.textContent.trim() : `Unknown ${index}`;
+
       console.log(`Connecting dual-slider: ${paramName}`);
       
       slider.noUiSlider.off('update');
@@ -3495,7 +3515,11 @@ function connectAllSliders() {
           if (!isNaN(min) && !isNaN(max) && voiceData[currentVoice].parameters[paramName]) {
             voiceData[currentVoice].parameters[paramName].min = min;
             voiceData[currentVoice].parameters[paramName].max = max;
+         // Clear any cached values
             delete voiceData[currentVoice].parameters[paramName].currentValue;
+            delete voiceData[currentVoice].parameters[paramName].currentTempo;
+            delete voiceData[currentVoice].parameters[paramName].currentNote;
+
             console.log(`✅ ${paramName}: ${min}-${max}`);
           }
         }
@@ -3508,7 +3532,9 @@ const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrap
 console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
 
 behaviorSliders.forEach((slider) => {
-  const row = slider.closest('.parameter-rollup') || slider.closest('.row-container');
+  const row = slider.closest('.row-container') || 
+            slider.closest('.slider-wrapper')?.closest('.row-container') ||
+            slider.closest('.parameter-rollup-content')?.closest('.parameter-rollup');
   const label = row ? (row.querySelector('.parameter-rollup-title') || row.querySelector('.label-container')) : null;
   const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
   
@@ -3567,9 +3593,12 @@ const dropdowns = parameterSection.querySelectorAll('select.param-select, select
 console.log(`Found ${dropdowns.length} dropdowns to connect`);
 
 dropdowns.forEach((dropdown) => {
-  const row = dropdown.closest('.row-container');
-  const label = row ? row.querySelector('.label-container') : null;
-  const paramName = label ? label.textContent.trim() : 'Unknown Dropdown';
+  // CORRECT - use same method as TEMPO sliders
+const row = dropdown.closest('.row-container-content');
+const rollup = row ? row.closest('.parameter-rollup') : null;
+const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Dropdown';
+
   
   // Determine if this is min/max dropdown or single dropdown
   const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
@@ -3627,9 +3656,12 @@ dropdowns.forEach((dropdown) => {
   console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
   
   multiDualContainers.forEach((container) => {
-    const row = container.closest('.row-container');
-    const label = row ? row.querySelector('.label-container') : null;
-    const paramName = label ? label.textContent.trim() : 'Unknown Multi-Dual';
+    // CORRECT - use same method as other sliders
+const row = container.closest('.row-container-content');
+const rollup = row ? row.closest('.parameter-rollup') : null;
+const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Multi-Dual';
+
     
     // Skip if this is a regular dual slider (already handled above)
     if (container.querySelectorAll('.slider-wrapper').length < 2) return;
@@ -3803,20 +3835,7 @@ class VoiceManager {
     console.log('All voices stopped');
   }
   
-  /**
-   * Preview individual voice (for parameter adjustment)
-   */
-  previewVoice(voiceIndex) {
-    const voice = this.voices[voiceIndex];
-    
-    if (voice.isPreviewPlaying) {
-      voice.stopPreview();
-    } else {
-      // Stop any other voice previews first
-      this.voices.forEach(v => v.stopPreview());
-      voice.startPreview();
-    }
-  }
+  
   
   /**
    * Get enabled voices for coordination
@@ -4124,12 +4143,14 @@ scheduleNextNote(startTime) {
   /**
    * Start parameter evolution for preview mode
    */
-  startParameterEvolution() {
-    if (this.isPreviewPlaying) {
-      // Use existing parameter evolution system
-      startTestClock();
-    }
+startParameterEvolution() {
+  if (this.isPreviewPlaying) {
+    console.log('DEBUG: this.voiceIndex =', this.voiceIndex); // Add this line
+    // Use existing parameter evolution system
+    startTestClock(this.voiceIndex);
   }
+}
+
 }
 
 // Global voice manager instance
@@ -5187,6 +5208,47 @@ function calculateActualTempo() {
 
 
 
+// =============================================================================
+// SHORTENING FAST NOTES SO THEY ARTICULATE
+// =============================================================================
+/**
+ * Calculate appropriate envelope times based on note duration
+ * Ensures fast notes can articulate properly
+ */
+function getEnvelopeForDuration(noteDurationSeconds) {
+  const durationMs = noteDurationSeconds * 1000;
+  
+  if (durationMs < 50) {
+    // Very fast notes (32nd at high BPM): minimal envelope
+    return { 
+      attack: 0.002,  // 2ms attack
+      release: 0.010, // 10ms release
+      sustain: 0.8    // 80% of peak volume
+    };
+  } else if (durationMs < 100) {
+    // Fast notes (16th at high BPM): short envelope  
+    return { 
+      attack: 0.005,  // 5ms attack
+      release: 0.020, // 20ms release
+      sustain: 0.8    
+    };
+  } else if (durationMs < 200) {
+    // Medium notes: moderate envelope
+    return { 
+      attack: 0.010,  // 10ms attack
+      release: 0.050, // 50ms release
+      sustain: 0.8    
+    };
+  } else {
+    // Slow notes: full envelope for smooth sound
+    return { 
+      attack: 0.015,  // 15ms attack
+      release: 0.100, // 100ms release
+      sustain: 0.8    
+    };
+  }
+}
+// =============================================================================
 
 
 
