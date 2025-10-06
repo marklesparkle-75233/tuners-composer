@@ -1,7 +1,7 @@
 // Parameter definitions
 const parameterDefinitions = [
   // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
-  { name: "SOUND", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
+  { name: "INSTRUMENT", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
   { name: "MELODIC RANGE", type: "single-dual", min: 21, max: 108, rollup: "instrument" },
   { name: "POLYPHONY", type: "single-dual", min: 1, max: 16, rollup: "instrument" },
   { name: "ATTACK VELOCITY", type: "single-dual", min: 0, max: 127, rollup: "instrument" },
@@ -121,6 +121,52 @@ const midiNoteNames = {
 };
 
 
+/**
+ * Compatibility bridge - maps old voiceLifecycleManager calls to new VoiceClock system
+ */
+class VoiceLifecycleCompatibility {
+  constructor() {
+    this.isActive = false;
+  }
+  
+  start() {
+    this.isActive = true;
+    console.log('🔄 VoiceLifecycle compatibility layer started');
+  }
+  
+  stop() {
+    this.isActive = false;
+    console.log('🔄 VoiceLifecycle compatibility layer stopped');
+  }
+  
+  updateVoiceStates() {
+    // Delegate to VoiceClockManager if it exists
+    if (voiceClockManager && voiceClockManager.isInitialized) {
+      voiceClockManager.updateAllVoices();
+    }
+  }
+  
+  shouldVoicePlaying(voiceIndex) {
+    // Delegate to VoiceClock system
+    if (voiceClockManager && voiceClockManager.isInitialized) {
+      const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+      return voiceClock ? voiceClock.shouldPlayNote() : false;
+    }
+    return false;
+  }
+  
+  getVoiceState(voiceIndex) {
+    // Delegate to VoiceClock system
+    if (voiceClockManager && voiceClockManager.isInitialized) {
+      const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+      return voiceClock ? voiceClock.lifeCycleState : 'stopped';
+    }
+    return 'stopped';
+  }
+}
+
+
+
 // NEW MASTER CLOCK SYSTEM
 // =============================================================================
 // MASTER CLOCK SYSTEM - High Resolution Parameter Evolution
@@ -130,33 +176,52 @@ const midiNoteNames = {
  * High-resolution Master Clock - Continuously evolves all parameters
  * Runs at ~100Hz (10ms intervals) for smooth parameter evolution
  */
+
+/**
+ * Enhanced Master Clock - 1ms resolution for parameter evolution and voice coordination
+ */
 class MasterClock {
   constructor() {
-    this.resolution = 10; // 10ms = 100Hz update rate for smooth evolution
+    this.resolution = 1; // 1ms = 1000Hz update rate for maximum precision
     this.isRunning = false;
     this.intervalId = null;
     this.startTime = 0;
+    this.currentTime = 0;
     this.lastUpdateTime = 0;
     
-    console.log('Master Clock initialized - 100Hz parameter evolution');
+    // Master timeline tracking
+    this.masterStartTime = 0; // When playback started (for Life Span calculations)
+    this.elapsedTime = 0;     // Total elapsed time since start (ms)
+    
+    console.log('Enhanced Master Clock initialized - 1ms resolution for voice coordination');
   }
   
+  /**
+   * Start master clock with 1ms precision
+   */
   start() {
     if (this.isRunning) {
-      this.stop(); // Stop existing clock first
+      this.stop();
     }
     
     this.isRunning = true;
     this.startTime = Date.now();
+    this.masterStartTime = this.startTime;
     this.lastUpdateTime = this.startTime;
+    this.currentTime = this.startTime;
+    this.elapsedTime = 0;
     
+    // High-precision 1ms interval
     this.intervalId = setInterval(() => {
-      this.updateAllParameters();
+      this.update();
     }, this.resolution);
     
-    console.log('🕐 Master Clock started - continuous parameter evolution active');
+    console.log('🕐 Enhanced Master Clock started - 1ms precision active');
   }
   
+  /**
+   * Stop master clock
+   */
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -167,19 +232,83 @@ class MasterClock {
     console.log('🕐 Master Clock stopped');
   }
   
+  /**
+   * Main update loop - runs every 1ms
+   */
+  /**
+ * Main update loop - runs every 1ms
+ */
+/**
+ * Main update loop - runs every 1ms
+ */
+/**
+ * Main update loop - runs every 1ms
+ */
+update() {
+  const now = Date.now();
+  this.currentTime = now;
+  this.elapsedTime = now - this.masterStartTime;
+  
+  // Update all parameter evolution
+  this.updateAllParameters();
+  
+  // Update voice clocks (NEW)
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    voiceClockManager.updateAllVoices();
+  }
+  
+  // REMOVED: Old voice lifecycle manager reference that was causing the error
+  
+  this.lastUpdateTime = now;
+}
+
+
+
+  /**
+   * Get elapsed time since master clock started (for Life Span calculations)
+   */
+  getElapsedTime() {
+    return this.elapsedTime;
+  }
+  
+  /**
+   * Get elapsed time in seconds
+   */
+  getElapsedSeconds() {
+    return this.elapsedTime / 1000;
+  }
+  
+  /**
+   * Get current master time reference (for voice synchronization)
+   */
+  getMasterTime() {
+    return this.currentTime;
+  }
+  
+  /**
+   * Check if master clock is running
+   */
+  isActive() {
+    return this.isRunning;
+  }
+  
+  /**
+   * Update all voice parameters (existing logic)
+   */
   updateAllParameters() {
-    const currentTime = Date.now();
-    const deltaTime = Math.min((currentTime - this.lastUpdateTime) / 1000, 0.05);
+    const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
     
+    // Update parameters for enabled voices
     for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
       if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
         this.updateVoiceParameters(voiceIndex, deltaTime);
       }
     }
-    
-    this.lastUpdateTime = currentTime;
   }
   
+  /**
+   * Update parameters for a specific voice (existing logic)
+   */
   updateVoiceParameters(voiceIndex, deltaTime) {
     const voice = voiceData[voiceIndex];
     if (!voice) return;
@@ -191,7 +320,7 @@ class MasterClock {
     this.updateParameter(voice.parameters['ATTACK VELOCITY'], deltaTime);
     this.updateParameter(voice.parameters['DETUNING'], deltaTime);
     this.updateParameter(voice.parameters['PORTAMENTO GLIDE TIME'], deltaTime);
-    this.updateParameter(voice.parameters['TEMPO (BPM)'], deltaTime);
+    this.updateParameter(voice.parameters['TEMPO (BPM)'], deltaTime); // Individual voice tempo
     this.updateParameter(voice.parameters['REVERB'], deltaTime);
     
     // Update multi-parameter effects
@@ -206,6 +335,9 @@ class MasterClock {
     }
   }
   
+  /**
+   * Update individual parameter (existing logic)
+   */
   updateParameter(param, deltaTime) {
     if (!param || param.behavior <= 0) return;
     
@@ -222,6 +354,9 @@ class MasterClock {
     );
   }
   
+  /**
+   * Update effect parameter (existing logic)
+   */
   updateEffectParameter(param, deltaTime) {
     if (!param || param.behavior <= 0) return;
     
@@ -252,6 +387,9 @@ class MasterClock {
     }
   }
   
+  /**
+   * Apply real-time audio changes (existing logic)
+   */
   applyAudioChanges(voiceIndex) {
     const voice = voiceData[voiceIndex];
     
@@ -265,10 +403,11 @@ class MasterClock {
   }
 }
 
+
 // Global master clock instance
 let masterClock = null;
-
-
+let voiceClockManager = null;
+let voiceLifecycleManager = new VoiceLifecycleCompatibility();
 
 
 
@@ -301,7 +440,7 @@ function initializeVoices() {
     parameterDefinitions.forEach(param => {
       if (param.type === 'dropdown') {
         // Set sensible defaults for dropdown parameters
-        if (param.name === 'SOUND') {
+        if (param.name === 'INSTRUMENT') {
           voice.parameters[param.name] = 0; // First GM sound (Acoustic Grand Piano)
         } else {
           voice.parameters[param.name] = 0;
@@ -368,10 +507,9 @@ function initializeVoices() {
       } else if (param.type === 'timing-controls') {
         // FIXED - only one parameter assignment for timing controls
         voice.parameters[param.name] = {
-          duration: 50,    // Default values
-          entrance: 25,
-          exit: 25,
-          repeat: false
+           entrance: 0,
+           duration: 100,
+          repeat: true,
         };
       }
     });
@@ -446,7 +584,7 @@ function createDropdown(optionsType, paramName, voiceIndex) {
   
   const label = document.createElement('div');
   label.className = 'dropdown-label';
-  label.textContent = paramName === 'SOUND' ? 'Instrument' : 'Selection';
+  label.textContent = paramName === 'INSTRUMENT' ? 'Instrument' : 'Selection';
   wrapper.appendChild(label);
   
   const select = document.createElement('select');
@@ -918,8 +1056,6 @@ function createBehaviorSlider(param, voiceIndex) {
   
   return wrapper;
 }
-
-
 function createTimingControls(param, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'timing-controls-container';
@@ -937,36 +1073,13 @@ function createTimingControls(param, voiceIndex) {
   
   const repeatCheckbox = document.createElement('input');
   repeatCheckbox.type = 'checkbox';
-  repeatCheckbox.checked = currentTimingData.repeat; // Load from voiceData
+  repeatCheckbox.checked = currentTimingData.repeat; // Default: false
   repeatCheckbox.className = 'timing-checkbox';
   
   repeatContainer.appendChild(repeatLabel);
   repeatContainer.appendChild(repeatCheckbox);
   
-  // Container 2: Duration
-  const durationContainer = document.createElement('div');
-  durationContainer.className = 'timing-control-container duration-container';
-  
-  const durationLabel = document.createElement('div');
-  durationLabel.className = 'timing-control-label';
-  durationLabel.textContent = 'Duration';
-  
-  const durationFormatLabel = document.createElement('div');
-  durationFormatLabel.className = 'timing-format-label';
-  durationFormatLabel.textContent = 'mm:ss';
-  
-  const durationSlider = document.createElement('input');
-  durationSlider.type = 'range';
-  durationSlider.min = param.min;
-  durationSlider.max = param.max;
-  durationSlider.value = currentTimingData.duration; // Load from voiceData
-  durationSlider.className = 'timing-slider';
-  
-  durationContainer.appendChild(durationLabel);
-  durationContainer.appendChild(durationFormatLabel);
-  durationContainer.appendChild(durationSlider);
-  
-  // Container 3: Entrance
+  // Container 2: Entrance (KEEP AS IS)
   const entranceContainer = document.createElement('div');
   entranceContainer.className = 'timing-control-container entrance-container';
   
@@ -980,43 +1093,42 @@ function createTimingControls(param, voiceIndex) {
   
   const entranceSlider = document.createElement('input');
   entranceSlider.type = 'range';
-  entranceSlider.min = param.min;
-  entranceSlider.max = param.max;
-  entranceSlider.value = currentTimingData.entrance; // Load from voiceData
+  entranceSlider.min = 0;    // 0 seconds
+  entranceSlider.max = 100;  // 5 minutes
+  entranceSlider.value = currentTimingData.entrance; // Default: 0
   entranceSlider.className = 'timing-slider';
   
   entranceContainer.appendChild(entranceLabel);
   entranceContainer.appendChild(entranceFormatLabel);
   entranceContainer.appendChild(entranceSlider);
   
-  // Container 4: Exit
-  const exitContainer = document.createElement('div');
-  exitContainer.className = 'timing-control-container exit-container';
+  // Container 3: Duration (RENAMED FROM EXIT)
+  const durationContainer = document.createElement('div');
+  durationContainer.className = 'timing-control-container duration-container';
   
-  const exitLabel = document.createElement('div');
-  exitLabel.className = 'timing-control-label';
-  exitLabel.textContent = 'Exit';
+  const durationLabel = document.createElement('div');
+  durationLabel.className = 'timing-control-label';
+  durationLabel.textContent = 'Duration'; // CHANGED FROM "Exit"
   
-  const exitFormatLabel = document.createElement('div');
-  exitFormatLabel.className = 'timing-format-label';
-  exitFormatLabel.textContent = 'mm:ss';
+  const durationFormatLabel = document.createElement('div');
+  durationFormatLabel.className = 'timing-format-label';
+  durationFormatLabel.textContent = 'mm:ss';
   
-  const exitSlider = document.createElement('input');
-  exitSlider.type = 'range';
-  exitSlider.min = param.min;
-  exitSlider.max = param.max;
-  exitSlider.value = currentTimingData.exit; // Load from voiceData
-  exitSlider.className = 'timing-slider';
+  const durationSlider = document.createElement('input');
+  durationSlider.type = 'range';
+  durationSlider.min = 0;    // 0 seconds
+  durationSlider.max = 100;  // 5 minutes
+  durationSlider.value = currentTimingData.duration; // Default: 100 (5 minutes)
+  durationSlider.className = 'timing-slider';
   
-  exitContainer.appendChild(exitLabel);
-  exitContainer.appendChild(exitFormatLabel);
-  exitContainer.appendChild(exitSlider);
+  durationContainer.appendChild(durationLabel);
+  durationContainer.appendChild(durationFormatLabel);
+  durationContainer.appendChild(durationSlider);
   
-  // Add all containers to wrapper
+  // Add containers to wrapper (ONLY 3 NOW: repeat, entrance, duration)
   wrapper.appendChild(repeatContainer);
-  wrapper.appendChild(durationContainer);
   wrapper.appendChild(entranceContainer);
-  wrapper.appendChild(exitContainer);
+  wrapper.appendChild(durationContainer);
   
   return wrapper;
 }
@@ -1086,8 +1198,59 @@ function createRow(param, voiceIndex) {
   return row;
 }
 
-
+// ONE LEVEL OF ROLLUPS:
 function renderParameters() {
+  const parameterSection = document.getElementById('parameter-section');
+  
+  // Initialize parameter rollup states if needed
+  if (Object.keys(parameterRollupState).length === 0) {
+    initializeParameterRollupState();
+  }
+  
+  // Properly destroy all existing noUiSlider instances before clearing
+  const existingSliders = parameterSection.querySelectorAll('[data-nouislider]');
+  existingSliders.forEach(slider => {
+    if (slider.noUiSlider) {
+      try {
+        slider.noUiSlider.destroy();
+      } catch (error) {
+        // Silent error handling
+      }
+    }
+  });
+  
+  parameterSection.innerHTML = '';
+  
+  // Voice controls
+  const voiceControls = document.createElement('div');
+  voiceControls.className = 'voice-controls';
+  voiceControls.innerHTML = `
+    <div class="voice-label">Voice ${currentVoice + 1}</div>
+    <div class="control-buttons">
+      <button class="control-btn" onclick="previewVoice(${currentVoice})">PREVIEW</button>
+      <button class="control-btn sync-btn" onclick="syncVoiceToOthers(${currentVoice})" title="Copy this voice's tempo to all other voices">SYNC</button>
+      <button class="control-btn" onclick="toggleLockVoice(${currentVoice})">${voiceData[currentVoice].locked ? 'UNLOCK' : 'LOCK'}</button>
+    </div>
+  `;
+  parameterSection.appendChild(voiceControls);
+  
+  // Create individual parameter rollups directly (no grouping)
+  parameterDefinitions.forEach(param => {
+    const parameterRollup = createParameterRollup(param, currentVoice);
+    parameterSection.appendChild(parameterRollup);
+  });
+  
+  // Reconnect all sliders after rendering
+  setTimeout(() => {
+    connectAllSliders();
+  }, 100);
+}
+
+
+
+
+
+/* function renderParameters() {
   const parameterSection = document.getElementById('parameter-section');
   
   // Initialize rollup states if needed
@@ -1149,6 +1312,7 @@ function renderParameters() {
     connectAllSliders();
   }, 100);
 }
+ // END NESTED ROLLUP CODE ***********************************
 
 
 // ADDING SYNC BUTTON FUNCTION
@@ -1253,7 +1417,7 @@ function previewVoice(voiceIndex) {
   
   } else {
     // Start audio
-    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+    const selectedSoundIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
     const selectedSoundName = gmSounds[selectedSoundIndex];
     const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
     
@@ -1286,74 +1450,113 @@ function toggleLockVoice(voiceIndex) {
 }
 
 
-// Master multi-voice playback system - ADD THESE BEFORE DOMContentLoaded
-async function startMasterPlayback() {
-  console.log('=== STARTING MASTER MULTI-VOICE PLAYBACK ===');
+ /**
+ * Fixed Master Playback with proper timing
+ */
+async function toggleMasterPlayback() {
+  console.log('🎯 MASTER PLAY clicked (Fixed Version)');
   
-  // Ensure audio system is initialized
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('Initializing audio system...');
-    if (!audioManager) {
-      audioManager = new AudioManager();
-    }
-    await audioManager.initialize();
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  
+  if (playButton && playButton.textContent === 'STOP') {
+    console.log('=== STOPPING MASTER PLAYBACK (New System) ===');
     
-    if (!audioManager.isInitialized) {
-      console.log('❌ Audio initialization failed');
+    // Stop all systems
+    if (voiceClockManager) {
+      voiceClockManager.stopAllVoices();
+    }
+    
+    if (masterClock) {
+      masterClock.stop();
+    }
+    
+    // Reset button appearance
+    playButton.textContent = 'PLAY';
+    playButton.style.backgroundColor = '';
+    playButton.style.color = '';
+    
+    console.log('✅ Master playback stopped (New System)');
+    
+  } else {
+    console.log('=== STARTING MASTER PLAYBACK (New System) ===');
+    
+    // Initialize audio if needed
+    if (!audioManager || !audioManager.isInitialized) {
+      console.log('Initializing audio system...');
+      if (!audioManager) {
+        audioManager = new AudioManager();
+      }
+      await audioManager.initialize();
+      
+      if (!audioManager.isInitialized) {
+        console.log('❌ Audio initialization failed');
+        return;
+      }
+    }
+    
+    // Initialize clock systems
+    if (!masterClock) {
+      masterClock = new MasterClock();
+    }
+    
+    if (!voiceClockManager) {
+      voiceClockManager = new VoiceClockManager();
+      voiceClockManager.initialize(masterClock);
+    }
+    
+    // Check enabled voices
+    const enabledVoices = [];
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        enabledVoices.push(i + 1);
+      }
+    }
+    
+    if (enabledVoices.length === 0) {
+      console.log('❌ No voices enabled! Please enable at least one voice.');
+      alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
       return;
     }
-  }
-  
-  // Create voice manager if it doesn't exist
-  if (!voiceManager) {
-    console.log('Creating VoiceManager...');
-    voiceManager = new VoiceManager(audioManager.audioContext, audioManager.masterGainNode);
-  }
-  
-  // Check which voices are enabled
-  const enabledVoices = [];
-  for (let i = 0; i < 16; i++) {
-    if (voiceData[i].enabled) {
-      enabledVoices.push(i + 1);
-    }
-  }
-  
-  console.log(`Enabled voices: ${enabledVoices.join(', ')}`);
-  
-  if (enabledVoices.length === 0) {
-    console.log('❌ No voices enabled! Please enable at least one voice.');
-    alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
-    return;
-  }
-  
-  // Stop any individual previews first
-  document.querySelectorAll('.voice-controls button').forEach(button => {
-    if (button.textContent === 'STOP') {
-      button.click(); // Stop individual previews
-    }
-  });
-  
-  // Start all enabled voices playing together
-  voiceManager.startAllVoices();
-  
-  // Update play button state
-  const playButton = document.querySelector('#file-controls button:nth-child(4)');
-  if (playButton) {
+    
+    console.log(`Starting playback with voices: ${enabledVoices.join(', ')}`);
+    
+    // Start master clock FIRST
+    console.log('🕐 Starting master clock...');
+    masterClock.start();
+    
+    // FIXED: Wait a moment for master clock to fully start
+    console.log('⏳ Waiting for master clock to stabilize...');
+    await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
+    
+    // NOW start voice clocks
+    console.log('🎵 Starting voice clocks...');
+    voiceClockManager.startAllVoices();
+    
+    // Update button appearance
     playButton.textContent = 'STOP';
     playButton.style.backgroundColor = '#dc3545';
     playButton.style.color = 'white';
+    
+    console.log(`🎉 Master playback started with ${enabledVoices.length} voices!`);
   }
-  
-  console.log('🎵 Multi-voice playback started!');
 }
+
+
+
 
 function stopMasterPlayback() {
   console.log('=== STOPPING MASTER MULTI-VOICE PLAYBACK ===');
   
-  if (voiceManager) {
-    voiceManager.stopAllVoices();
+  // Keep these - they're for the NEW system:
+  if (voiceClockManager) {
+    voiceClockManager.stopAllVoices();
   }
   
+  if (masterClock) {
+    masterClock.stop();
+  }
+  
+  // Keep button state updates too...
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
   if (playButton) {
     playButton.textContent = 'PLAY';
@@ -1361,191 +1564,165 @@ function stopMasterPlayback() {
     playButton.style.color = '';
   }
   
-  console.log('🔇 Multi-voice playback stopped');
+  console.log('✅ Multi-voice playback stopped');
 }
 
 async function toggleMasterPlayback() {
-  console.log('🎯 PLAY button clicked!'); // Debug log
+  console.log('🎯 PLAY button clicked (Fixed Version)');
   
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
   
   if (playButton && playButton.textContent === 'STOP') {
-    stopMasterPlayback();
-  } else {
-    await startMasterPlayback();
-  }
-}
-
-// Master multi-voice playback system
-async function startMasterPlayback() {
-  console.log('=== STARTING MASTER MULTI-VOICE PLAYBACK ===');
-  
-  // Ensure audio system is initialized
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('Initializing audio system...');
-    if (!audioManager) {
-      audioManager = new AudioManager();
-    }
-    await audioManager.initialize();
+    console.log('=== STOPPING MASTER PLAYBACK (New System) ===');
     
-    if (!audioManager.isInitialized) {
-      console.log('❌ Audio initialization failed');
-      return;
+    // Stop all systems
+    if (voiceClockManager) {
+      voiceClockManager.stopAllVoices();
     }
-  }
-  
-  // Create voice manager if it doesn't exist
-  if (!voiceManager) {
-    console.log('Creating VoiceManager...');
-    voiceManager = new VoiceManager(audioManager.audioContext, audioManager.masterGainNode);
-  }
-  
-  // Check which voices are enabled
-  const enabledVoices = [];
-  for (let i = 0; i < 16; i++) {
-    if (voiceData[i].enabled) {
-      enabledVoices.push(i + 1);
+    
+    if (masterClock) {
+      masterClock.stop();
     }
-  }
-  
-  console.log(`Enabled voices: ${enabledVoices.join(', ')}`);
-  
-  if (enabledVoices.length === 0) {
-    console.log('❌ No voices enabled! Please enable at least one voice.');
-    alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
-    return;
-  }
-  
-  // Stop any individual previews first
-  document.querySelectorAll('.voice-controls button').forEach(button => {
-    if (button.textContent === 'STOP') {
-      button.click(); // Stop individual previews
-    }
-  });
-  
-  // Start all enabled voices playing together
-  voiceManager.startAllVoices();
-  
-  // Update play button state
-  const playButton = document.querySelector('#file-controls button:nth-child(4)');
-  if (playButton) {
-    playButton.textContent = 'STOP';
-    playButton.style.backgroundColor = '#dc3545';
-    playButton.style.color = 'white';
-  }
-  
-  console.log('🎵 Multi-voice playback started!');
-}
-
-function stopMasterPlayback() {
-  console.log('=== STOPPING MASTER MULTI-VOICE PLAYBACK ===');
-  
-  if (voiceManager) {
-    voiceManager.stopAllVoices();
-  }
-  
-  const playButton = document.querySelector('#file-controls button:nth-child(4)');
-  if (playButton) {
+    
+    // Reset button appearance
     playButton.textContent = 'PLAY';
     playButton.style.backgroundColor = '';
     playButton.style.color = '';
-  }
-  
-  console.log('🔇 Multi-voice playback stopped');
-}
-
-async function toggleMasterPlayback() {
-  console.log('🎯 PLAY button clicked!');
-  
-  const playButton = document.querySelector('#file-controls button:nth-child(4)');
-  
-  if (playButton && playButton.textContent === 'STOP') {
-    stopMasterPlayback();
+    
+    console.log('✅ Master playback stopped (New System)');
+    
   } else {
-    await startMasterPlayback();
+    console.log('=== STARTING MASTER PLAYBACK (New System) ===');
+    
+    // Initialize audio if needed
+    if (!audioManager || !audioManager.isInitialized) {
+      console.log('Initializing audio system...');
+      if (!audioManager) {
+        audioManager = new AudioManager();
+      }
+      await audioManager.initialize();
+      
+      if (!audioManager.isInitialized) {
+        console.log('❌ Audio initialization failed');
+        return;
+      }
+    }
+    
+    // Initialize clock systems
+    if (!masterClock) {
+      masterClock = new MasterClock();
+    }
+    
+    if (!voiceClockManager) {
+      voiceClockManager = new VoiceClockManager();
+      voiceClockManager.initialize(masterClock);
+    }
+    
+    // Check enabled voices
+    const enabledVoices = [];
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        enabledVoices.push(i + 1);
+      }
+    }
+    
+    if (enabledVoices.length === 0) {
+      console.log('❌ No voices enabled! Please enable at least one voice.');
+      alert('Please enable at least one voice by checking the checkboxes in the voice tabs.');
+      return;
+    }
+    
+    console.log(`Starting playback with voices: ${enabledVoices.join(', ')}`);
+    
+    // Start master clock FIRST
+    console.log('🕐 Starting master clock...');
+    masterClock.start();
+    
+    // Wait for master clock to stabilize
+    console.log('⏳ Waiting for master clock to stabilize...');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // NOW start voice clocks
+    console.log('🎵 Starting voice clocks...');
+    voiceClockManager.startAllVoices();
+    
+    // Update button appearance
+    playButton.textContent = 'STOP';
+    playButton.style.backgroundColor = '#dc3545';
+    playButton.style.color = 'white';
+    
+    console.log(`🎉 Master playback started with ${enabledVoices.length} voices!`);
   }
 }
 
 
 
+// INITIALIZE SYSTEMS ON PAGE LOAD
 
-
-// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize existing systems
   audioManager = new AudioManager();
-
   initializeVoices();
   createVoiceTabs();
   renderParameters();
   
-  // Connect sliders and PLAY button after UI is ready
-  setTimeout(() => {
-    connectAllSliders();
   
-    // Connect PLAY button
+document.addEventListener('DOMContentLoaded', () => {
+  // Existing initialization code...
+  
+  // ADD THIS DEBUG CODE:
+  setTimeout(() => {
+    const playButton = document.querySelector('#file-controls button:nth-child(4)');
+    console.log('=== PLAY BUTTON DEBUG ===');
+    console.log('playButton found:', !!playButton);
+    console.log('playButton.onclick:', playButton?.onclick);
+    console.log('playButton text:', playButton?.textContent);
+    
+    // ENSURE CONNECTION TO NEW SYSTEM:
+    if (playButton) {
+      console.log('🔧 Connecting PLAY button to toggleMasterPlayback...');
+      playButton.onclick = toggleMasterPlayback;
+      console.log('✅ PLAY button connected to new system');
+    } else {
+      console.log('❌ PLAY button not found!');
+    }
+  }, 500);
+  
+  
+    // Connect PLAY button to new system
     const playButton = document.querySelector('#file-controls button:nth-child(4)');
     if (playButton) {
       playButton.onclick = toggleMasterPlayback;
-      console.log('✅ Master PLAY button connected to toggleMasterPlayback');
+      console.log('✅ Master PLAY button connected to new clock system');
     } else {
       console.log('❌ PLAY button not found during connection');
     }
   }, 200);
 
-  
+  // Initialize audio on first click
   document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
-
-
-
   
-// Connect Master Clock tempo buttons with click-and-hold
-setTimeout(() => {
-  const tempoUpBtn = document.getElementById('tempo-up');
-  const tempoDownBtn = document.getElementById('tempo-down');
-  
-  if (tempoUpBtn) {
-    // Remove old onclick
-    tempoUpBtn.onclick = null;
+  // Initialize master tempo controls
+  setTimeout(() => {
+    const tempoUpBtn = document.getElementById('tempo-up');
+    const tempoDownBtn = document.getElementById('tempo-down');
     
-    // Add new mouse events for click-and-hold
-    tempoUpBtn.addEventListener('mousedown', () => startTempoScroll(1));
-    tempoUpBtn.addEventListener('mouseup', stopTempoScroll);
-    tempoUpBtn.addEventListener('mouseleave', stopTempoScroll);
+    if (tempoUpBtn) {
+      tempoUpBtn.onmousedown = () => startTempoScroll(1);
+      tempoUpBtn.onmouseup = stopTempoScroll;
+      tempoUpBtn.onmouseleave = stopTempoScroll;
+    }
     
-    // Add touch events for mobile
-    tempoUpBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      startTempoScroll(1);
-    });
-    tempoUpBtn.addEventListener('touchend', stopTempoScroll);
+    if (tempoDownBtn) {
+      tempoDownBtn.onmousedown = () => startTempoScroll(-1);
+      tempoDownBtn.onmouseup = stopTempoScroll; 
+      tempoDownBtn.onmouseleave = stopTempoScroll;
+    }
     
-    console.log('✅ Master tempo UP button connected with click-and-hold');
-  }
-  
-  if (tempoDownBtn) {
-    // Remove old onclick
-    tempoDownBtn.onclick = null;
-    
-    // Add new mouse events for click-and-hold
-    tempoDownBtn.addEventListener('mousedown', () => startTempoScroll(-1));
-    tempoDownBtn.addEventListener('mouseup', stopTempoScroll);
-    tempoDownBtn.addEventListener('mouseleave', stopTempoScroll);
-    
-    // Add touch events for mobile
-    tempoDownBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      startTempoScroll(-1);
-    });
-    tempoDownBtn.addEventListener('touchend', stopTempoScroll);
-    
-    console.log('✅ Master tempo DOWN button connected with click-and-hold');
-  }
-  
-  // Initialize display
-  updateMasterTempoDisplay();
-}, 200);
-
+    updateMasterTempoDisplay();
+  }, 200);
 });
+
 
 
 /**
@@ -1734,7 +1911,7 @@ function updateVoiceParameters(voiceIndex) {
 /**
  * Main parameter interpolation update loop
  * FIXED: Removed problematic slider updates
- */
+ *//* 
 function startParameterInterpolation() {
   if (!isParameterInterpolationActive) {
     return;
@@ -1759,7 +1936,7 @@ function startParameterInterpolation() {
     }
   }
 }
-
+ */
 /**
  * Reset parameter evolution when stopping
  */
@@ -1849,260 +2026,6 @@ function updateCurrentVoiceSliders() {
 }
 
 /**
- * Start parameter interpolation system
- */
-// Add this debugging version to test what's happening
-// Replace the enableParameterInterpolation function with this debug version
-
-function enableParameterInterpolation() {
-  console.log('=== ENABLING PARAMETER INTERPOLATION ===');
-  
-  if (parameterUpdateTimer) {
-    clearInterval(parameterUpdateTimer);
-  }
-  
-  isParameterInterpolationActive = true;
-  lastUpdateTime = Date.now();
-  
-  // Check current voice parameters before starting
-  console.log('Current voice:', currentVoice);
-  console.log('Voice data:', voiceData[currentVoice]);
-  console.log('Volume param:', voiceData[currentVoice].parameters['VOLUME']);
-  console.log('Balance param:', voiceData[currentVoice].parameters['STEREO BALANCE']);
-  
-  // Update every 100ms for smooth parameter evolution
-  parameterUpdateTimer = setInterval(() => {
-    console.log('Timer tick - isActive:', isParameterInterpolationActive);
-    startParameterInterpolation();
-  }, 100);
-  
-  console.log('Parameter interpolation timer started');
-}
-
-
-
-
-
-/* MASTER TEMPO CONTROLS */
-/* Update Master Tempo Display */
-
-
-function updateMasterTempoDisplay() {
-  const display = document.getElementById('master-tempo-display');
-  if (display) {
-    display.textContent = `${masterTempo} BPM`;
-    console.log(`Master tempo updated to: ${masterTempo} BPM`);
-  }
-}
-
-/**
- * Increase Master Tempo
- */
-function increaseMasterTempo() {
-  if (masterTempo < 240) { // Max tempo limit
-    masterTempo += 1;
-    updateMasterTempoDisplay();
-    console.log(`Master tempo updated to: ${masterTempo} BPM`);
-  } else {
-    console.log('Maximum tempo reached (240 BPM)');
-  }
-}
-
-/**
- * Decrease Master Tempo
- */
-function decreaseMasterTempo() {
-  if (masterTempo > 40) { // Min tempo limit
-    masterTempo -= 1;
-    updateMasterTempoDisplay();
-    console.log(`Master tempo updated to: ${masterTempo} BPM`);
-  } else {
-    console.log('Minimum tempo reached (40 BPM)');
-  }
-}
-
-/**
- * Update Master Tempo Display
- */
-function updateMasterTempoDisplay() {
-  const display = document.getElementById('master-tempo-display');
-  if (display) {
-    display.textContent = `${masterTempo} BPM`;
-    console.log(`Master tempo updated to: ${masterTempo} BPM`);
-  }
-}
-
-// ADD THE NEW FUNCTIONS HERE:
-/**
- * Start tempo scrolling in specified direction
- */
-/**
- * Start tempo scrolling in specified direction - IMPROVED DEBOUNCING
- */
-function startTempoScroll(direction) {
-  // Stop any existing scroll
-  stopTempoScroll();
-  
-  tempoScrollDirection = direction;
-  
-  // Initial change (immediate response)
-  if (direction > 0) {
-    increaseMasterTempo();
-  } else {
-    decreaseMasterTempo();
-  }
-  
-  // IMPROVED TIMING: Less sensitive click-and-hold
-  setTimeout(() => {
-    if (tempoScrollDirection !== 0) {
-      tempoScrollInterval = setInterval(() => {
-        if (tempoScrollDirection > 0) {
-          increaseMasterTempo();
-        } else if (tempoScrollDirection < 0) {
-          decreaseMasterTempo();
-        }
-      }, 120); // CHANGED: Slower repeat from 100ms to 120ms
-    }
-  }, 750); // CHANGED: Longer delay from 500ms to 750ms - must hold longer before rapid scrolling starts
-}
-
-
-/**
- * Stop tempo scrolling
- */
-function stopTempoScroll() {
-  tempoScrollDirection = 0;
-  if (tempoScrollInterval) {
-    clearInterval(tempoScrollInterval);
-    tempoScrollInterval = null;
-  }
-}
-
-
-
-
-
-
-
-
-
-/* END MASTER TEMPO CONTROLS
-
-
-/**
- * Updated preview function using simple test clock
- // Replace the existing previewVoice function with this unified version
- */
-
-/**
- * Updated preview function using Master Clock architecture
- */
-async function previewVoice(voiceIndex) {
-  console.log('=== PREVIEW VOICE (Master Clock system) ===', voiceIndex);
-  
-  if (!audioManager || !audioManager.isInitialized) {
-    if (!audioManager) {
-      audioManager = new AudioManager();
-    }
-    await audioManager.initialize();
-    
-    if (!audioManager.isInitialized) {
-      console.log('Failed to initialize audio manager');
-      return;
-    }
-    console.log('Audio manager ready');
-  }
-  
-  // Initialize master clock if needed
-  if (!masterClock) {
-    masterClock = new MasterClock();
-  }
-  
-  const voiceControls = document.querySelector('.voice-controls');
-  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
-  
-  if (previewButton.textContent === 'STOP') {
-    console.log('Stopping all playback...');
-    
-    // Stop rhythmic playback
-    stopRhythmicPlayback();
-    
-    // Stop master clock
-    masterClock.stop();
-    
-    // Stop any old continuous tone
-    if (audioManager.isPlaying) {
-      audioManager.stopTestOscillator();
-    }
-    
-    // Reset parameters
-    resetParameterValues();
-    
-    previewButton.textContent = 'PREVIEW';
-    previewButton.style.backgroundColor = '';
-    previewButton.style.color = '';
-    
-    console.log('All playback stopped');
-  
-  } else {
-    console.log('Starting Master Clock preview...');
-    
-    // Stop any existing playback first
-    stopRhythmicPlayback();
-    masterClock.stop();
-    if (audioManager.isPlaying) {
-      audioManager.stopTestOscillator();
-    }
-    
-    // Show current parameter settings
-    const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
-    const restParam = voiceData[voiceIndex].parameters['RESTS'];
-    const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
-    const volumeParam = voiceData[voiceIndex].parameters['VOLUME'];
-    const balanceParam = voiceData[voiceIndex].parameters['STEREO BALANCE'];
-    
-    console.log('Voice settings:', {
-      rhythm: `${rhythmParam.min}-${rhythmParam.max} (behavior: ${rhythmParam.behavior}%)`,
-      rest: `${restParam.min}-${restParam.max} (behavior: ${restParam.behavior}%)`,
-      melodic: `MIDI ${melodicParam.min}-${melodicParam.max} (behavior: ${melodicParam.behavior}%)`,
-      volume: `${volumeParam.min}-${volumeParam.max}% (behavior: ${volumeParam.behavior}%)`,
-      balance: `${balanceParam.min}-${balanceParam.max}% (behavior: ${balanceParam.behavior}%)`
-    });
-    
-    // Start Master Clock for continuous parameter evolution
-    masterClock.start();
-    
-    // Start rhythmic note patterns
-    startRhythmicPlayback(voiceIndex);
-    
-    previewButton.textContent = 'STOP';
-    previewButton.style.backgroundColor = '#ffcccc';
-    previewButton.style.color = '#333';
-    
-    console.log('Master Clock preview started');
-  }
-}
-
-
-
-
-
-
-/**
- * Stop parameter interpolation system
- */
-function disableParameterInterpolation() {
-  isParameterInterpolationActive = false;
-  
-  if (parameterUpdateTimer) {
-    clearInterval(parameterUpdateTimer);
-    parameterUpdateTimer = null;
-  }
-  
-  console.log('Parameter interpolation disabled');
-}
-
-/**
  * Enhanced preview function with parameter interpolation
  */
 function previewVoiceWithInterpolation(voiceIndex) {
@@ -2124,7 +2047,7 @@ function previewVoiceWithInterpolation(voiceIndex) {
   
   } else {
     // Start audio
-    const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+    const selectedSoundIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
     const selectedSoundName = gmSounds[selectedSoundIndex];
     const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
     
@@ -2406,7 +2329,7 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
   const panNode = audioManager.audioContext.createStereoPanner();
   
   // Get current sound type for this voice
-  const selectedSoundIndex = voiceData[voiceIndex].parameters['SOUND'];
+  const selectedSoundIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
   const selectedSoundName = gmSounds[selectedSoundIndex];
   const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
   
@@ -2479,8 +2402,18 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
 
 /**
  * Schedule a rhythm pattern for a voice - WITH ERROR HANDLING
- */
+ *//* 
 function scheduleRhythmPattern(voiceIndex, startTime) {
+  // NEW: Check if voice should be playing based on lifecycle state
+    if (voiceLifecycleManager && voiceLifecycleManager.isActive) {
+        if (!voiceLifecycleManager.shouldVoicePlaying(voiceIndex)) {
+            // Voice is in WAITING, SILENT, or STOPPED state - don't schedule notes
+            return startTime + 0.1; // Return small delay and skip note scheduling
+            // Add this temporary logging after the lifecycle check in scheduleRhythmPattern:
+            console.log(`🎵 Voice ${voiceIndex + 1}: ACTIVELY SCHEDULING NOTE`);
+
+        }
+    }
     const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
     const restParam = voiceData[voiceIndex].parameters['RESTS'];
     
@@ -2575,15 +2508,26 @@ if (restParam.min < 0 || restParam.max < 0 ||
     
     // Return when the next note should be scheduled
     return startTime + noteDuration + restDuration;
-}
-
-
-
+} */
 
 /**
  * Rhythmic pattern scheduler - replaces continuous tone
- */
+ *//* 
 function startRhythmicPlayback(voiceIndex) {
+  // ADD THIS CHECK AT THE BEGINNING
+  if (!audioManager || !audioManager.audioContext) {
+    console.error('❌ Audio manager or context not initialized');
+    return;
+  }
+  
+  if (rhythmScheduler) {
+    clearInterval(rhythmScheduler);
+  }
+  
+  console.log(`=== STARTING RHYTHMIC PLAYBACK FOR VOICE ${voiceIndex + 1} ===`);
+  
+  isRhythmicPlaybackActive = true;
+  nextScheduledNoteTime = audioManager.audioContext.currentTime + 0.1; // This line was failing
   if (rhythmScheduler) {
     clearInterval(rhythmScheduler);
   }
@@ -2615,7 +2559,7 @@ function startRhythmicPlayback(voiceIndex) {
 
 /**
  * Stop rhythmic playback
- */
+ *//* 
 function stopRhythmicPlayback() {
   console.log('=== STOPPING RHYTHMIC PLAYBACK ===');
   
@@ -2637,14 +2581,18 @@ function stopRhythmicPlayback() {
   
   currentlyPlayingNotes = [];
   nextScheduledNoteTime = 0;
-}
+} */ 
 
 /**
  * Updated preview function with rhythmic playback
  */
-async function previewVoiceRhythmic(voiceIndex) {
-  console.log('=== PREVIEW VOICE (rhythmic) ===', voiceIndex);
+/**
+ * Enhanced Preview Voice using new VoiceClock system
+ */
+async function previewVoice(voiceIndex) {
+  console.log(`=== PREVIEW VOICE ${voiceIndex + 1} (New Clock System) ===`);
   
+  // Initialize audio system if needed
   if (!audioManager || !audioManager.isInitialized) {
     if (!audioManager) {
       audioManager = new AudioManager();
@@ -2652,49 +2600,90 @@ async function previewVoiceRhythmic(voiceIndex) {
     await audioManager.initialize();
     
     if (!audioManager.isInitialized) {
-      console.log('Failed to initialize audio manager');
+      console.log('❌ Audio initialization failed');
       return;
     }
-    console.log('Audio manager ready');
+  }
+  
+  // Initialize clock systems if needed
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
+  if (!voiceClockManager) {
+    voiceClockManager = new VoiceClockManager();
+    voiceClockManager.initialize(masterClock);
   }
   
   const voiceControls = document.querySelector('.voice-controls');
   const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
   
+  if (!previewButton) {
+    console.log('❌ Preview button not found');
+    return;
+  }
+  
   if (previewButton.textContent === 'STOP') {
-    console.log('Stopping rhythmic preview...');
-    stopRhythmicPlayback();
-    // ← stopTestClock() DELETED
-    resetParameterValues();
+    console.log(`Stopping preview for Voice ${voiceIndex + 1}...`);
     
+    // Stop individual voice clock
+    const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+    if (voiceClock) {
+      voiceClock.stop();
+    }
+    
+    // Stop master clock if no other voices are active
+    if (voiceClockManager.getActiveVoiceCount() === 0) {
+      masterClock.stop();
+    }
+    
+    // Reset button appearance
     previewButton.textContent = 'PREVIEW';
     previewButton.style.backgroundColor = '';
     previewButton.style.color = '';
-  
+    
+    console.log(`✅ Voice ${voiceIndex + 1} preview stopped`);
+    
   } else {
-    console.log('Starting rhythmic preview...');
+    console.log(`Starting preview for Voice ${voiceIndex + 1}...`);
     
-    // Show current parameter settings
-    const rhythmParam = voiceData[voiceIndex].parameters['RHYTHMS'];
-    const restParam = voiceData[voiceIndex].parameters['RESTS'];
-    const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+    // Stop any existing full playback first
+    if (voiceClockManager.getActiveVoiceCount() > 0) {
+      voiceClockManager.stopAllVoices();
+    }
     
-    console.log('Settings:', {
-      rhythm: `${rhythmParam.min}-${rhythmParam.max} (behavior: ${rhythmParam.behavior}%)`,
-      rest: `${restParam.min}-${restParam.max} (behavior: ${restParam.behavior}%)`,
-      melodic: `${melodicParam.min}-${melodicParam.max} (behavior: ${melodicParam.behavior}%)`
-    });
+    // Start master clock
+    if (!masterClock.isActive()) {
+      masterClock.start();
+    }
     
-    // ← startTestClock(voiceIndex) DELETED
+    // Enable only this voice temporarily for preview
+    const originalEnabled = voiceData[voiceIndex].enabled;
+    voiceData[voiceIndex].enabled = true;
     
-    // Start rhythmic note pattern
-    startRhythmicPlayback(voiceIndex);
+    // Start individual voice clock
+    const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+    if (voiceClock) {
+      voiceClock.start();
+    }
     
+    // Update button appearance
     previewButton.textContent = 'STOP';
     previewButton.style.backgroundColor = '#ffcccc';
     previewButton.style.color = '#333';
     
-    console.log('Rhythmic preview started');
+    console.log(`✅ Voice ${voiceIndex + 1} preview started`);
+    
+    // Log current voice settings
+    const voiceParams = voiceData[voiceIndex].parameters;
+    console.log(`Voice settings:`, {
+      sound: gmSounds[voiceParams['INSTRUMENT']],
+      tempo: `${voiceParams['TEMPO (BPM)'].min}-${voiceParams['TEMPO (BPM)'].max} BPM`,
+      rhythm: `${voiceParams['RHYTHMS'].min}-${voiceParams['RHYTHMS'].max}`,
+      melodic: `MIDI ${voiceParams['MELODIC RANGE'].min}-${voiceParams['MELODIC RANGE'].max}`,
+      lifeSpan: `Enter: ${formatSecondsToMMSS(convertLifeSpanToSeconds(voiceParams['LIFE SPAN'].entrance))}, 
+                 Exit: ${formatSecondsToMMSS(convertLifeSpanToSeconds(voiceParams['LIFE SPAN'].exit))}`
+    });
   }
 }
 
@@ -3613,7 +3602,7 @@ const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Dropdo
   dropdown.onchange = function(e) {
     const value = parseInt(e.target.value);
     
-    if (paramName === 'SOUND') {
+    if (paramName === 'INSTRUMENT') {
       // Single dropdown for sound selection
       voiceData[currentVoice].parameters[paramName] = value;
       console.log(`✅ ${paramName}: ${gmSounds[value]}`);
@@ -3727,35 +3716,36 @@ const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Multi-
   const timingSliders = parameterSection.querySelectorAll('.timing-slider');
   console.log(`Found ${timingSliders.length} timing control sliders to connect`);
   
-  timingSliders.forEach((slider) => {
-    const timingContainer = slider.closest('.timing-control-container');
-    const controlLabel = timingContainer ? timingContainer.querySelector('.timing-control-label') : null;
-    const controlType = controlLabel ? controlLabel.textContent.trim().toLowerCase() : 'unknown';
+  // Find this section and update:
+timingSliders.forEach((slider) => {
+  const timingContainer = slider.closest('.timing-control-container');
+  const controlLabel = timingContainer ? timingContainer.querySelector('.timing-control-label') : null;
+  const controlType = controlLabel ? controlLabel.textContent.trim().toLowerCase() : 'unknown';
+  
+  console.log(`Connecting timing slider: ${controlType}`);
+  
+  slider.oninput = function(e) {
+    const value = parseInt(e.target.value);
     
-    console.log(`Connecting timing slider: ${controlType}`);
-    
-    // Remove existing event listeners
-    slider.oninput = null;
-    slider.onchange = null;
-    
-    // Add new event listeners with tooltips
-    slider.oninput = function(e) {
-      const value = parseInt(e.target.value);
-      
-      // Update voiceData
-      if (voiceData[currentVoice].parameters['LIFE SPAN']) {
-        voiceData[currentVoice].parameters['LIFE SPAN'][controlType] = value;
-        console.log(`✅ LIFE SPAN ${controlType}: ${value}`);
+    // Update voiceData - map "duration" label back to internal "duration" property
+    if (voiceData[currentVoice].parameters['LIFE SPAN']) {
+      if (controlType === 'duration') {
+        voiceData[currentVoice].parameters['LIFE SPAN'].duration = value;
+        console.log(`✅ LIFE SPAN duration: ${value}`);
+      } else if (controlType === 'entrance') {
+        voiceData[currentVoice].parameters['LIFE SPAN'].entrance = value;
+        console.log(`✅ LIFE SPAN entrance: ${value}`);
       }
-      
-      // Update tooltip
-      updateTimingTooltip(slider, value);
-    };
+    }
     
-    // Initialize tooltip
-    const initialValue = parseInt(slider.value);
-    updateTimingTooltip(slider, initialValue);
-  });
+    // Update tooltip
+    updateTimingTooltip(slider, value);
+  };
+  
+  // Initialize tooltip
+  const initialValue = parseInt(slider.value);
+  updateTimingTooltip(slider, initialValue);
+});
   
   // 7. Connect Timing Repeat Checkbox
   const timingCheckbox = parameterSection.querySelector('.timing-checkbox');
@@ -3786,64 +3776,7 @@ const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Multi-
 // VOICE MANAGEMENT SYSTEM
 // =============================================================================
 
-class VoiceManager {
-  constructor(audioContext, masterGainNode) {
-    this.audioContext = audioContext;
-    this.masterGainNode = masterGainNode;
-    this.voices = [];
-    this.isPlaying = false;
-    
-    // Create 16 independent voice instances
-    for (let i = 0; i < 16; i++) {
-      this.voices.push(new Voice(audioContext, i, masterGainNode));
-    }
-    
-    console.log('VoiceManager initialized with 16 voices');
-  }
-  
-  /**
-   * Start all enabled voices playing together
-   */
-  startAllVoices() {
-    if (this.isPlaying) {
-      this.stopAllVoices();
-    }
-    
-    this.isPlaying = true;
-    
-    // Start each enabled voice
-    this.voices.forEach((voice, index) => {
-      if (voiceData[index].enabled) {
-        voice.startPlaying();
-        console.log(`Started voice ${index + 1}`);
-      }
-    });
-    
-    console.log('Multi-voice playback started');
-  }
-  
-  /**
-   * Stop all voices
-   */
-  stopAllVoices() {
-    this.isPlaying = false;
-    
-    this.voices.forEach((voice, index) => {
-      voice.stopPlaying();
-    });
-    
-    console.log('All voices stopped');
-  }
-  
-  
-  
-  /**
-   * Get enabled voices for coordination
-   */
-  getEnabledVoices() {
-    return this.voices.filter((voice, index) => voiceData[index].enabled);
-  }
-}
+
 
 class Voice {
   constructor(audioContext, voiceIndex, masterGainNode) {
@@ -3889,7 +3822,7 @@ class Voice {
     this.noteGainNode = this.audioContext.createGain();
     
     // Get voice sound type
-    const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+    const selectedSoundIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
     const selectedSoundName = gmSounds[selectedSoundIndex];
     const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
     
@@ -4033,12 +3966,12 @@ scheduleNextNote(startTime) {
   
   // Use this voice's individual tempo instead of shared tempo
   const voiceTempo = getVoiceTempo(this.voiceIndex);
-  console.log(`VoiceManager Voice ${this.voiceIndex + 1} tempo: ${voiceTempo} BPM (Master: ${masterTempo} BPM)`);
+    console.log(`VoiceClock Voice ${this.voiceIndex + 1} tempo: ${voiceTempo} BPM`); // CHANGED
   
   const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
   const restDuration = getRestDuration(restIndex, voiceTempo);
   
-  console.log(`VoiceManager Note: ${noteDuration.toFixed(3)}s, Rest: ${restDuration.toFixed(3)}s`);
+  console.log(`VoiceClock Note: ${noteDuration.toFixed(3)}s, Rest: ${restDuration.toFixed(3)}s`); // CHANGED
   
   // Select note frequency
   const noteInfo = selectMidiNote(this.voiceIndex);
@@ -4067,7 +4000,7 @@ scheduleNextNote(startTime) {
     const gainNode = this.audioContext.createGain();
     
     // Get voice sound type
-    const selectedSoundIndex = voiceData[this.voiceIndex].parameters['SOUND'];
+    const selectedSoundIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
     const selectedSoundName = gmSounds[selectedSoundIndex];
     const oscillatorType = getOscillatorTypeForGMSound(selectedSoundName);
     
@@ -4152,9 +4085,6 @@ startParameterEvolution() {
 }
 
 }
-
-// Global voice manager instance
-let voiceManager = null;
 
 // =============================================================================
 // INTERACTIVE PIANO KEYBOARD
@@ -4510,27 +4440,27 @@ function testDelaySliders() {
 const rollupConfig = {
   instrument: {
     title: "INSTRUMENT & SOUND",
-    icon: "🎹",
+    // icon: "🎹",
     expanded: true // Start expanded
   },
     mixing: {
     title: "MIXING & LEVELS",
-    icon: "🎚️", 
+    // icon: "🎚️", 
     expanded: true // Start expanded
   },
   rhythm: {
     title: "RHYTHM & TIMING", 
-    icon: "🥁",
+    // icon: "🥁",
     expanded: true // Start expanded
   },
   modulation: {
     title: "MODULATION EFFECTS",
-    icon: "🌊",
+    // icon: "🌊",
     expanded: false // Start collapsed
   },
   spatial: {
     title: "SPATIAL EFFECTS",
-    icon: "🏛️",
+    //icon: "🏛️",
     expanded: false // Start collapsed
   }
 };
@@ -4539,10 +4469,10 @@ const rollupConfig = {
 // ROLL UP CODE
 // =============================================================================
 // Global rollup state
-let rollupState = {};
+//let rollupState = {};
 
 // Initialize rollup state - START ALL COLLAPSED
-function initializeRollupState() {
+/* function initializeRollupState() {
   Object.keys(rollupConfig).forEach(key => {
     rollupState[key] = false; // CHANGED: All groups start collapsed
   });
@@ -4639,9 +4569,9 @@ function collapseAllRollups() {
       toggleRollup(key);
     }
   });
-}
+} */
 
-// END ROLL UP CODE
+// END OF NESTED ROLL UP CODE
 // =============================================================================
 
 // =============================================================================
@@ -5102,7 +5032,7 @@ function createNestedGroupRollup(rollupKey, rollupInfo, parameters, voiceIndex) 
  */
 function expandInstrumentGroup() {
   if (!rollupState['instrument']) toggleRollup('instrument');
-  if (!parameterRollupState['SOUND']) toggleParameterRollup('SOUND');
+  if (!parameterRollupState['INSTRUMENT']) toggleParameterRollup('INSTRUMENT');
   if (!parameterRollupState['MELODIC RANGE']) toggleParameterRollup('MELODIC RANGE');
   console.log('🎹 Instrument group expanded');
 }
@@ -5248,20 +5178,1458 @@ function getEnvelopeForDuration(noteDurationSeconds) {
     };
   }
 }
+// ENDING SHORTENING FAST NOTES
 // =============================================================================
 
 
+//*=============================================================================
+//
+// Oct 4, 25  ADDING LIFESPAN CONTROLS BELOW
+//
+
+/**
+ * Convert Life Span slider values to actual time in seconds
+ * Slider range 0-100 maps to 0-600 seconds (10 minutes max)
+ */
+function convertLifeSpanToSeconds(sliderValue) {
+  // 0-100 slider maps to 0-300 seconds (5 minutes max)
+  const seconds = Math.round((sliderValue / 100) * 300);
+  return seconds;
+}
+
+/**
+ * Convert seconds back to mm:ss format for display
+ */
+function formatSecondsToMMSS(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Test function for time conversion
+ */
+function testTimeConversion() {
+  console.log('=== TESTING TIME CONVERSION ===');
+  
+  const testValues = [0, 25, 50, 75, 100];
+  
+  testValues.forEach(sliderValue => {
+    const seconds = convertLifeSpanToSeconds(sliderValue);
+    const timeString = formatSecondsToMMSS(seconds);
+    console.log(`Slider ${sliderValue}% → ${seconds}s → ${timeString}`);
+  });
+  
+  console.log('\nExpected:');
+  console.log('0% → 0:00, 25% → 2:30, 50% → 5:00, 75% → 7:30, 100% → 10:00');
+}
+
+/**
+ * Voice Lifecycle States
+ */
+const VoiceState = {
+  WAITING: 'waiting',     // Before entrance time
+  ACTIVE: 'active',       // Playing notes
+  SILENT: 'silent',       // After exit, before repeat
+  STOPPED: 'stopped'      // Duration expired or no repeat
+};
+
+
+/**
+ * Voice Lifecycle Manager - tracks timing for all voices
+ */
+class VoiceLifecycleManager {
+  constructor() {
+    this.voiceStates = {}; // Track state for each voice
+    this.startTime = 0;    // When playback started
+    this.isActive = false; // Whether lifecycle management is running
+    
+    // Initialize all 16 voices
+    for (let i = 0; i < 16; i++) {
+      this.voiceStates[i] = {
+        state: VoiceState.STOPPED,
+        cycleStartTime: 0,
+        nextStateTime: 0
+      };
+    }
+    
+    console.log('VoiceLifecycleManager initialized');
+  }
+  
+
+
+  /**
+   * Start lifecycle management for all enabled voices
+   */
+  start() {
+    this.isActive = true;
+    this.startTime = Date.now();
+    
+    // Initialize states for all enabled voices
+    for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
+      if (voiceData[voiceIndex].enabled) {
+        this.initializeVoiceState(voiceIndex);
+      }
+    }
+    
+    console.log('🕐 Voice Lifecycle Management started');
+  }
+  
+  /**
+   * Stop lifecycle management
+   */
+  stop() {
+    this.isActive = false;
+    
+    // Reset all voice states
+    for (let i = 0; i < 16; i++) {
+      this.voiceStates[i].state = VoiceState.STOPPED;
+    }
+    
+    console.log('🕐 Voice Lifecycle Management stopped');
+  }
+  
+  /**
+   * Initialize state for a specific voice
+   */
+  initializeVoiceState(voiceIndex) {
+    const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+    const entranceSeconds = convertLifeSpanToSeconds(lifeSpan.entrance);
+    
+    this.voiceStates[voiceIndex] = {
+      state: entranceSeconds === 0 ? VoiceState.ACTIVE : VoiceState.WAITING,
+      cycleStartTime: this.startTime,
+      nextStateTime: this.startTime + (entranceSeconds * 1000)
+    };
+    
+    const voiceName = `Voice ${voiceIndex + 1}`;
+    const entranceTime = formatSecondsToMMSS(entranceSeconds);
+    
+    if (entranceSeconds === 0) {
+      console.log(`🎵 ${voiceName}: ACTIVE immediately`);
+    } else {
+      console.log(`⏳ ${voiceName}: WAITING, enters at ${entranceTime}`);
+    }
+  }
+  
+  /**
+   * Get current state of a voice
+   */
+  getVoiceState(voiceIndex) {
+    return this.voiceStates[voiceIndex]?.state || VoiceState.STOPPED;
+  }
+  
+    /**
+   * Check if a voice should be playing notes right now
+   */
+  shouldVoicePlaying(voiceIndex) {
+    return this.getVoiceState(voiceIndex) === VoiceState.ACTIVE;
+  }
+
+  /**
+   * Update all voice states based on current time
+   * Called regularly during playback to transition states
+   */
+  updateVoiceStates() {
+    if (!this.isActive) return;
+    
+    const currentTime = Date.now();
+    
+    for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
+      if (!voiceData[voiceIndex].enabled) continue;
+      
+      const voiceState = this.voiceStates[voiceIndex];
+      const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+      
+      // Calculate key timing points
+      const durationMs = convertLifeSpanToSeconds(lifeSpan.duration) * 1000;
+      const entranceMs = convertLifeSpanToSeconds(lifeSpan.entrance) * 1000;
+      const exitMs = convertLifeSpanToSeconds(lifeSpan.exit) * 1000;
+      
+      const cycleElapsed = currentTime - voiceState.cycleStartTime;
+      const voiceName = `Voice ${voiceIndex + 1}`;
+      
+      // State machine logic
+      switch (voiceState.state) {
+        case VoiceState.WAITING:
+          if (cycleElapsed >= entranceMs) {
+            voiceState.state = VoiceState.ACTIVE;
+            console.log(`🎵 ${voiceName}: ACTIVE (entered at ${formatSecondsToMMSS(cycleElapsed/1000)})`);
+          }
+          break;
+          
+        case VoiceState.ACTIVE:
+          if (exitMs > 0 && cycleElapsed >= exitMs) {
+            voiceState.state = VoiceState.SILENT;
+            console.log(`🔇 ${voiceName}: SILENT (exited at ${formatSecondsToMMSS(cycleElapsed/1000)})`);
+          } else if (cycleElapsed >= durationMs) {
+            if (lifeSpan.repeat) {
+              voiceState.state = VoiceState.WAITING;
+              voiceState.cycleStartTime = currentTime;
+              console.log(`🔄 ${voiceName}: REPEAT CYCLE (duration complete)`);
+            } else {
+              voiceState.state = VoiceState.STOPPED;
+              console.log(`⏹️ ${voiceName}: STOPPED (duration complete, no repeat)`);
+            }
+          }
+          break;
+          
+        case VoiceState.SILENT:
+          if (cycleElapsed >= durationMs) {
+            if (lifeSpan.repeat) {
+              voiceState.state = VoiceState.WAITING;
+              voiceState.cycleStartTime = currentTime;
+              console.log(`🔄 ${voiceName}: REPEAT CYCLE (silence period complete)`);
+            } else {
+              voiceState.state = VoiceState.STOPPED;
+              console.log(`⏹️ ${voiceName}: STOPPED (duration complete, no repeat)`);
+            }
+          }
+          break;
+      }
+    }
+  }
+
+// ← This closing brace ends the VoiceLifecycleManager class
+
+
+}
+
+// Global lifecycle manager instance
+// let voiceLifecycleManager = null;
+
+// testing function
+function testVoiceLifecycleManager() {
+  console.log('=== TESTING VOICE LIFECYCLE MANAGER ===');
+  
+  // Create a test instance
+  if (!voiceLifecycleManager) {
+    voiceLifecycleManager = new VoiceLifecycleManager();
+  }
+  
+  // Test with current voice settings
+  console.log('\nCurrent voice Life Span settings:');
+  const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+  console.log('Duration:', lifeSpan.duration, '→', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.duration)));
+  console.log('Entrance:', lifeSpan.entrance, '→', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.entrance)));
+  console.log('Exit:', lifeSpan.exit, '→', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.exit)));
+  console.log('Repeat:', lifeSpan.repeat);
+  
+  // Test starting lifecycle management
+  console.log('\nTesting lifecycle start...');
+  voiceLifecycleManager.start();
+  
+  // Check voice state
+  const state = voiceLifecycleManager.getVoiceState(currentVoice);
+  const shouldPlay = voiceLifecycleManager.shouldVoicePlaying(currentVoice);
+  
+  console.log(`Voice ${currentVoice + 1} state:`, state);
+  console.log(`Should be playing:`, shouldPlay);
+  
+  // Stop for now
+  voiceLifecycleManager.stop();
+}
+
+function testStateUpdates() {
+  console.log('=== TESTING STATE UPDATES ===');
+  
+  if (!voiceLifecycleManager) {
+    voiceLifecycleManager = new VoiceLifecycleManager();
+  }
+  
+  // Set up a quick test scenario
+  console.log('Setting up quick test: Voice enters in 3 seconds, exits at 6 seconds...');
+  
+  // Temporarily modify current voice for quick testing
+  const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+  const originalValues = {
+    duration: lifeSpan.duration,
+    entrance: lifeSpan.entrance,
+    exit: lifeSpan.exit,
+    repeat: lifeSpan.repeat
+  };
+  
+  // Quick test values (entrance at 5%, exit at 10%, duration at 20%)
+  lifeSpan.duration = 20;  // 2 minutes total
+  lifeSpan.entrance = 5;   // Enter at 18 seconds  
+  lifeSpan.exit = 10;      // Exit at 36 seconds
+  lifeSpan.repeat = false;
+  
+  console.log('Test settings:');
+  console.log('Duration:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.duration)));
+  console.log('Entrance:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.entrance)));
+  console.log('Exit:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.exit)));
+  
+  // Start lifecycle
+  voiceLifecycleManager.start();
+  
+  // Simulate time passing
+  console.log('\nSimulating state updates...');
+  voiceLifecycleManager.updateVoiceStates();
+  
+  // Check initial state
+  console.log('Initial state:', voiceLifecycleManager.getVoiceState(currentVoice));
+  
+  // Restore original values
+  Object.assign(lifeSpan, originalValues);
+  voiceLifecycleManager.stop();
+  
+  console.log('Test complete - original values restored');
+}
+
+function testMasterClockIntegration() {
+  console.log('=== TESTING MASTER CLOCK + LIFECYCLE INTEGRATION ===');
+  
+  // Create instances if needed
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  if (!voiceLifecycleManager) {
+    voiceLifecycleManager = new VoiceLifecycleManager();
+  }
+  
+  // Set up a quick test scenario (voice enters in 3 seconds)
+  const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+  const originalValues = {
+    duration: lifeSpan.duration,
+    entrance: lifeSpan.entrance,
+    exit: lifeSpan.exit
+  };
+  
+  // Quick test: entrance in 3 seconds
+  lifeSpan.entrance = 0.5; // 0.5% = 3 seconds
+  lifeSpan.exit = 1.0;     // 1% = 6 seconds  
+  lifeSpan.duration = 2.0; // 2% = 12 seconds
+  
+  console.log('Test scenario:');
+  console.log('- Voice enters at:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.entrance)));
+  console.log('- Voice exits at:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.exit)));
+  console.log('- Total duration:', formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.duration)));
+  
+  // Start both systems
+  console.log('\nStarting Master Clock and Lifecycle Manager...');
+  voiceLifecycleManager.start();
+  masterClock.start();
+  
+  console.log('✅ Both systems running');
+  console.log('Initial voice state:', voiceLifecycleManager.getVoiceState(currentVoice));
+  
+  // Let it run for a few seconds then stop
+  setTimeout(() => {
+    console.log('\nAfter 5 seconds...');
+    console.log('Voice state:', voiceLifecycleManager.getVoiceState(currentVoice));
+    
+    // Stop and restore
+    masterClock.stop();
+    voiceLifecycleManager.stop();
+    Object.assign(lifeSpan, originalValues);
+    
+    console.log('Test complete - systems stopped and values restored');
+  }, 5000);
+  
+  console.log('⏳ Test will complete in 5 seconds...');
+}
+
+async function testCompleteLifeSpanSystem() {
+  console.log('=== TESTING COMPLETE LIFE SPAN SYSTEM ===');
+  
+  // ENSURE audio is initialized first
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('Initializing audio manager...');
+    if (!audioManager) {
+      audioManager = new AudioManager();
+    }
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('❌ Audio initialization failed - cannot test audio features');
+      return;
+    }
+    console.log('✅ Audio manager ready');
+  }
+  
+  // Create instances
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  if (!voiceLifecycleManager) {
+    voiceLifecycleManager = new VoiceLifecycleManager();
+  }
+  
+  // Set up test scenario with audio
+  const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+  const originalValues = {
+    duration: lifeSpan.duration,
+    entrance: lifeSpan.entrance,
+    exit: lifeSpan.exit
+  };
+  
+  // Test: 2 second entrance delay, 5 second exit
+  lifeSpan.entrance = 0.33; // ~2 seconds
+  lifeSpan.exit = 0.83;     // ~5 seconds  
+  lifeSpan.duration = 1.67; // ~10 seconds total
+  
+  console.log('🎵 AUDIO TEST SCENARIO:');
+  console.log('- 0-2s: WAITING (no audio) 🔇');
+  console.log('- 2-5s: ACTIVE (playing audio) 🎵');
+  console.log('- 5-10s: SILENT (no audio) 🔇');
+  console.log('');
+  console.log('Expected: You should hear notes ONLY between 2-5 seconds');
+  console.log('');
+  
+  // Start the complete system
+  voiceLifecycleManager.start();
+  masterClock.start();
+  
+  // FIXED: Use correct function name
+  startRhythmicPlayback(currentVoice);  // Fixed the typo
+  
+  console.log('✅ Complete system started - listen for audio pattern!');
+  
+  // Stop after 8 seconds
+  setTimeout(() => {
+    stopRhythmicPlayback();
+    masterClock.stop();
+    voiceLifecycleManager.stop();
+    Object.assign(lifeSpan, originalValues);
+    
+    console.log('🎉 COMPLETE TEST FINISHED');
+    console.log('Did you hear: Silence → Notes → Silence pattern?');
+  }, 8000);
+  
+  console.log('⏳ Test running for 8 seconds...');
+}
 
 
 
 
+function debugLifecycleStates() {
+  console.log('=== DEBUGGING LIFECYCLE STATES ===');
+  
+  if (!voiceLifecycleManager || !voiceLifecycleManager.isActive) {
+    console.log('❌ VoiceLifecycleManager not active');
+    return;
+  }
+  
+  for (let i = 0; i < 2; i++) { // Check first 2 voices
+    if (voiceData[i].enabled) {
+      const state = voiceLifecycleManager.getVoiceState(i);
+      const shouldPlay = voiceLifecycleManager.shouldVoicePlaying(i);
+      const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+      
+      console.log(`Voice ${i + 1}:`);
+      console.log(`  Current State: ${state}`);
+      console.log(`  Should Play: ${shouldPlay}`);
+      console.log(`  LifeSpan Settings:`, {
+        duration: lifeSpan.duration,
+        entrance: lifeSpan.entrance,
+        exit: lifeSpan.exit,
+        repeat: lifeSpan.repeat
+      });
+      console.log(`  Entrance Time: ${convertLifeSpanToSeconds(lifeSpan.entrance)} seconds`);
+    }
+  }
+}
+
+/**
+ * Test enhanced master clock timing accuracy
+ */
+function testEnhancedMasterClock() {
+  console.log('=== TESTING ENHANCED MASTER CLOCK (1ms resolution) ===');
+  
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
+  console.log('Starting master clock...');
+  masterClock.start();
+  
+  // Test timing accuracy over 5 seconds
+  let testCount = 0;
+  const testInterval = setInterval(() => {
+    testCount++;
+    const elapsed = masterClock.getElapsedSeconds();
+    const expected = testCount * 1.0; // Expected seconds
+    const accuracy = Math.abs(elapsed - expected);
+    
+    console.log(`Test ${testCount}s: Elapsed=${elapsed.toFixed(3)}s, Expected=${expected}s, Accuracy=±${accuracy.toFixed(3)}s`);
+    
+    if (testCount >= 5) {
+      clearInterval(testInterval);
+      masterClock.stop();
+      console.log('✅ Enhanced Master Clock test complete');
+      
+      if (accuracy < 0.01) {
+        console.log('🎉 Timing accuracy: EXCELLENT (within 10ms)');
+      } else if (accuracy < 0.05) {
+        console.log('✅ Timing accuracy: GOOD (within 50ms)');
+      } else {
+        console.log('⚠️ Timing accuracy: NEEDS IMPROVEMENT');
+      }
+    }
+  }, 1000);
+  
+  return testInterval;
+} // End of test function
+
+/**
+ * Individual Voice Clock - Synced to Master Clock
+ * Each voice gets its own tempo evolution while staying synchronized to master timing
+ */
+class VoiceClock {
+  constructor(voiceIndex, masterClock) {
+    this.voiceIndex = voiceIndex;
+    this.masterClock = masterClock;
+    
+    // Voice timing state
+    this.isActive = false;
+    this.lastNoteTime = 0;        // When last note was scheduled (master time)
+    this.nextNoteTime = 0;        // When next note should be scheduled (master time)
+    this.currentTempo = 120;      // Current evolved tempo for this voice
+    this.lastTempoUpdate = 0;     // When tempo was last updated
+    
+    // Life Span state tracking
+    this.lifeCycleState = VoiceState.STOPPED;
+    this.cycleStartTime = 0;      // When current cycle started (master time)
+    
+    console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
+  }
+  
+  /**
+   * Start this voice clock (called when playback begins)
+   */
+  /**
+ * Start this voice clock (called when playback begins) - FIXED LIFE SPAN
+ */
+start() {
+  if (!this.masterClock.isActive()) {
+    console.warn(`Voice ${this.voiceIndex + 1}: Cannot start - master clock not running`);
+    return;
+  }
+  
+  this.isActive = true;
+  const masterTime = this.masterClock.getMasterTime();
+  
+  // Initialize timing
+  this.lastNoteTime = masterTime;
+  this.cycleStartTime = masterTime; // When this voice's cycle started
+  this.lastTempoUpdate = masterTime;
+  
+  // Initialize tempo from voice parameters
+  this.updateTempo();
+  
+  // CHECK LIFE SPAN - Don't schedule first note immediately
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const entranceMs = convertLifeSpanToSeconds(lifeSpan.entrance) * 1000;
+  
+  if (entranceMs === 0) {
+    // Enter immediately
+    this.lifeCycleState = VoiceState.ACTIVE;
+    this.nextNoteTime = masterTime + 100; // Schedule first note 100ms from now
+    console.log(`🎵 Voice ${this.voiceIndex + 1} clock started - ACTIVE immediately`);
+  } else {
+    // Wait for entrance time
+    this.lifeCycleState = VoiceState.WAITING;
+    this.nextNoteTime = masterTime + entranceMs + 100; // Schedule first note after entrance + 100ms
+    console.log(`🎵 Voice ${this.voiceIndex + 1} clock started - WAITING, enters in ${entranceMs/1000}s`);
+  }
+  
+  console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM, entrance: ${formatSecondsToMMSS(entranceMs/1000)}`);
+}
+
+  
+ /**
+ * Stop this voice clock
+ */
+stop() {
+  this.isActive = false;
+  this.lifeCycleState = VoiceState.STOPPED;
+  
+  console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
+  
+  // NEW: Trigger auto-reset check when a voice stops
+  if (voiceClockManager) {
+    setTimeout(() => {
+      voiceClockManager.checkForAutoReset();
+    }, 100); // Small delay to let state settle
+  }
+}
+
+  
+  /**
+   * Update voice tempo (only at note boundaries - per requirement)
+   */
+  updateTempo() {
+    if (!this.isActive) return;
+    
+    const voiceParams = voiceData[this.voiceIndex].parameters;
+    const tempoParam = voiceParams['TEMPO (BPM)'];
+    
+    if (!tempoParam) {
+      this.currentTempo = 120; // Default fallback
+      return;
+    }
+    
+    // Use evolved tempo if behavior is active
+    if (tempoParam.behavior > 0 && tempoParam.currentValue !== undefined) {
+      this.currentTempo = Math.round(tempoParam.currentValue);
+    } else {
+      // Use middle of range if no evolution
+      this.currentTempo = Math.round((tempoParam.min + tempoParam.max) / 2);
+    }
+    
+    // Clamp to reasonable bounds
+    this.currentTempo = Math.max(40, Math.min(240, this.currentTempo));
+    
+    this.lastTempoUpdate = this.masterClock.getMasterTime();
+  }
+  
+  /**
+   * Update Life Span state based on master clock time
+   */
+  updateLifeCycleState() {
+    if (!this.isActive || !this.masterClock.isActive()) return;
+    
+    const voiceParams = voiceData[this.voiceIndex].parameters;
+    const lifeSpan = voiceParams['LIFE SPAN'];
+    if (!lifeSpan) return;
+    
+    // Calculate timing in milliseconds
+    const durationMs = convertLifeSpanToSeconds(lifeSpan.duration) * 1000;
+    const entranceMs = convertLifeSpanToSeconds(lifeSpan.entrance) * 1000;
+    const exitMs = convertLifeSpanToSeconds(lifeSpan.exit) * 1000;
+    
+    // Time since cycle started
+    const cycleElapsed = this.masterClock.getMasterTime() - this.cycleStartTime;
+    
+    // State machine logic
+    let newState = this.lifeCycleState;
+    
+    if (cycleElapsed < entranceMs) {
+      newState = VoiceState.WAITING;
+    } else if (exitMs > 0 && cycleElapsed >= exitMs) {
+      newState = VoiceState.SILENT;
+    } else if (cycleElapsed < durationMs) {
+      newState = VoiceState.ACTIVE;
+    } else {
+      // Duration complete
+      if (lifeSpan.repeat) {
+        // Start new cycle
+        this.cycleStartTime = this.masterClock.getMasterTime();
+        newState = VoiceState.WAITING;
+        console.log(`🔄 Voice ${this.voiceIndex + 1}: Starting repeat cycle`);
+      } else {
+        newState = VoiceState.STOPPED;
+        this.stop();
+        console.log(`⏹️ Voice ${this.voiceIndex + 1}: Duration complete, stopping`);
+      }
+    }
+    
+    // Log state changes
+    if (newState !== this.lifeCycleState) {
+      const stateName = newState.toUpperCase();
+      const timeString = formatSecondsToMMSS(cycleElapsed / 1000);
+      console.log(`🎵 Voice ${this.voiceIndex + 1}: ${stateName} at ${timeString}`);
+    }
+    
+    this.lifeCycleState = newState;
+  }
+  
+  /**
+   * Check if this voice should be playing notes right now
+   */
+  shouldPlayNote() {
+    return this.isActive && this.lifeCycleState === VoiceState.ACTIVE;
+  }
+  
+  /**
+   * Check if it's time for the next note
+   */
+  isTimeForNextNote() {
+    if (!this.shouldPlayNote()) return false;
+    
+    const masterTime = this.masterClock.getMasterTime();
+    return masterTime >= this.nextNoteTime;
+  }
+  
+  /**
+   * Calculate when next note should be scheduled
+   */
+  scheduleNextNote() {
+    if (!this.shouldPlayNote()) return;
+    
+    // Update tempo at note boundary (per requirement)
+    this.updateTempo();
+    
+    const voiceParams = voiceData[this.voiceIndex].parameters;
+    
+    // Get rhythm and rest selections
+    const rhythmParam = voiceParams['RHYTHMS'];
+    const restParam = voiceParams['RESTS'];
+    
+    // Calculate note and rest durations
+    const rhythmIndex = this.selectValueInRange(rhythmParam);
+    const restIndex = this.selectValueInRange(restParam);
+    
+    const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
+    const restDurationMs = this.getRestDurationMs(restIndex);
+    
+    // Schedule note (this will be implemented in next steps)
+    const noteInfo = this.createNoteInfo();
+    this.triggerNote(noteInfo, noteDurationMs);
+    
+    // Update timing for next note
+    this.lastNoteTime = this.nextNoteTime;
+    this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Note scheduled, next in ${(noteDurationMs + restDurationMs)}ms`);
+  }
+  
+  /**
+   * Select value within parameter range considering behavior
+   */
+  selectValueInRange(param) {
+    if (!param) return 0;
+    
+    if (param.behavior > 0) {
+      return Math.floor(interpolateParameter(
+        (param.min + param.max) / 2,
+        param.min,
+        param.max,
+        param.behavior,
+        0.3
+      ));
+    } else {
+      return Math.floor((param.min + param.max) / 2);
+    }
+  }
+  
+  /**
+   * Get rhythm duration in milliseconds using voice's current tempo
+   */
+  getRhythmDurationMs(rhythmIndex) {
+    const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[7]; // Default to quarter notes
+    const beatDurationMs = (60 / this.currentTempo) * 1000; // ms per beat
+    return rhythmInfo.beats * beatDurationMs;
+  }
+  
+  /**
+   * Get rest duration in milliseconds using voice's current tempo
+   */
+  getRestDurationMs(restIndex) {
+    if (restIndex === 0) return 0; // No rests
+    
+    const restInfo = rhythmDurations[restIndex - 1] || rhythmDurations[7];
+    const beatDurationMs = (60 / this.currentTempo) * 1000;
+    return restInfo.beats * beatDurationMs;
+  }
+  
+  /**
+   * Create note information for this voice
+   */
+  createNoteInfo() {
+    const noteSelection = selectMidiNote(this.voiceIndex);
+    return {
+      frequency: noteSelection.frequency,
+      midiNote: noteSelection.midiNote,
+      noteName: noteSelection.noteName,
+      voiceIndex: this.voiceIndex,
+      tempo: this.currentTempo
+    };
+  }
+  
+  /**
+ * Trigger actual audio note playback
+ */
+triggerNote(noteInfo, durationMs) {
+  if (!audioManager || !audioManager.isInitialized || !audioManager.audioContext) {
+    console.warn(`Voice ${this.voiceIndex + 1}: Audio not ready, skipping note`);
+    return;
+  }
+  
+  const startTime = audioManager.audioContext.currentTime + 0.01; // Start 10ms from now
+  const durationSeconds = durationMs / 1000;
+  
+  // Create the scheduled note using existing system
+  const scheduledNote = this.createScheduledAudioNote(
+    noteInfo.frequency,
+    durationSeconds,
+    startTime
+  );
+  
+  if (scheduledNote) {
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: ${noteInfo.noteName} (${noteInfo.frequency.toFixed(1)}Hz) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
+  }
+}
+
+/**
+ * Create actual audio note (adapted from existing scheduleNote function)
+ */
+createScheduledAudioNote(frequency, duration, startTime) {
+  if (!audioManager || !audioManager.audioContext) return null;
+  
+  const oscillator = audioManager.audioContext.createOscillator();
+  const gainNode = audioManager.audioContext.createGain();
+  const panNode = audioManager.audioContext.createStereoPanner();
+
+  // Get voice instrument type
+  const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
+  const selectedInstrumentName = gmSounds[selectedInstrumentIndex];
+  const oscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+
+  // Set up oscillator
+  oscillator.type = oscillatorType;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  
+  // Apply current voice parameters
+  const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+  const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+  const gainValue = (currentVolume / 100) * 0.15; // Scale down for multiple voices
+  
+  const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
+  const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
+  const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
+  
+  // Dynamic envelope based on note duration
+  const envelope = this.getEnvelopeForDuration(duration);
+  const sustainLevel = gainValue * envelope.sustain;
+  
+  // Set up envelope
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + envelope.attack);
+  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - envelope.release);
+  gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+  
+  panNode.pan.setValueAtTime(panValue, startTime);
+  
+  // Connect audio chain
+  oscillator.connect(gainNode);
+  gainNode.connect(panNode);
+  panNode.connect(audioManager.masterGainNode);
+  
+  // Schedule playback
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration);
+  
+  // Cleanup when note ends
+  oscillator.onended = () => {
+    try {
+      oscillator.disconnect();
+      gainNode.disconnect();
+      panNode.disconnect();
+    } catch (e) {
+      // Already disconnected
+    }
+  };
+  
+  return {
+    oscillator,
+    gainNode,
+    panNode,
+    startTime,
+    duration,
+    frequency,
+    voiceIndex: this.voiceIndex
+  };
+}
+
+/**
+ * Get envelope for note duration (adapted from existing function)
+ */
+getEnvelopeForDuration(noteDurationSeconds) {
+  const durationMs = noteDurationSeconds * 1000;
+  
+  if (durationMs < 50) {
+    return { attack: 0.002, release: 0.010, sustain: 0.8 };
+  } else if (durationMs < 100) {
+    return { attack: 0.005, release: 0.020, sustain: 0.8 };
+  } else if (durationMs < 200) {
+    return { attack: 0.010, release: 0.050, sustain: 0.8 };
+  } else {
+    return { attack: 0.015, release: 0.100, sustain: 0.8 };
+  }
+}
+
+  
+  /**
+   * Get current voice status for debugging
+   */
+  getStatus() {
+    return {
+      voiceIndex: this.voiceIndex + 1,
+      isActive: this.isActive,
+      lifeCycleState: this.lifeCycleState,
+      currentTempo: this.currentTempo,
+      shouldPlay: this.shouldPlayNote(),
+      timeToNextNote: Math.max(0, this.nextNoteTime - this.masterClock.getMasterTime())
+    };
+  }
+}
+/**
+ * Test VoiceClock class with master clock synchronization
+ */
+function testVoiceClockSync() {
+  console.log('=== TESTING VOICE CLOCK SYNCHRONIZATION ===');
+  
+  // Ensure master clock exists
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
+  // Create test voice clock
+  const testVoiceClock = new VoiceClock(0, masterClock); // Voice 1
+  
+  // Start master clock
+  masterClock.start();
+  
+  // Start voice clock
+  testVoiceClock.start();
+  
+  // Test for 3 seconds
+  let testCount = 0;
+  const testInterval = setInterval(() => {
+    testCount++;
+    const status = testVoiceClock.getStatus();
+    
+    console.log(`Test ${testCount}s:`, {
+      voice: status.voiceIndex,
+      active: status.isActive,
+      state: status.lifeCycleState,
+      tempo: status.currentTempo,
+      shouldPlay: status.shouldPlay,
+      nextNote: `${status.timeToNextNote}ms`
+    });
+    
+    if (testCount >= 3) {
+      clearInterval(testInterval);
+      testVoiceClock.stop();
+      masterClock.stop();
+      console.log('✅ Voice Clock sync test complete');
+    }
+  }, 1000);
+  
+  return testInterval;
+}
+
+/**
+ * Voice Clock Management System
+ * Creates and manages 16 individual voice clocks
+ */
+class VoiceClockManager {
+  constructor() {
+    this.voiceClocks = [];
+    this.masterClock = null;
+    this.isInitialized = false;
+    
+    console.log('VoiceClockManager initialized');
+  }
+  
+  /**
+   * Initialize 16 voice clocks linked to master clock
+   */
+  initialize(masterClock) {
+    this.masterClock = masterClock;
+    this.voiceClocks = [];
+    
+    // Create 16 voice clocks in loop
+    for (let i = 0; i < 16; i++) {
+      const voiceClock = new VoiceClock(i, masterClock);
+      this.voiceClocks.push(voiceClock);
+    }
+    
+    this.isInitialized = true;
+    console.log('🎵 VoiceClockManager: All 16 voice clocks initialized');
+  }
+  
+  /**
+   * Start all enabled voice clocks
+   */
+  startAllVoices() {
+    if (!this.isInitialized) {
+      console.error('VoiceClockManager not initialized!');
+      return;
+    }
+    
+    if (!this.masterClock || !this.masterClock.isActive()) {
+      console.error('Master clock not running!');
+      return;
+    }
+    
+    let startedCount = 0;
+    
+    // Start only enabled voices
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        this.voiceClocks[i].start();
+        startedCount++;
+      }
+    }
+    
+    console.log(`🎵 VoiceClockManager: Started ${startedCount} enabled voice clocks`);
+  }
+  
+  /**
+   * Stop all voice clocks
+   */
+  stopAllVoices() {
+    for (let i = 0; i < 16; i++) {
+      this.voiceClocks[i].stop();
+    }
+    
+    console.log('🔇 VoiceClockManager: All voice clocks stopped');
+  }
+  
+  /**
+   * Update all voice clocks (called by master clock)
+   */
+  updateAllVoices() {
+    if (!this.isInitialized) return;
+    
+    for (let i = 0; i < 16; i++) {
+      const voiceClock = this.voiceClocks[i];
+      
+      if (voiceClock.isActive) {
+        // Update life cycle state
+        voiceClock.updateLifeCycleState();
+        
+        // Check if it's time for next note
+        if (voiceClock.isTimeForNextNote()) {
+          voiceClock.scheduleNextNote();
+        }
+      }
+    }
+  }
+  
+/**
+ * Check if we should auto-reset the play button when all voices complete
+ */
+checkForAutoReset() {
+  // Count how many voices are still supposed to be active
+  let activeCount = 0;
+  let waitingCount = 0;
+  
+  for (let i = 0; i < 16; i++) {
+    const voiceClock = this.voiceClocks[i];
+    const voiceEnabled = voiceData[i].enabled;
+    
+    if (voiceEnabled && voiceClock.isActive) {
+      if (voiceClock.lifeCycleState === 'active') {
+        activeCount++;
+      } else if (voiceClock.lifeCycleState === 'waiting') {
+        waitingCount++;
+      }
+    }
+  }
+  
+  console.log(`🔍 Auto-reset check: ${activeCount} active, ${waitingCount} waiting`);
+  
+  // If no voices are active or waiting, auto-reset the button
+  if (activeCount === 0 && waitingCount === 0) {
+    setTimeout(() => {
+      const playButton = document.querySelector('#file-controls button:nth-child(4)');
+      if (playButton && playButton.textContent === 'STOP') {
+        playButton.textContent = 'PLAY';
+        playButton.style.backgroundColor = '';
+        playButton.style.color = '';
+        
+        // Stop master clock
+        if (masterClock && masterClock.isActive()) {
+          masterClock.stop();
+        }
+        
+        console.log('🔄 AUTO-RESET: All voices completed naturally - button reset to PLAY');
+      }
+    }, 500); // Small delay to ensure all state updates are complete
+  }
+}
+
+  /**
+   * Get voice clock by index
+   */
+  getVoiceClock(voiceIndex) {
+    if (voiceIndex < 0 || voiceIndex >= 16) return null;
+    return this.voiceClocks[voiceIndex];
+  }
+  
+  /**
+   * Get status of all voice clocks
+   */
+  getAllVoiceStatus() {
+    const status = [];
+    
+    for (let i = 0; i < 16; i++) {
+      const voiceClock = this.voiceClocks[i];
+      status.push({
+        voice: i + 1,
+        enabled: voiceData[i].enabled,
+        active: voiceClock.isActive,
+        state: voiceClock.lifeCycleState,
+        tempo: voiceClock.currentTempo,
+        shouldPlay: voiceClock.shouldPlayNote()
+      });
+    }
+    
+
+    
+    return status;
+  }
+  
+  /**
+   * Get count of active voices
+   */
+  getActiveVoiceCount() {
+    return this.voiceClocks.filter(clock => clock.isActive).length;
+  }
+}
+// 
 
 
+/**
+ * Test all 16 voice clocks initialization and management
+ */
+function testAll16VoiceClocks() {
+  console.log('=== TESTING ALL 16 VOICE CLOCKS ===');
+  
+  // Initialize systems
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
+  if (!voiceClockManager) {
+    voiceClockManager = new VoiceClockManager();
+  }
+  
+  // Initialize voice clock manager with master clock
+  voiceClockManager.initialize(masterClock);
+  
+  // Start master clock
+  masterClock.start();
+  
+  // Enable first 3 voices for testing
+  voiceData[0].enabled = true;
+  voiceData[1].enabled = true;
+  voiceData[2].enabled = true;
+  
+  // Start voice clocks
+  voiceClockManager.startAllVoices();
+  
+  // Test status every second for 5 seconds
+  let testCount = 0;
+  const testInterval = setInterval(() => {
+    testCount++;
+    
+    console.log(`\n--- Test ${testCount}s ---`);
+    console.log(`Master elapsed: ${masterClock.getElapsedSeconds().toFixed(3)}s`);
+    console.log(`Active voice count: ${voiceClockManager.getActiveVoiceCount()}`);
+    
+    // Show status of first 3 voices
+    const allStatus = voiceClockManager.getAllVoiceStatus();
+    for (let i = 0; i < 3; i++) {
+      const status = allStatus[i];
+      console.log(`Voice ${status.voice}: enabled=${status.enabled}, active=${status.active}, state=${status.state}, tempo=${status.tempo}`);
+    }
+    
+    if (testCount >= 5) {
+      clearInterval(testInterval);
+      voiceClockManager.stopAllVoices();
+      masterClock.stop();
+      console.log('\n✅ All 16 voice clocks test complete');
+    }
+  }, 1000);
+  
+  return testInterval;
+}
 
+/**
+ * Test voice clocks with actual audio playback
+ */
+async function testVoiceClocksWithAudio() {
+  console.log('=== TESTING VOICE CLOCKS WITH REAL AUDIO ===');
+  
+  // Initialize audio first
+  if (!audioManager || !audioManager.isInitialized) {
+    console.log('Initializing audio system...');
+    if (!audioManager) {
+      audioManager = new AudioManager();
+    }
+    await audioManager.initialize();
+    
+    if (!audioManager.isInitialized) {
+      console.log('❌ Audio initialization failed');
+      return;
+    }
+    console.log('✅ Audio system ready');
+  }
+  
+  // Initialize clock systems
+  if (!masterClock) {
+    masterClock = new MasterClock();
+  }
+  
+  if (!voiceClockManager) {
+    voiceClockManager = new VoiceClockManager();
+  }
+  
+  voiceClockManager.initialize(masterClock);
+  
+  // Enable only first voice for clean audio test
+  voiceData[0].enabled = true;
+  voiceData[1].enabled = false;
+  voiceData[2].enabled = false;
+  
+  // Start systems
+  masterClock.start();
+  voiceClockManager.startAllVoices();
+  
+  console.log('🎵 Voice clock with audio started - you should hear notes playing!');
+  console.log('🎵 Listen for quarter notes with evolving tempo...');
+  
+  // Let it play for 10 seconds
+  setTimeout(() => {
+    voiceClockManager.stopAllVoices();
+    masterClock.stop();
+    console.log('🔇 Audio test complete');
+  }, 10000);
+}
 
+/**
+ * Test polyrhythmic audio with 3 voices
+ */
+async function testPolyrhythmicAudio() {
+  console.log('=== TESTING POLYRHYTHMIC AUDIO (3 Voices) ===');
+  
+  // Ensure audio is ready
+  if (!audioManager || !audioManager.isInitialized) {
+    await audioManager.initialize();
+  }
+  
+  if (!masterClock) masterClock = new MasterClock();
+  if (!voiceClockManager) voiceClockManager = new VoiceClockManager();
+  
+  voiceClockManager.initialize(masterClock);
+  
+  // Enable first 3 voices for polyrhythmic test
+  voiceData[0].enabled = true;  // Voice 1
+  voiceData[1].enabled = true;  // Voice 2  
+  voiceData[2].enabled = true;  // Voice 3
+  
+  console.log('🎵 Starting 3-voice polyrhythmic test...');
+  console.log('🎵 Each voice will have different tempo evolution');
+  console.log('🎵 Listen for overlapping rhythmic patterns!');
+  
+  masterClock.start();
+  voiceClockManager.startAllVoices();
+  
+  // Play for 15 seconds
+  setTimeout(() => {
+    voiceClockManager.stopAllVoices();
+    masterClock.stop();
+    console.log('🎉 Polyrhythmic test complete!');
+  }, 15000);
+}
 
+/**
+ * Comprehensive Life Span Timing Diagnostic
+ */
+function diagLifeSpanTiming() {
+  console.log('=== LIFE SPAN TIMING DIAGNOSTIC ===');
+  
+  // Check if systems are initialized
+  console.log('\n--- SYSTEM STATUS ---');
+  console.log('Master Clock exists:', !!masterClock);
+  console.log('Master Clock active:', masterClock ? masterClock.isActive() : false);
+  console.log('VoiceClockManager exists:', !!voiceClockManager);
+  console.log('VoiceClockManager initialized:', voiceClockManager ? voiceClockManager.isInitialized : false);
+  
+  if (masterClock && masterClock.isActive()) {
+    console.log('Master Clock elapsed time:', masterClock.getElapsedSeconds().toFixed(3) + 's');
+  }
+  
+  // Check first few voices
+  console.log('\n--- VOICE LIFE SPAN SETTINGS ---');
+  for (let i = 0; i < 4; i++) {
+    const voice = voiceData[i];
+    const lifeSpan = voice.parameters['LIFE SPAN'];
+    
+    console.log(`Voice ${i + 1}:`);
+    console.log(`  Enabled: ${voice.enabled}`);
+    console.log(`  Duration: ${lifeSpan.duration}% = ${formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.duration))}`);
+    console.log(`  Entrance: ${lifeSpan.entrance}% = ${formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.entrance))}`);
+    console.log(`  Exit: ${lifeSpan.exit}% = ${formatSecondsToMMSS(convertLifeSpanToSeconds(lifeSpan.exit))}`);
+    console.log(`  Repeat: ${lifeSpan.repeat}`);
+    
+    // Check actual seconds calculation
+    const entranceSeconds = convertLifeSpanToSeconds(lifeSpan.entrance);
+    const exitSeconds = convertLifeSpanToSeconds(lifeSpan.exit);
+    const durationSeconds = convertLifeSpanToSeconds(lifeSpan.duration);
+    
+    console.log(`  Calculated seconds: Enter=${entranceSeconds}s, Exit=${exitSeconds}s, Duration=${durationSeconds}s`);
+  }
+  
+  // Check voice clock states
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    console.log('\n--- VOICE CLOCK STATES ---');
+    for (let i = 0; i < 4; i++) {
+      const voiceClock = voiceClockManager.getVoiceClock(i);
+      if (voiceClock) {
+        const status = voiceClock.getStatus();
+        console.log(`Voice ${i + 1} Clock:`);
+        console.log(`  Active: ${status.isActive}`);
+        console.log(`  Life Cycle State: ${status.lifeCycleState || 'undefined'}`);
+        console.log(`  Should Play: ${status.shouldPlay}`);
+        console.log(`  Current Tempo: ${status.currentTempo} BPM`);
+        console.log(`  Time to Next Note: ${status.timeToNextNote}ms`);
+        
+        // Check cycle timing if active
+        if (voiceClock.isActive && voiceClock.cycleStartTime) {
+          const masterTime = masterClock ? masterClock.getMasterTime() : Date.now();
+          const cycleElapsed = masterTime - voiceClock.cycleStartTime;
+          console.log(`  Cycle Elapsed: ${(cycleElapsed/1000).toFixed(3)}s`);
+        }
+      } else {
+        console.log(`Voice ${i + 1} Clock: NOT FOUND`);
+      }
+    }
+  }
+  
+  // Check VoiceState constants
+  console.log('\n--- VOICE STATE CONSTANTS ---');
+  if (typeof VoiceState !== 'undefined') {
+    console.log('VoiceState defined:', VoiceState);
+  } else {
+    console.log('❌ VoiceState constants not defined!');
+  }
+  
+  // Test time conversion functions
+  console.log('\n--- TIME CONVERSION TEST ---');
+  const testValues = [0, 3, 5, 25, 50];
+  testValues.forEach(percent => {
+    const seconds = convertLifeSpanToSeconds(percent);
+    const formatted = formatSecondsToMMSS(seconds);
+    console.log(`${percent}% → ${seconds}s → ${formatted}`);
+  });
+  
+  // Recommend test setup
+  console.log('\n--- RECOMMENDED TEST SETUP ---');
+  console.log('To test Voice 2 entering at 18 seconds:');
+  console.log('1. Set Voice 1: Entrance = 0% (immediate)');
+  console.log('2. Set Voice 2: Entrance = 3% (18 seconds)');
+  console.log('3. Enable both voices');
+  console.log('4. Click master PLAY button');
+  console.log('5. Voice 1 should start immediately, Voice 2 after 18 seconds');
+}
 
+/**
+ * Quick Life Span test setup
+ */
+function setupLifeSpanTest() {
+  console.log('=== SETTING UP LIFE SPAN TEST ===');
+  
+  // Reset all voices first
+  for (let i = 0; i < 16; i++) {
+    voiceData[i].enabled = false;
+  }
+  
+  // Voice 1: Immediate entry
+  voiceData[0].enabled = true;
+  voiceData[0].parameters['LIFE SPAN'].entrance = 0;   // 0% = 0 seconds
+  voiceData[0].parameters['LIFE SPAN'].exit = 50;      // 50% = 5 minutes
+  voiceData[0].parameters['LIFE SPAN'].duration = 100; // 100% = 10 minutes
+  
+  // Voice 2: 18 second delay entry  
+  voiceData[1].enabled = true;
+  voiceData[1].parameters['LIFE SPAN'].entrance = 3;   // 3% = 18 seconds
+  voiceData[1].parameters['LIFE SPAN'].exit = 50;      // 50% = 5 minutes
+  voiceData[1].parameters['LIFE SPAN'].duration = 100; // 100% = 10 minutes
+  
+  console.log('✅ Test setup complete:');
+  console.log(`Voice 1 entrance: ${formatSecondsToMMSS(convertLifeSpanToSeconds(voiceData[0].parameters['LIFE SPAN'].entrance))}`);
+  console.log(`Voice 2 entrance: ${formatSecondsToMMSS(convertLifeSpanToSeconds(voiceData[1].parameters['LIFE SPAN'].entrance))}`);
+  
+  console.log('\nNow click the master PLAY button to test!');
+}
 
+/**
+ * Monitor voice states in real-time
+ */
+function monitorVoiceStates() {
+  console.log('🔍 MONITORING VOICE STATES - Starting 30-second monitor...');
+  
+  let monitorCount = 0;
+  const monitorInterval = setInterval(() => {
+    monitorCount++;
+    
+    if (masterClock && masterClock.isActive()) {
+      const elapsed = masterClock.getElapsedSeconds();
+      console.log(`\n--- ${elapsed.toFixed(1)}s elapsed ---`);
+      
+      for (let i = 0; i < 2; i++) {
+        if (voiceData[i].enabled && voiceClockManager) {
+          const voiceClock = voiceClockManager.getVoiceClock(i);
+          if (voiceClock) {
+            console.log(`Voice ${i + 1}: ${voiceClock.lifeCycleState || 'unknown'} - Should play: ${voiceClock.shouldPlayNote()}`);
+          }
+        }
+      }
+    } else {
+      console.log('Master clock not active');
+    }
+    
+    if (monitorCount >= 30) {
+      clearInterval(monitorInterval);
+      console.log('⏹️ Monitor stopped after 30 seconds');
+    }
+  }, 1000);
+  
+  return monitorInterval;
+}
+/**
+ * Debug melodic range parameter values
+ */
+function debugMelodicRange() {
+  console.log('=== MELODIC RANGE DEBUG ===');
+  
+  for (let i = 0; i < 2; i++) {
+    const melodicParam = voiceData[i].parameters['MELODIC RANGE'];
+    console.log(`\nVoice ${i + 1} MELODIC RANGE parameter:`);
+    console.log('  Raw parameter:', melodicParam);
+    console.log('  Min:', melodicParam.min, `(${midiNoteNames[melodicParam.min] || 'unknown'})`);
+    console.log('  Max:', melodicParam.max, `(${midiNoteNames[melodicParam.max] || 'unknown'})`);
+    console.log('  Behavior:', melodicParam.behavior);
+    console.log('  CurrentNote:', melodicParam.currentNote);
+    console.log('  SelectedNotes:', melodicParam.selectedNotes);
+  }
+  
+  // Test the selectMidiNote function directly
+  console.log('\n--- TESTING selectMidiNote() ---');
+  for (let i = 0; i < 2; i++) {
+    const note = selectMidiNote(i);
+    console.log(`selectMidiNote(${i}):`, note);
+  }
+}
+
+// Oct 5 25 Still Getting the MAster Clock working:
+// FORCE CONNECT PLAY BUTTON - Add at very end of scripts.js
+setTimeout(() => {
+  console.log('🔧 FORCING PLAY BUTTON CONNECTION...');
+  
+  const playButton = document.querySelector('#file-controls button:nth-child(4)');
+  console.log('Play button found:', !!playButton);
+  console.log('Play button text:', playButton?.textContent);
+  
+  if (playButton) {
+    // Remove any existing handlers
+    playButton.onclick = null;
+    
+    // Force connection to new system
+    playButton.onclick = toggleMasterPlayback;
+    
+    console.log('✅ PLAY button force-connected to toggleMasterPlayback');
+    console.log('Try clicking PLAY now!');
+  } else {
+    console.log('❌ PLAY button not found in DOM');
+  }
+}, 2000); // Wait 2 seconds for DOM to be ready
 
 
 
