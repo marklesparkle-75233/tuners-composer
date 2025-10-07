@@ -2064,35 +2064,43 @@ function midiToFrequency(midiNote) {
   return 440 * Math.pow(2, (midiNote - 69) / 12);
 }
 
+
 /**
- * Enhanced selectMidiNote function - WITH ERROR HANDLING
+ * ENHANCED selectMidiNote with Musical Chord System
  */
-/**
- * Enhanced selectMidiNote function - WITH POLYPHONY SUPPORT
- */
-function selectMidiNote(voiceIndex) {
+window.selectMidiNote = function(voiceIndex) {
+    console.log(`🎼 ENHANCED selectMidiNote called for Voice ${voiceIndex + 1} (Musical Chord System)`);
+    
     const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
     const polyphonyParam = voiceData[voiceIndex].parameters['POLYPHONY'];
     
+    console.log('Polyphony param:', polyphonyParam);
+    
     // Determine how many notes to play simultaneously
     let noteCount = 1; // Default to monophonic
-    if (polyphonyParam && polyphonyParam.behavior > 0) {
-        const currentPolyphony = interpolateParameter(
-            (polyphonyParam.min + polyphonyParam.max) / 2,
-            polyphonyParam.min,
-            polyphonyParam.max,
-            polyphonyParam.behavior,
-            0.15
-        );
-        noteCount = Math.round(Math.max(1, Math.min(16, currentPolyphony)));
-    } else if (polyphonyParam) {
-        noteCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
+    
+    if (polyphonyParam && typeof polyphonyParam.min === 'number' && typeof polyphonyParam.max === 'number') {
+        if (polyphonyParam.behavior > 0) {
+            const currentPolyphony = interpolateParameter(
+                (polyphonyParam.min + polyphonyParam.max) / 2,
+                polyphonyParam.min,
+                polyphonyParam.max,
+                polyphonyParam.behavior,
+                0.15
+            );
+            noteCount = Math.round(Math.max(1, Math.min(16, currentPolyphony)));
+        } else {
+            noteCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
+        }
     }
+    
+    console.log(`Calculated noteCount: ${noteCount}`);
     
     const selectedNotes = [];
     
     // Handle custom selected notes from piano
     if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
+        console.log('Using piano selection');
         const availableNotes = [...melodicParam.selectedNotes];
         
         // Select notes based on polyphony count
@@ -2105,8 +2113,13 @@ function selectMidiNote(voiceIndex) {
             
             selectedNotes.push({ midiNote: selectedMidi, frequency, noteName });
         }
+        
+        console.log(`Returning ${selectedNotes.length} piano notes:`, selectedNotes.map(n => n.noteName));
+        return selectedNotes;
     } else {
-        // Handle range-based selection
+        console.log('Using MUSICAL CHORD SYSTEM for range-based selection');
+        
+        // Handle range-based selection with musical chord system
         const currentMin = Math.round(melodicParam.min);
         const currentMax = Math.round(melodicParam.max);
         
@@ -2120,19 +2133,43 @@ function selectMidiNote(voiceIndex) {
             return selectedNotes;
         }
         
-        // Generate chord based on harmonic algorithms
-        const baseNote = selectBaseNote(voiceIndex, currentMin, currentMax);
-        selectedNotes.push(baseNote);
-        
-        // Add additional notes for polyphony
-        if (noteCount > 1) {
-            const additionalNotes = generateHarmonicNotes(baseNote, noteCount - 1, currentMin, currentMax);
-            selectedNotes.push(...additionalNotes);
+        // Generate evolving root note
+        let currentNote = melodicParam.currentNote;
+        if (!currentNote || currentNote < currentMin || currentNote > currentMax) {
+            currentNote = Math.floor((currentMin + currentMax) / 2);
+            melodicParam.currentNote = currentNote;
         }
+        
+        // Apply behavior changes to root note
+        if (melodicParam.behavior > 0) {
+            const newNote = interpolateParameter(
+                currentNote,
+                currentMin,
+                currentMax,
+                melodicParam.behavior,
+                0.15
+            );
+            currentNote = Math.round(newNote);
+            melodicParam.currentNote = currentNote;
+        }
+        
+        // Ensure note stays within bounds
+        currentNote = Math.max(currentMin, Math.min(currentMax, currentNote));
+        
+        const baseNote = {
+            midiNote: currentNote,
+            frequency: midiToFrequency(currentNote),
+            noteName: midiNoteNames[currentNote] || `MIDI${currentNote}`
+        };
+        
+        // NEW: Generate musical chord using compendium
+        const behaviorSetting = melodicParam.behavior || 50;
+        const musicalChord = generateMusicalChord(baseNote, noteCount, currentMin, currentMax, behaviorSetting);
+        
+        console.log(`Returning ${musicalChord.length} musical chord notes:`, musicalChord.map(n => n.noteName));
+        return musicalChord;
     }
-    
-    return selectedNotes;
-}
+};
 
 
 
@@ -6628,6 +6665,180 @@ function testChordGeneration() {
         }
     }
 }
+
+
+/**
+ * Master Chord Compendium - Semitone intervals from root
+ * Each array represents the intervals above the root note
+ */
+const chordQualities = {
+    // Basic Triads
+    major: [0, 4, 7],                    // Root, Major 3rd, Perfect 5th
+    minor: [0, 3, 7],                    // Root, Minor 3rd, Perfect 5th
+    diminished: [0, 3, 6],               // Root, Minor 3rd, Tritone
+    augmented: [0, 4, 8],                // Root, Major 3rd, Augmented 5th
+    
+    // Suspended Chords
+    sus2: [0, 2, 7],                     // Root, 2nd, Perfect 5th
+    sus4: [0, 5, 7],                     // Root, 4th, Perfect 5th
+    
+    // Seventh Chords
+    major7: [0, 4, 7, 11],               // Major + Major 7th
+    minor7: [0, 3, 7, 10],               // Minor + Minor 7th
+    dominant7: [0, 4, 7, 10],            // Major + Minor 7th
+    diminished7: [0, 3, 6, 9],           // Diminished + Diminished 7th
+    halfDiminished7: [0, 3, 6, 10],      // Diminished + Minor 7th
+    augmented7: [0, 4, 8, 10],           // Augmented + Minor 7th
+    majorMajor7: [0, 4, 7, 11],          // Major + Major 7th (same as major7)
+    
+    // Extended Chords
+    add9: [0, 4, 7, 14],                 // Major + 9th (no 7th)
+    major9: [0, 4, 7, 11, 14],           // Major 7th + 9th
+    minor9: [0, 3, 7, 10, 14],           // Minor 7th + 9th
+    dominant9: [0, 4, 7, 10, 14],        // Dominant 7th + 9th
+    
+    major11: [0, 4, 7, 11, 14, 17],      // Major 9th + 11th
+    minor11: [0, 3, 7, 10, 14, 17],      // Minor 9th + 11th
+    dominant11: [0, 4, 7, 10, 14, 17],   // Dominant 9th + 11th
+    
+    major13: [0, 4, 7, 11, 14, 17, 21],  // Major 11th + 13th
+    minor13: [0, 3, 7, 10, 14, 17, 21],  // Minor 11th + 13th
+    dominant13: [0, 4, 7, 10, 14, 17, 21], // Dominant 11th + 13th
+    
+    // Jazz & Modern Chords
+    sixth: [0, 4, 7, 9],                 // Major + 6th
+    minorSixth: [0, 3, 7, 9],            // Minor + 6th
+    sixNine: [0, 4, 7, 9, 14],           // 6th + 9th
+    
+    // Altered Dominants
+    dom7sharp5: [0, 4, 8, 10],           // Dominant 7th + Augmented 5th
+    dom7flat5: [0, 4, 6, 10],            // Dominant 7th + Diminished 5th
+    dom7sharp9: [0, 4, 7, 10, 15],       // Dominant 7th + Sharp 9th
+    dom7flat9: [0, 4, 7, 10, 13],        // Dominant 7th + Flat 9th
+    
+    // Quartal/Modern
+    quartal: [0, 5, 10, 15],             // Built on 4ths
+    cluster: [0, 1, 2, 3],               // Chromatic cluster
+    wholeTone: [0, 2, 4, 6, 8, 10]       // Whole tone scale
+};
+
+/**
+ * Chord categories for different musical styles
+ */
+const chordCategories = {
+    simple: ['major', 'minor', 'sus2', 'sus4'],
+    classical: ['major', 'minor', 'diminished', 'augmented', 'dominant7'],
+    jazz: ['major7', 'minor7', 'dominant7', 'halfDiminished7', 'major9', 'dominant9'],
+    extended: ['major9', 'minor9', 'dominant9', 'major11', 'minor11', 'major13'],
+    modern: ['quartal', 'cluster', 'dom7sharp5', 'dom7flat9', 'wholeTone'],
+    all: Object.keys(chordQualities)
+};
+
+console.log('✅ Master Chord Compendium loaded');
+console.log(`📊 Available chord types: ${Object.keys(chordQualities).length}`);
+console.log(`🎼 Categories: ${Object.keys(chordCategories).length}`);
+
+//
+// END CHORD COMPENDIUM 
+//****************************************************************************** */
+
+
+//
+ /* Select chord quality based on polyphony count and musical style
+ */
+function selectChordQuality(polyphonyCount, behaviorSetting = 50, musicalStyle = 'jazz') {
+    // Get chord pool based on polyphony count
+    let availableChords = [];
+    
+    if (polyphonyCount <= 3) {
+        // Use triads and simple chords
+        availableChords = chordCategories.simple.concat(chordCategories.classical);
+    } else if (polyphonyCount <= 5) {
+        // Use 7th chords and basic extensions
+        availableChords = chordCategories.jazz.concat(['sixth', 'add9']);
+    } else {
+        // Use extended chords for high polyphony
+        availableChords = chordCategories.extended.concat(chordCategories.modern);
+    }
+    
+    // Filter chords that fit the polyphony count
+    availableChords = availableChords.filter(chordType => {
+        const intervals = chordQualities[chordType];
+        return intervals && intervals.length <= polyphonyCount;
+    });
+    
+    // Behavior affects chord complexity preference
+    if (behaviorSetting > 75) {
+        // High behavior: prefer complex/modern chords
+        const complexChords = availableChords.filter(chord => 
+            chordCategories.modern.includes(chord) || 
+            chordCategories.extended.includes(chord)
+        );
+        if (complexChords.length > 0) availableChords = complexChords;
+    } else if (behaviorSetting < 25) {
+        // Low behavior: prefer simple chords
+        const simpleChords = availableChords.filter(chord => 
+            chordCategories.simple.includes(chord)
+        );
+        if (simpleChords.length > 0) availableChords = simpleChords;
+    }
+    
+    // Fallback to basic chords if no matches
+    if (availableChords.length === 0) {
+        availableChords = ['major', 'minor'];
+    }
+    
+    // Select random chord from available options
+    const selectedChord = availableChords[Math.floor(Math.random() * availableChords.length)];
+    
+    return selectedChord;
+}
+
+/**
+ * Generate chord using the compendium system
+ */
+function generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting = 50) {
+    console.log(`🎼 Generating chord: baseNote=${midiNoteNames[baseNote.midiNote]}, polyphony=${polyphonyCount}`);
+    
+    // Select chord quality
+    const chordType = selectChordQuality(polyphonyCount, behaviorSetting);
+    const intervals = chordQualities[chordType];
+    
+    console.log(`Selected chord type: ${chordType} with intervals [${intervals}]`);
+    
+    const chordNotes = [];
+    const baseMidi = baseNote.midiNote;
+    
+    // Generate notes from intervals
+    for (let i = 0; i < Math.min(intervals.length, polyphonyCount); i++) {
+        const interval = intervals[i];
+        let chordNoteMidi = baseMidi + interval;
+        
+        // Handle octave wrapping if note goes out of range
+        while (chordNoteMidi > maxNote && chordNoteMidi - 12 >= minNote) {
+            chordNoteMidi -= 12; // Drop an octave
+        }
+        while (chordNoteMidi < minNote && chordNoteMidi + 12 <= maxNote) {
+            chordNoteMidi += 12; // Raise an octave
+        }
+        
+        // Only add if still in range
+        if (chordNoteMidi >= minNote && chordNoteMidi <= maxNote) {
+            chordNotes.push({
+                midiNote: chordNoteMidi,
+                frequency: midiToFrequency(chordNoteMidi),
+                noteName: midiNoteNames[chordNoteMidi] || `MIDI${chordNoteMidi}`
+            });
+        }
+    }
+    
+    console.log(`Generated chord: [${chordNotes.map(n => n.noteName).join(', ')}]`);
+    return chordNotes;
+}
+
+console.log('✅ Chord quality selection system loaded');
+
+
 
 
 
