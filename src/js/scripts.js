@@ -434,6 +434,13 @@ function initializeVoices() {
     };
     
     parameterDefinitions.forEach(param => {
+      if (param.name === 'POLYPHONY') {
+    voice.parameters[param.name] = {
+        min: 1,    // Minimum 1 note (monophonic)
+        max: 4,    // Default maximum 4 notes
+        behavior: 25  // Low behavior for stable chord changes
+    };
+}
       if (param.type === 'dropdown') {
         // Set sensible defaults for dropdown parameters
         if (param.name === 'INSTRUMENT') {
@@ -2058,73 +2065,73 @@ function midiToFrequency(midiNote) {
 }
 
 /**
- * Select random MIDI note within melodic range and behavior
- */
-// Replace the selectMidiNote function with this fixed version
-
-
-/**
  * Enhanced selectMidiNote function - WITH ERROR HANDLING
+ */
+/**
+ * Enhanced selectMidiNote function - WITH POLYPHONY SUPPORT
  */
 function selectMidiNote(voiceIndex) {
     const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+    const polyphonyParam = voiceData[voiceIndex].parameters['POLYPHONY'];
     
-    // Check if we have custom selected notes from piano
-    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
-        // Pick random note from actual selected notes
-        const selectedArray = melodicParam.selectedNotes;
-        const randomIndex = Math.floor(Math.random() * selectedArray.length);
-        const selectedMidi = selectedArray[randomIndex];
-        
-        const frequency = midiToFrequency(selectedMidi);
-        const noteName = midiNoteNames[selectedMidi] || `MIDI${selectedMidi}`;
-        
-        return { midiNote: selectedMidi, frequency, noteName };
-    }
-    
-    // ERROR HANDLING: Check if we have a valid range
-    const currentMin = Math.round(melodicParam.min);
-    const currentMax = Math.round(melodicParam.max);
-    
-    if (isNaN(currentMin) || isNaN(currentMax) || currentMin > currentMax) {
-        console.warn(`Voice ${voiceIndex + 1}: Invalid melodic range, using Middle C`);
-        const frequency = midiToFrequency(60); // Middle C
-        return { midiNote: 60, frequency, noteName: 'C4' };
-    }
-    
-    // Initialize currentNote if needed
-    if (!melodicParam.currentNote || 
-        melodicParam.currentNote < currentMin || 
-        melodicParam.currentNote > currentMax) {
-        melodicParam.currentNote = Math.floor((currentMin + currentMax) / 2);
-    }
-    
-    // Apply behavior changes
-    if (melodicParam.behavior > 0) {
-        const newNote = interpolateParameter(
-            melodicParam.currentNote,
-            currentMin,
-            currentMax,
-            melodicParam.behavior,
+    // Determine how many notes to play simultaneously
+    let noteCount = 1; // Default to monophonic
+    if (polyphonyParam && polyphonyParam.behavior > 0) {
+        const currentPolyphony = interpolateParameter(
+            (polyphonyParam.min + polyphonyParam.max) / 2,
+            polyphonyParam.min,
+            polyphonyParam.max,
+            polyphonyParam.behavior,
             0.15
         );
+        noteCount = Math.round(Math.max(1, Math.min(16, currentPolyphony)));
+    } else if (polyphonyParam) {
+        noteCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
+    }
+    
+    const selectedNotes = [];
+    
+    // Handle custom selected notes from piano
+    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
+        const availableNotes = [...melodicParam.selectedNotes];
         
-        melodicParam.currentNote = Math.round(newNote);
+        // Select notes based on polyphony count
+        for (let i = 0; i < noteCount && availableNotes.length > 0; i++) {
+            const randomIndex = Math.floor(Math.random() * availableNotes.length);
+            const selectedMidi = availableNotes.splice(randomIndex, 1)[0];
+            
+            const frequency = midiToFrequency(selectedMidi);
+            const noteName = midiNoteNames[selectedMidi] || `MIDI${selectedMidi}`;
+            
+            selectedNotes.push({ midiNote: selectedMidi, frequency, noteName });
+        }
+    } else {
+        // Handle range-based selection
+        const currentMin = Math.round(melodicParam.min);
+        const currentMax = Math.round(melodicParam.max);
+        
+        if (isNaN(currentMin) || isNaN(currentMax) || currentMin > currentMax) {
+            console.warn(`Voice ${voiceIndex + 1}: Invalid melodic range, using Middle C`);
+            selectedNotes.push({
+                midiNote: 60,
+                frequency: midiToFrequency(60),
+                noteName: 'C4'
+            });
+            return selectedNotes;
+        }
+        
+        // Generate chord based on harmonic algorithms
+        const baseNote = selectBaseNote(voiceIndex, currentMin, currentMax);
+        selectedNotes.push(baseNote);
+        
+        // Add additional notes for polyphony
+        if (noteCount > 1) {
+            const additionalNotes = generateHarmonicNotes(baseNote, noteCount - 1, currentMin, currentMax);
+            selectedNotes.push(...additionalNotes);
+        }
     }
     
-    // Ensure note stays within bounds
-    melodicParam.currentNote = Math.max(currentMin, Math.min(currentMax, melodicParam.currentNote));
-    
-    // ERROR HANDLING: Final validation
-    if (isNaN(melodicParam.currentNote) || melodicParam.currentNote < 21 || melodicParam.currentNote > 108) {
-        console.error(`Voice ${voiceIndex + 1}: Invalid note ${melodicParam.currentNote}, using Middle C`);
-        melodicParam.currentNote = 60;
-    }
-    
-    const frequency = midiToFrequency(melodicParam.currentNote);
-    const noteName = midiNoteNames[melodicParam.currentNote] || `MIDI${melodicParam.currentNote}`;
-    
-    return { midiNote: melodicParam.currentNote, frequency, noteName };
+    return selectedNotes;
 }
 
 
@@ -5572,12 +5579,12 @@ stop() {
   }
   
   /**
-   * Calculate when next note should be scheduled
-   */
-  scheduleNextNote() {
+ * Schedule polyphonic notes for this voice
+ */
+scheduleNextNote() {
     if (!this.shouldPlayNote()) return;
     
-    // Update tempo at note boundary (per requirement)
+    // Update tempo at note boundary
     this.updateTempo();
     
     const voiceParams = voiceData[this.voiceIndex].parameters;
@@ -5593,16 +5600,20 @@ stop() {
     const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
     const restDurationMs = this.getRestDurationMs(restIndex);
     
-    // Schedule note (this will be implemented in next steps)
-    const noteInfo = this.createNoteInfo();
-    this.triggerNote(noteInfo, noteDurationMs);
+    // Get polyphonic note selection (returns array)
+    const noteInfoArray = selectMidiNote(this.voiceIndex);
+    
+    // Schedule polyphonic notes
+    this.triggerNote(noteInfoArray, noteDurationMs);
     
     // Update timing for next note
     this.lastNoteTime = this.nextNoteTime;
     this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Note scheduled, next in ${(noteDurationMs + restDurationMs)}ms`);
-  }
+    const noteCount = noteInfoArray.length;
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
+}
+
   
   /**
    * Select value within parameter range considering behavior
@@ -5657,100 +5668,121 @@ stop() {
     };
   }
   
-  /**
- * Trigger actual audio note playback
+/**
+ * Trigger polyphonic note playback
  */
-triggerNote(noteInfo, durationMs) {
-  if (!audioManager || !audioManager.isInitialized || !audioManager.audioContext) {
-    console.warn(`Voice ${this.voiceIndex + 1}: Audio not ready, skipping note`);
-    return;
-  }
-  
-  const startTime = audioManager.audioContext.currentTime + 0.01; // Start 10ms from now
-  const durationSeconds = durationMs / 1000;
-  
-  // Create the scheduled note using existing system
-  const scheduledNote = this.createScheduledAudioNote(
-    noteInfo.frequency,
-    durationSeconds,
-    startTime
-  );
-  
-  if (scheduledNote) {
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: ${noteInfo.noteName} (${noteInfo.frequency.toFixed(1)}Hz) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
-  }
+triggerNote(noteInfoArray, durationMs) {
+    if (!audioManager || !audioManager.isInitialized || !audioManager.audioContext) {
+        console.warn(`Voice ${this.voiceIndex + 1}: Audio not ready, skipping notes`);
+        return;
+    }
+    
+    const startTime = audioManager.audioContext.currentTime + 0.01;
+    const durationSeconds = durationMs / 1000;
+    const scheduledNotes = [];
+    
+    // Create audio note for each selected note
+    noteInfoArray.forEach((noteInfo, index) => {
+        const scheduledNote = this.createScheduledAudioNote(
+            noteInfo.frequency,
+            durationSeconds,
+            startTime,
+            index / noteInfoArray.length // Slight timing offset for natural feel
+        );
+        
+        if (scheduledNote) {
+            scheduledNotes.push(scheduledNote);
+        }
+    });
+    
+    if (scheduledNotes.length > 0) {
+        const noteNames = noteInfoArray.map(n => n.noteName).join(', ');
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: [${noteNames}] (${scheduledNotes.length} notes) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
+    }
+    
+    return scheduledNotes;
 }
 
 /**
- * Create actual audio note (adapted from existing scheduleNote function)
+ * Enhanced createScheduledAudioNote with slight timing offset
  */
-createScheduledAudioNote(frequency, duration, startTime) {
-  if (!audioManager || !audioManager.audioContext) return null;
-  
-  const oscillator = audioManager.audioContext.createOscillator();
-  const gainNode = audioManager.audioContext.createGain();
-  const panNode = audioManager.audioContext.createStereoPanner();
+createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
+    if (!audioManager || !audioManager.audioContext) return null;
+    
+    const actualStartTime = startTime + (offset * 0.001); // 1ms offset per note
+    
+    const oscillator = audioManager.audioContext.createOscillator();
+    const gainNode = audioManager.audioContext.createGain();
+    const panNode = audioManager.audioContext.createStereoPanner();
 
-  // Get voice instrument type
-  const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
-  const selectedInstrumentName = gmSounds[selectedInstrumentIndex];
-  const oscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+    // Get voice instrument type
+    const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
+    const selectedInstrumentName = gmSounds[selectedInstrumentIndex];
+    const oscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
 
-  // Set up oscillator
-  oscillator.type = oscillatorType;
-  oscillator.frequency.setValueAtTime(frequency, startTime);
-  
-  // Apply current voice parameters
-  const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
-  const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
-  const gainValue = (currentVolume / 100) * 0.15; // Scale down for multiple voices
-  
-  const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
-  const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
-  const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
-  
-  // Dynamic envelope based on note duration
-  const envelope = this.getEnvelopeForDuration(duration);
-  const sustainLevel = gainValue * envelope.sustain;
-  
-  // Set up envelope
-  gainNode.gain.setValueAtTime(0, startTime);
-  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + envelope.attack);
-  gainNode.gain.setValueAtTime(sustainLevel, startTime + duration - envelope.release);
-  gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-  
-  panNode.pan.setValueAtTime(panValue, startTime);
-  
-  // Connect audio chain
-  oscillator.connect(gainNode);
-  gainNode.connect(panNode);
-  panNode.connect(audioManager.masterGainNode);
-  
-  // Schedule playback
-  oscillator.start(startTime);
-  oscillator.stop(startTime + duration);
-  
-  // Cleanup when note ends
-  oscillator.onended = () => {
-    try {
-      oscillator.disconnect();
-      gainNode.disconnect();
-      panNode.disconnect();
-    } catch (e) {
-      // Already disconnected
-    }
-  };
-  
-  return {
-    oscillator,
-    gainNode,
-    panNode,
-    startTime,
-    duration,
-    frequency,
-    voiceIndex: this.voiceIndex
-  };
+    // Set up oscillator
+    oscillator.type = oscillatorType;
+    oscillator.frequency.setValueAtTime(frequency, actualStartTime);
+    
+    // Apply current voice parameters with polyphonic scaling
+    const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+    const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
+    const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+    
+    // Scale volume based on polyphony to prevent clipping
+    const polyphonyCount = Math.max(1, (polyphonyParam.min + polyphonyParam.max) / 2);
+    const volumeScale = Math.max(0.1, 1 / Math.sqrt(polyphonyCount));
+    const gainValue = (currentVolume / 100) * 0.15 * volumeScale;
+    
+    const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
+    const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
+    const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
+    
+    // Dynamic envelope based on note duration
+    const envelope = this.getEnvelopeForDuration(duration);
+    const sustainLevel = gainValue * envelope.sustain;
+    
+    // Set up envelope
+    gainNode.gain.setValueAtTime(0, actualStartTime);
+    gainNode.gain.linearRampToValueAtTime(gainValue, actualStartTime + envelope.attack);
+    gainNode.gain.setValueAtTime(sustainLevel, actualStartTime + duration - envelope.release);
+    gainNode.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    panNode.pan.setValueAtTime(panValue, actualStartTime);
+    
+    // Connect audio chain
+    oscillator.connect(gainNode);
+    gainNode.connect(panNode);
+    panNode.connect(audioManager.masterGainNode);
+    
+    // Schedule playback
+    oscillator.start(actualStartTime);
+    oscillator.stop(actualStartTime + duration);
+    
+    // Cleanup when note ends
+    oscillator.onended = () => {
+        try {
+            oscillator.disconnect();
+            gainNode.disconnect();
+            panNode.disconnect();
+        } catch (e) {
+            // Already disconnected
+        }
+    };
+    
+    return {
+        oscillator,
+        gainNode,
+        panNode,
+        startTime: actualStartTime,
+        duration,
+        frequency,
+        voiceIndex: this.voiceIndex
+    };
 }
+
+  
+
 
 /**
  * Get envelope for note duration (adapted from existing function)
@@ -6425,7 +6457,177 @@ setTimeout(() => {
   }
 }, 2000); // Wait 2 seconds for DOM to be ready
 
+//
+//
+// Oct 7 25  -  POLYPHONY STARTS HERE
+//
+//
+/**
+ * Generate harmonically related notes
+ */
+// Enhanced version that handles limited ranges better
+window.generateHarmonicNotes = function(baseNote, additionalCount, minNote, maxNote) {
+    console.log(`Generating ${additionalCount} harmonic notes from range ${midiNoteNames[minNote]}-${midiNoteNames[maxNote]}`);
+    
+    const harmonicNotes = [];
+    const baseMidi = baseNote.midiNote;
+    const availableRange = maxNote - minNote + 1;
+    
+    console.log(`Available range: ${availableRange} semitones`);
+    
+    // For very limited ranges, use all available notes
+    if (availableRange <= 12) { // Less than an octave
+        console.log('Using chromatic approach for limited range');
+        
+        const usedNotes = new Set([baseMidi]);
+        
+        // Try to use every note in the range
+        for (let midi = minNote; midi <= maxNote && harmonicNotes.length < additionalCount; midi++) {
+            if (!usedNotes.has(midi)) {
+                harmonicNotes.push({
+                    midiNote: midi,
+                    frequency: midiToFrequency(midi),
+                    noteName: midiNoteNames[midi] || `MIDI${midi}`
+                });
+                usedNotes.add(midi);
+                console.log(`Added available note: ${midiNoteNames[midi]}`);
+            }
+        }
+    } else {
+        // Use original harmonic approach for wider ranges
+        console.log('Using harmonic intervals for wide range');
+        const intervals = [3, 4, 7, 10, 12, 15, 16, 19];
+        const usedNotes = new Set([baseMidi]);
+        
+        for (let i = 0; i < additionalCount; i++) {
+            let attempts = 0;
+            let noteFound = false;
+            
+            while (attempts < 20 && !noteFound) {
+                const intervalIndex = Math.floor(Math.random() * intervals.length);
+                const interval = intervals[intervalIndex];
+                const direction = Math.random() > 0.5 ? 1 : -1;
+                const newMidi = baseMidi + (interval * direction);
+                
+                if (newMidi >= minNote && newMidi <= maxNote && !usedNotes.has(newMidi)) {
+                    harmonicNotes.push({
+                        midiNote: newMidi,
+                        frequency: midiToFrequency(newMidi),
+                        noteName: midiNoteNames[newMidi] || `MIDI${newMidi}`
+                    });
+                    usedNotes.add(newMidi);
+                    noteFound = true;
+                    console.log(`Added harmonic note: ${midiNoteNames[newMidi]} (interval: ${interval})`);
+                }
+                attempts++;
+            }
+            
+            if (!noteFound) {
+                console.log(`Could not find valid harmonic note ${i + 1}`);
+                break;
+            }
+        }
+    }
+    
+    console.log(`Generated ${harmonicNotes.length}/${additionalCount} requested notes`);
+    return harmonicNotes;
+};
 
+console.log('✅ Enhanced generateHarmonicNotes loaded');
+
+/**
+ * Select base note with behavior evolution
+ */
+function selectBaseNote(voiceIndex, minNote, maxNote) {
+    const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
+    
+    // Initialize currentNote if needed
+    if (!melodicParam.currentNote || 
+        melodicParam.currentNote < minNote || 
+        melodicParam.currentNote > maxNote) {
+        melodicParam.currentNote = Math.floor((minNote + maxNote) / 2);
+    }
+    
+    // Apply behavior changes
+    if (melodicParam.behavior > 0) {
+        const newNote = interpolateParameter(
+            melodicParam.currentNote,
+            minNote,
+            maxNote,
+            melodicParam.behavior,
+            0.15
+        );
+        melodicParam.currentNote = Math.round(newNote);
+    }
+    
+    // Ensure note stays within bounds
+    melodicParam.currentNote = Math.max(minNote, Math.min(maxNote, melodicParam.currentNote));
+    
+    return {
+        midiNote: melodicParam.currentNote,
+        frequency: midiToFrequency(melodicParam.currentNote),
+        noteName: midiNoteNames[melodicParam.currentNote] || `MIDI${melodicParam.currentNote}`
+    };
+}
+
+/**
+ * Test polyphony with different settings
+ */
+async function testPolyphony() {
+    console.log('=== TESTING POLYPHONY IMPLEMENTATION ===');
+    
+    // Initialize audio if needed
+    if (!audioManager || !audioManager.isInitialized) {
+        await audioManager.initialize();
+    }
+    
+    if (!masterClock) masterClock = new MasterClock();
+    if (!voiceClockManager) voiceClockManager = new VoiceClockManager();
+    voiceClockManager.initialize(masterClock);
+    
+    // Set up Voice 1 for polyphonic testing
+    voiceData[0].enabled = true;
+    voiceData[0].parameters['POLYPHONY'].min = 3;
+    voiceData[0].parameters['POLYPHONY'].max = 6;
+    voiceData[0].parameters['POLYPHONY'].behavior = 75;
+    
+    // Set a nice melodic range
+    voiceData[0].parameters['MELODIC RANGE'].min = 60; // C4
+    voiceData[0].parameters['MELODIC RANGE'].max = 72; // C5
+    voiceData[0].parameters['MELODIC RANGE'].behavior = 50;
+    
+    console.log('🎹 Starting polyphonic test - you should hear 3-6 notes playing simultaneously');
+    
+    masterClock.start();
+    voiceClockManager.startAllVoices();
+    
+    // Play for 15 seconds
+    setTimeout(() => {
+        voiceClockManager.stopAllVoices();
+        masterClock.stop();
+        console.log('🎹 Polyphonic test complete!');
+    }, 15000);
+}
+
+/**
+ * Test chord generation algorithms
+ */
+function testChordGeneration() {
+    console.log('=== TESTING CHORD GENERATION ===');
+    
+    const baseNote = { midiNote: 60, frequency: 261.63, noteName: 'C4' };
+    
+    for (let noteCount = 2; noteCount <= 6; noteCount++) {
+        console.log(`\nGenerating ${noteCount}-note chords:`);
+        
+        for (let i = 0; i < 3; i++) {
+            const harmonicNotes = generateHarmonicNotes(baseNote, noteCount - 1, 48, 84);
+            const allNotes = [baseNote, ...harmonicNotes];
+            const noteNames = allNotes.map(n => n.noteName).join(', ');
+            console.log(`  Chord ${i + 1}: [${noteNames}]`);
+        }
+    }
+}
 
 
 
