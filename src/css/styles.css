@@ -856,7 +856,7 @@ justify-content: center;
 .slider-wrapper {
 width: 100%;
 min-width: 120px;
-margin: 0;
+margin: 10px;
 }
 
 .slider-label {
@@ -1875,8 +1875,7 @@ FOOTER
     gap: 10px; /* Reduced for mobile */
   }
 }
-
-/* Smooth animations */
+/* Increase the animation height limits */
 @keyframes rollupExpand {
   from {
     opacity: 0;
@@ -1884,20 +1883,21 @@ FOOTER
   }
   to {
     opacity: 1;
-    max-height: 400px; /* Reduced from 500px */
+    max-height: 600px; /* Increased from 400px to accommodate 3 sliders */
   }
 }
 
 @keyframes rollupCollapse {
   from {
     opacity: 1;
-    max-height: 400px; /* Reduced from 500px */
+    max-height: 600px; /* Match the expand height */
   }
   to {
     opacity: 0;
     max-height: 0;
   }
 }
+
 
 .parameter-rollup-content {
   animation: rollupExpand 0.3s ease-out;
@@ -1906,9 +1906,35 @@ FOOTER
 .parameter-rollup.collapsing .parameter-rollup-content {
   animation: rollupCollapse 0.3s ease-out;
 }
-
 /* END INDIVIDUAL PARAMETER ROLLUP SYSTEM */
 
+/* Allow more height for DELAY parameter specifically */
+.parameter-rollup[data-parameter="DELAY"] .parameter-rollup-content {
+  min-height: 180px; /* Give DELAY more space for 3 sliders */
+}
+
+/* Add spacing between DELAY sliders specifically */
+.parameter-rollup[data-parameter="DELAY"] .slider-wrapper {
+  margin-bottom: 20px !important;
+}
+
+.parameter-rollup[data-parameter="DELAY"] .slider-wrapper:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Spacing for DELAY parameter sliders */
+[data-parameter="DELAY"] .slider-wrapper {
+    margin-bottom: 25px !important;
+    padding-bottom: 10px !important;
+    border-bottom: 1px solid #eee !important;
+}
+
+/* Remove bottom styling from last DELAY slider */
+[data-parameter="DELAY"] .slider-wrapper:last-child {
+    margin-bottom: 0px !important;
+    padding-bottom: 0px !important;
+    border-bottom: none !important;
+}
 
 
 

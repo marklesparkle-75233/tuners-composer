@@ -24,8 +24,8 @@ const parameterDefinitions = [
   { name: "PHASER", type: "multi-dual", min: 0, max: 100, rollup: "modulation" },
   
   // SPATIAL EFFECTS ROLLUP (unchanged)
-  { name: "REVERB", type: "single-dual", min: 0, max: 100, rollup: "spatial" },
-  { name: "DELAY", type: "multi-dual", min: 0, max: 2000, rollup: "spatial" }
+  { name: "REVERB", type: "multi-dual", min: 0, max: 100, rollup: "spatial" },
+  { name: "DELAY", type: "multi-dual", min: 0, max: 100, rollup: "spatial" }
 ];
 
 
@@ -435,13 +435,12 @@ function initializeVoices() {
     
     parameterDefinitions.forEach(param => {
       if (param.name === 'POLYPHONY') {
-    voice.parameters[param.name] = {
-        min: 1,    // Minimum 1 note (monophonic)
-        max: 4,    // Default maximum 4 notes
-        behavior: 25  // Low behavior for stable chord changes
-    };
-}
-      if (param.type === 'dropdown') {
+        voice.parameters[param.name] = {
+          min: 1,    // Minimum 1 note (monophonic)
+          max: 4,    // Default maximum 4 notes
+          behavior: 25  // Low behavior for stable chord changes
+        };
+      } else if (param.type === 'dropdown') {
         // Set sensible defaults for dropdown parameters
         if (param.name === 'INSTRUMENT') {
           voice.parameters[param.name] = 0; // First GM sound (Acoustic Grand Piano)
@@ -495,23 +494,65 @@ function initializeVoices() {
           console.error(`Missing min/max for parameter: ${param.name}`);
         }
         
-        // THIS WAS MISSING - add the actual parameter assignment for multi-dual
-        voice.parameters[param.name] = {
-          speed: {
-            min: param.min + (param.max - param.min) * 0.25,
-            max: param.min + (param.max - param.min) * 0.75
-          },
-          depth: {
-            min: param.min + (param.max - param.min) * 0.25,
-            max: param.min + (param.max - param.min) * 0.75
-          },
-          behavior: 50
-        };
+        // NEW: Set all ADSR effects to OFF by default
+        if (param.name === 'TREMOLO' || param.name === 'CHORUS' || param.name === 'PHASER') {
+          voice.parameters[param.name] = {
+            speed: {
+              min: 0,  // OFF
+              max: 0   // OFF
+            },
+            depth: {
+              min: 0,  // OFF
+              max: 0   // OFF
+            },
+            behavior: 0  // No evolution when OFF
+          };
+         } else if (param.name === 'REVERB') {
+          voice.parameters[param.name] = {
+            speed: {
+              min: 0,  // OFF
+              max: 0   // OFF (reverb time controlled differently)
+            },
+            depth: {
+              min: 0,     // Starts at 0 (OFF)
+              max: 100    // Available up to 100% wet
+            },
+            behavior: 0
+          };
+        } else if (param.name === 'DELAY') {
+          voice.parameters[param.name] = {
+            speed: {      // Delay Time
+              min: 0,     // Starts at 0 (OFF)
+              max: 100    // Available up to 100% (maps to 0-2000ms via your formatter)
+            },
+            depth: {      // Mix (wet/dry)
+              min: 0,     // Starts at 0 (OFF) 
+              max: 100    // Available up to 100% wet
+            },
+            feedback: {   // Feedback amount
+              min: 0,     // Starts at 0 (OFF)
+              max: 90     // Available up to 90% (not 100% to prevent runaway feedback)
+            },
+            behavior: 0   // No evolution behavior
+          };
+        } else {
+          // Other multi-dual parameters (if any)
+          voice.parameters[param.name] = {
+            speed: {
+              min: param.min + (param.max - param.min) * 0.25,
+              max: param.min + (param.max - param.min) * 0.75
+            },
+            depth: {
+              min: param.min + (param.max - param.min) * 0.25,
+              max: param.min + (param.max - param.min) * 0.75
+            },
+            behavior: 50
+          };
+        }
       } else if (param.type === 'timing-controls') {
-        // FIXED - only one parameter assignment for timing controls
         voice.parameters[param.name] = {
-           entrance: 0,
-           duration: 100,
+          entrance: 0,
+          duration: 100,
           repeat: true,
         };
       }
@@ -520,17 +561,16 @@ function initializeVoices() {
     voiceData.push(voice);
   }
   
-  // Log the sensible defaults for confirmation
+  // Updated log message
   console.log('Voices initialized with sensible defaults:');
   console.log('- Sound: Acoustic Grand Piano');
   console.log('- Melodic Range: Middle C (C4) selected in piano');
   console.log('- Rhythms: Quarter Notes');
   console.log('- Rests: No Rests (continuous playing)');
+  console.log('- Effects: ALL OFF by default (Tremolo, Chorus, Phaser, Reverb, Delay)');
   console.log('- Other parameters: 25%-75% of their ranges');
-  
-  // TEMPORARY: Test what DELAY looks like
-  console.log('DELAY parameter for voice 0:', voiceData[0].parameters['DELAY']);
 }
+
 
 
 
@@ -676,7 +716,7 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
 
 function createDualSlider(param, voiceIndex) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'dual-slider';
+    wrapper.className = param.name === 'DELAY' ? 'triple-slider' : 'dual-slider';;
     
     // Special case for MELODIC RANGE - use piano keyboard on desktop, slider on mobile
     if (param.name === 'MELODIC RANGE') {
@@ -933,21 +973,70 @@ function createDualSlider(param, voiceIndex) {
     return wrapper;
 }
 
-
 function createMultiDualSlider(param, voiceIndex) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'dual-slider';
+  // NEW: Use triple-slider class for DELAY to accommodate 3 sliders
+  wrapper.className = 'dual-slider'; // Keep same class for all, just add more content for DELAY
   
   const speedWrapper = document.createElement('div');
   speedWrapper.className = 'slider-wrapper';
   
   const speedLabel = document.createElement('div');
   speedLabel.className = 'slider-label';
-  speedLabel.textContent = 'Speed';
+  
+  // Conditional labeling for REVERB and DELAY effects
+  if (param.name === 'REVERB' || param.name === 'DELAY') {
+    speedLabel.textContent = 'Time';
+  } else {
+    speedLabel.textContent = 'Speed';
+  }
+  
   speedWrapper.appendChild(speedLabel);
   
   const speedDiv = document.createElement('div');
   const voiceParam = voiceData[voiceIndex].parameters[param.name];
+  
+  // Create custom formatters for time-based parameters
+  let speedFormatter = {
+    to: value => Math.round(value).toString(),
+    from: value => Number(value)
+  };
+  
+  // NEW: Custom time formatters for REVERB and DELAY
+  if (param.name === 'REVERB') {
+    speedFormatter = {
+      to: value => {
+        const timeSeconds = (value / 100) * 3.0; // 0-100% maps to 0-3 seconds
+        return timeSeconds.toFixed(1) + 's';
+      },
+      from: value => {
+        const numStr = value.replace('s', '');
+        const seconds = parseFloat(numStr);
+        return (seconds / 3.0) * 100; // Convert back to 0-100 range
+      }
+    };
+  } else if (param.name === 'DELAY') {
+    speedFormatter = {
+      to: value => {
+        const timeMs = (value / 100) * 2000; // 0-100% maps to 0-2000ms
+        if (timeMs >= 1000) {
+          return (timeMs / 1000).toFixed(1) + 's';
+        } else {
+          return Math.round(timeMs) + 'ms';
+        }
+      },
+      from: value => {
+        let timeMs;
+        if (value.includes('s')) {
+          const seconds = parseFloat(value.replace('s', ''));
+          timeMs = seconds * 1000;
+        } else {
+          timeMs = parseFloat(value.replace('ms', ''));
+        }
+        return (timeMs / 2000) * 100; // Convert back to 0-100 range
+      }
+    };
+  }
   
   noUiSlider.create(speedDiv, {
     start: [voiceParam.speed.min, voiceParam.speed.max],
@@ -955,16 +1044,13 @@ function createMultiDualSlider(param, voiceIndex) {
     range: { min: param.min, max: param.max },
     step: 1,
     tooltips: [true, true],
-    format: {
-      to: value => Math.round(value).toString(),
-      from: value => Number(value)
-    }
+    format: speedFormatter
   });
   
   const updateSpeedValues = () => {
     const values = speedDiv.noUiSlider.get();
-    const min = Math.round(values[0]);
-    const max = Math.round(values[1]);
+    const min = Math.round(Number(speedFormatter.from(values[0])));
+    const max = Math.round(Number(speedFormatter.from(values[1])));
     voiceData[voiceIndex].parameters[param.name].speed.min = min;
     voiceData[voiceIndex].parameters[param.name].speed.max = max;
   };
@@ -974,12 +1060,19 @@ function createMultiDualSlider(param, voiceIndex) {
   
   speedWrapper.appendChild(speedDiv);
   
+  // Depth/Wet/Dry slider
   const depthWrapper = document.createElement('div');
   depthWrapper.className = 'slider-wrapper';
   
   const depthLabel = document.createElement('div');
   depthLabel.className = 'slider-label';
-  depthLabel.textContent = 'Depth';
+  
+  if (param.name === 'REVERB' || param.name === 'DELAY') {
+    depthLabel.textContent = 'Mix';
+  } else {
+    depthLabel.textContent = 'Depth';
+  }
+  
   depthWrapper.appendChild(depthLabel);
   
   const depthDiv = document.createElement('div');
@@ -991,15 +1084,15 @@ function createMultiDualSlider(param, voiceIndex) {
     step: 1,
     tooltips: [true, true],
     format: {
-      to: value => Math.round(value).toString(),
-      from: value => Number(value)
+      to: value => Math.round(value).toString() + '%',
+      from: value => Number(value.replace('%', ''))
     }
   });
   
   const updateDepthValues = () => {
     const values = depthDiv.noUiSlider.get();
-    const min = Math.round(values[0]);
-    const max = Math.round(values[1]);
+    const min = Math.round(Number(values[0].replace('%', '')));
+    const max = Math.round(Number(values[1].replace('%', '')));
     voiceData[voiceIndex].parameters[param.name].depth.min = min;
     voiceData[voiceIndex].parameters[param.name].depth.max = max;
   };
@@ -1009,11 +1102,61 @@ function createMultiDualSlider(param, voiceIndex) {
   
   depthWrapper.appendChild(depthDiv);
   
-  wrapper.appendChild(speedWrapper);
-  wrapper.appendChild(depthWrapper);
+  // NEW: Add Feedback slider for DELAY only
+  if (param.name === 'DELAY') {
+    const feedbackWrapper = document.createElement('div');
+    feedbackWrapper.className = 'slider-wrapper';
+    
+    const feedbackLabel = document.createElement('div');
+    feedbackLabel.className = 'slider-label';
+    feedbackLabel.textContent = 'Feedback';
+    feedbackWrapper.appendChild(feedbackLabel);
+    
+    const feedbackDiv = document.createElement('div');
+    
+    // Initialize feedback parameter if it doesn't exist
+    if (!voiceParam.feedback) {
+      voiceParam.feedback = { min: 0, max: 0 }; // Start OFF
+    }
+    
+    noUiSlider.create(feedbackDiv, {
+      start: [voiceParam.feedback.min, voiceParam.feedback.max],
+      connect: true,
+      range: { min: param.min, max: param.max },
+      step: 1,
+      tooltips: [true, true],
+      format: {
+        to: value => Math.round(value).toString() + '%',
+        from: value => Number(value.replace('%', ''))
+      }
+    });
+    
+    const updateFeedbackValues = () => {
+      const values = feedbackDiv.noUiSlider.get();
+      const min = Math.round(Number(values[0].replace('%', '')));
+      const max = Math.round(Number(values[1].replace('%', '')));
+      voiceData[voiceIndex].parameters[param.name].feedback.min = min;
+      voiceData[voiceIndex].parameters[param.name].feedback.max = max;
+    };
+    
+    feedbackDiv.noUiSlider.on('update', updateFeedbackValues);
+    updateFeedbackValues();
+    
+    feedbackWrapper.appendChild(feedbackDiv);
+    wrapper.appendChild(speedWrapper);
+    wrapper.appendChild(depthWrapper);
+    wrapper.appendChild(feedbackWrapper); // Add feedback as third slider
+  } else {
+    // Regular dual-slider layout
+    wrapper.appendChild(speedWrapper);
+    wrapper.appendChild(depthWrapper);
+  }
   
   return wrapper;
 }
+
+
+
 
 function createBehaviorSlider(param, voiceIndex) {
   const wrapper = document.createElement('div');
@@ -3213,6 +3356,9 @@ function clearMelodicRangeConflict(parameterName, voiceIndex) {
 /**
  * Enhanced parameter connection system - connects ALL UI controls to voiceData
  */
+/**
+ * Enhanced parameter connection system - connects ALL UI controls to voiceData
+ */
 function connectAllSliders() {
   console.log('=== CONNECTING ALL PARAMETER CONTROLS (including timing controls) ===');
   
@@ -3336,69 +3482,99 @@ setTimeout(initializeTooltipWhenReady, 500);
 
 });
 
-
   
- // 3. Connect dropdown selectors (Sound, Rhythms, Rests) - WITH VALIDATION
+ // 3. Connect dropdown selectors (Sound, Rhythms, Rests) - WITH SMART FALLBACK
 const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
 console.log(`Found ${dropdowns.length} dropdowns to connect`);
 
 dropdowns.forEach((dropdown) => {
-  // CORRECT - use same method as TEMPO sliders
-const row = dropdown.closest('.row-container-content');
-const rollup = row ? row.closest('.parameter-rollup') : null;
-const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
-const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Dropdown';
-
+  const row = dropdown.closest('.row-container-content');
+  const rollup = row ? row.closest('.parameter-rollup') : null;
+  const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+  const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Dropdown';
   
-  // Determine if this is min/max dropdown or single dropdown
   const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
   const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
   
   console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
   
-  // Remove existing event listeners
   dropdown.onchange = null;
   
-  // Add new event listener WITH VALIDATION
   dropdown.onchange = function(e) {
     const value = parseInt(e.target.value);
     
     if (paramName === 'INSTRUMENT') {
-      // Single dropdown for sound selection
       voiceData[currentVoice].parameters[paramName] = value;
       console.log(`✅ ${paramName}: ${gmSounds[value]}`);
       
     } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
-      // Dual dropdown (Rhythms/Rests) WITH VALIDATION
       const paramData = voiceData[currentVoice].parameters[paramName];
       
       if (dropdownLabel === 'Minimum') {
-        // Check if new minimum is <= current maximum
-        if (value <= paramData.max) {
-          paramData.min = value;
-          console.log(`✅ ${paramName} minimum: ${value}`);
-        } else {
-          // Invalid: minimum > maximum
-          dropdown.value = paramData.min; // Reset to previous valid value
-          console.warn(`❌ VALIDATION ERROR: ${paramName} minimum (${value}) cannot be greater than maximum (${paramData.max})`);
-          alert('Minimum must be less than Maximum.');
-        }
-        
+        paramData.min = value;
+        console.log(`✅ ${paramName} minimum: ${value}`);
       } else if (dropdownLabel === 'Maximum') {
-        // Check if new maximum is >= current minimum
-        if (value >= paramData.min) {
-          paramData.max = value;
-          console.log(`✅ ${paramName} maximum: ${value}`);
-        } else {
-          // Invalid: maximum < minimum
-          dropdown.value = paramData.max; // Reset to previous valid value
-          console.warn(`❌ VALIDATION ERROR: ${paramName} maximum (${value}) cannot be less than minimum (${paramData.min})`);
-          alert('Minimum must be less than Maximum.');
-        }
+        paramData.max = value;
+        console.log(`✅ ${paramName} maximum: ${value}`);
+      }
+      
+      // Check for invalid range and provide feedback
+      if (paramData.min > paramData.max && (paramName === 'RHYTHMS' || paramName === 'RESTS')) {
+        console.warn(`⚠️ Invalid ${paramName} range: min(${paramData.min}) > max(${paramData.max})`);
+        console.warn(`🎵 System will default to Quarter Notes during playback`);
+        
+        // Visual feedback - briefly highlight both dropdowns
+        const allDropdowns = dropdown.parentElement.parentElement.querySelectorAll('select.param-select');
+        allDropdowns.forEach(dd => {
+          dd.style.backgroundColor = '#fff3cd'; // Light yellow background
+          dd.style.border = '2px solid #ffc107'; // Yellow border
+          
+          setTimeout(() => {
+            dd.style.backgroundColor = '';
+            dd.style.border = '';
+          }, 2000);
+        });
+        
+        // Optional: Show a brief tooltip or message
+        showInvalidRangeMessage(dropdown, paramName);
       }
     }
   };
 });
+
+/**
+ * Show temporary message about invalid range
+ */
+function showInvalidRangeMessage(dropdown, paramName) {
+  const message = document.createElement('div');
+  message.style.cssText = `
+    position: absolute;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    color: #856404;
+    max-width: 200px;
+  `;
+  message.textContent = `Invalid ${paramName} range - will use Quarter Notes`;
+  
+  // Position near the dropdown
+  const rect = dropdown.getBoundingClientRect();
+  message.style.left = rect.left + 'px';
+  message.style.top = (rect.bottom + 5) + 'px';
+  
+  document.body.appendChild(message);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    if (message.parentNode) {
+      message.parentNode.removeChild(message);
+    }
+  }, 3000);
+}
+
 
   
   // 4. Connect multi-dual sliders (like DELAY with Speed/Depth)
@@ -3531,6 +3707,7 @@ timingSliders.forEach((slider) => {
   console.log(`   ✅ ${timingSliders.length} timing control sliders`);
   console.log(`   ✅ Timing repeat checkbox`);
 }
+
 
 
 // =============================================================================
@@ -5456,9 +5633,7 @@ class VoiceClock {
     console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
   }
   
-  /**
-   * Start this voice clock (called when playback begins)
-   */
+
   /**
  * Start this voice clock (called when playback begins) - FIXED LIFE SPAN
  */
@@ -5652,24 +5827,73 @@ scheduleNextNote() {
 }
 
   
-  /**
-   * Select value within parameter range considering behavior
-   */
-  selectValueInRange(param) {
-    if (!param) return 0;
+ /**
+ * Select value within parameter range considering behavior - ENHANCED with fallback
+ */
+selectValueInRange(param) {
+  if (!param) return 7; // Default to quarter notes (index 7)
+  
+  // Check for invalid range (min > max) and provide fallback
+  if (param.min > param.max) {
+    console.warn(`Invalid range detected: min(${param.min}) > max(${param.max}), defaulting to quarter notes`);
     
-    if (param.behavior > 0) {
-      return Math.floor(interpolateParameter(
-        (param.min + param.max) / 2,
-        param.min,
-        param.max,
-        param.behavior,
-        0.3
-      ));
-    } else {
-      return Math.floor((param.min + param.max) / 2);
-    }
+    // Update the UI dropdowns to reflect the fallback
+    this.updateDropdownsToQuarterNotes(param);
+    
+    return 7; // Quarter notes index
   }
+  
+  if (param.behavior > 0) {
+    return Math.floor(interpolateParameter(
+      (param.min + param.max) / 2,
+      param.min,
+      param.max,
+      param.behavior,
+      0.3
+    ));
+  } else {
+    return Math.floor((param.min + param.max) / 2);
+  }
+}
+
+/**
+ * Update dropdown displays to show quarter notes fallback
+ */
+updateDropdownsToQuarterNotes(param) {
+  // Find the current voice's rhythm dropdowns
+  const parameterSection = document.getElementById('parameter-section');
+  const rhythmDropdowns = parameterSection.querySelectorAll('select.param-select');
+  
+  rhythmDropdowns.forEach(dropdown => {
+    const row = dropdown.closest('.row-container-content');
+    const rollup = row ? row.closest('.parameter-rollup') : null;
+    const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+    const paramName = rollupTitle ? rollupTitle.textContent.trim() : '';
+    
+    if (paramName === 'RHYTHMS') {
+      const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
+      
+      if (dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum') {
+        dropdown.value = 7; // Set to quarter notes
+        dropdown.style.backgroundColor = '#ffe6e6'; // Light red background to indicate fallback
+        dropdown.style.border = '2px solid #ff9999'; // Red border
+        
+        // Add a temporary visual indicator
+        setTimeout(() => {
+          dropdown.style.backgroundColor = '';
+          dropdown.style.border = '';
+        }, 3000); // Remove styling after 3 seconds
+      }
+    }
+  });
+  
+  // Also update the parameter data
+  param.min = 7; // Quarter notes
+  param.max = 7; // Quarter notes
+  
+  console.log('🎵 Dropdowns updated to Quarter Notes fallback due to invalid range');
+}
+
   
   /**
    * Get rhythm duration in milliseconds using voice's current tempo
@@ -5741,67 +5965,314 @@ triggerNote(noteInfoArray, durationMs) {
 }
 
 /**
- * Enhanced createScheduledAudioNote with slight timing offset
+ * Comprehensive ADSR-driven note with all ADSR effects
  */
 createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     if (!audioManager || !audioManager.audioContext) return null;
     
-    const actualStartTime = startTime + (offset * 0.001); // 1ms offset per note
+    const actualStartTime = startTime + (offset * 0.001);
     
+    // Get parameters and ADSR
+    const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
+    const selectedInstrumentName = gmSounds[selectedInstrumentIndex];
+    const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+    
+    const currentVelocity = this.getCurrentVelocity();
+    const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
+    const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
+    
+    // MOVED UP: Get voice parameters before creating nodes
+    const voiceParams = this.getAllCurrentVoiceParameters();
+
+    // Create all audio nodes
     const oscillator = audioManager.audioContext.createOscillator();
     const gainNode = audioManager.audioContext.createGain();
     const panNode = audioManager.audioContext.createStereoPanner();
+    const filterNode = audioManager.audioContext.createBiquadFilter();
+    
+    // Tremolo nodes
+    const tremoloLFO = audioManager.audioContext.createOscillator();
+    const tremoloGain = audioManager.audioContext.createGain();
+    const tremoloDepth = audioManager.audioContext.createGain();
+    
+    // Chorus nodes
+    const chorusDelay1 = audioManager.audioContext.createDelay(0.1);
+    const chorusDelay2 = audioManager.audioContext.createDelay(0.1);
+    const chorusDelay3 = audioManager.audioContext.createDelay(0.1);
+    const chorusLFO1 = audioManager.audioContext.createOscillator();
+    const chorusLFO2 = audioManager.audioContext.createOscillator();
+    const chorusLFO3 = audioManager.audioContext.createOscillator();
+    const chorusGain1 = audioManager.audioContext.createGain();
+    const chorusGain2 = audioManager.audioContext.createGain();
+    const chorusGain3 = audioManager.audioContext.createGain();
+    const chorusDepth1 = audioManager.audioContext.createGain();
+    const chorusDepth2 = audioManager.audioContext.createGain();
+    const chorusDepth3 = audioManager.audioContext.createGain();
+    const chorusMix = audioManager.audioContext.createGain();
+    const dryGain = audioManager.audioContext.createGain();
+    
+    // Phaser nodes (4-stage phaser for rich effect)
+    const phaserStage1 = audioManager.audioContext.createBiquadFilter();
+    const phaserStage2 = audioManager.audioContext.createBiquadFilter();
+    const phaserStage3 = audioManager.audioContext.createBiquadFilter();
+    const phaserStage4 = audioManager.audioContext.createBiquadFilter();
+    const phaserStages = [phaserStage1, phaserStage2, phaserStage3, phaserStage4];
+    const phaserLFO = audioManager.audioContext.createOscillator();
+    const phaserDepth = audioManager.audioContext.createGain();
+    const phaserFeedback = audioManager.audioContext.createGain();
+    const phaserMix = audioManager.audioContext.createGain();
+    const phaserDry = audioManager.audioContext.createGain();
+    
+    // Reverb nodes
+    const reverbNode = audioManager.audioContext.createConvolver();
+    const reverbGain = audioManager.audioContext.createGain();
+    const reverbDry = audioManager.audioContext.createGain();
+    const reverbWet = audioManager.audioContext.createGain();
+    
+    // Delay nodes
+    const delayNode = audioManager.audioContext.createDelay(2.0);
+    const delayFeedback = audioManager.audioContext.createGain();
+    const delayWet = audioManager.audioContext.createGain();
+    const delayDry = audioManager.audioContext.createGain();
 
-    // Get voice instrument type
-    const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'];
-    const selectedInstrumentName = gmSounds[selectedInstrumentIndex];
-    const oscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
-
-    // Set up oscillator
-    oscillator.type = oscillatorType;
+    // Set oscillator properties
+    const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
+    oscillator.type = velocitySensitiveWaveform;
     oscillator.frequency.setValueAtTime(frequency, actualStartTime);
     
-    // Apply current voice parameters with polyphonic scaling
-    const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
-    const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
-    const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+    // Apply ADSR to all effects
+    this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+    this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
     
-    // Scale volume based on polyphony to prevent clipping
-    const polyphonyCount = Math.max(1, (polyphonyParam.min + polyphonyParam.max) / 2);
-    const volumeScale = Math.max(0.1, 1 / Math.sqrt(polyphonyCount));
-    const gainValue = (currentVolume / 100) * 0.15 * volumeScale;
+    const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, adsrEnvelope, voiceParams, actualStartTime, duration);
     
-    const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
-    const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
-    const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
+    const chorusIsActive = this.applyChorusADSR(
+        chorusDelay1, chorusDelay2, chorusDelay3,
+        chorusLFO1, chorusLFO2, chorusLFO3,
+        chorusGain1, chorusGain2, chorusGain3,
+        chorusDepth1, chorusDepth2, chorusDepth3,
+        adsrEnvelope, voiceParams, actualStartTime, duration
+    );
     
-    // Dynamic envelope based on note duration
-    const envelope = this.getEnvelopeForDuration(duration);
-    const sustainLevel = gainValue * envelope.sustain;
+    const phaserIsActive = this.applyPhaserADSR(
+        phaserStages, phaserLFO, phaserDepth, phaserFeedback,
+        adsrEnvelope, voiceParams, actualStartTime, duration
+    );
     
-    // Set up envelope
-    gainNode.gain.setValueAtTime(0, actualStartTime);
-    gainNode.gain.linearRampToValueAtTime(gainValue, actualStartTime + envelope.attack);
-    gainNode.gain.setValueAtTime(sustainLevel, actualStartTime + duration - envelope.release);
-    gainNode.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    // Apply Reverb ADSR
+    const reverbIsActive = this.applyReverbADSR(
+        reverbNode, reverbGain, reverbDry, reverbWet,
+        adsrEnvelope, voiceParams, actualStartTime, duration
+    );
+
+    // Apply Delay ADSR
+    const delayIsActive = this.applyDelayADSR(
+        delayNode, delayFeedback, delayWet, delayDry,
+        adsrEnvelope, voiceParams, actualStartTime, duration
+    );
     
-    panNode.pan.setValueAtTime(panValue, actualStartTime);
+    this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
     
-    // Connect audio chain
-    oscillator.connect(gainNode);
+    // Audio chain setup
+    oscillator.connect(filterNode);
+    let currentNode = filterNode;
+    
+    // Tremolo connection
+    if (tremoloIsActive) {
+        tremoloLFO.type = 'sine';
+        tremoloLFO.frequency.setValueAtTime(voiceParams.tremoloSpeed, actualStartTime);
+        tremoloLFO.start(actualStartTime);
+        tremoloLFO.stop(actualStartTime + duration);
+        
+        tremoloLFO.connect(tremoloDepth);
+        tremoloDepth.connect(tremoloGain.gain);
+        
+        currentNode.connect(tremoloGain);
+        currentNode = tremoloGain;
+    }
+    
+    // Chorus connection
+    if (chorusIsActive) {
+        const chorusWetLevel = Math.min(0.4, voiceParams.chorusDepth);
+        const chorusDryLevel = 1.0 - chorusWetLevel;
+        
+        // Dry path
+        dryGain.gain.setValueAtTime(chorusDryLevel, actualStartTime);
+        currentNode.connect(dryGain);
+        
+        // Wet path
+        currentNode.connect(chorusDelay1);
+        currentNode.connect(chorusDelay2);
+        currentNode.connect(chorusDelay3);
+        
+        chorusDelay1.connect(chorusGain1);
+        chorusDelay2.connect(chorusGain2);
+        chorusDelay3.connect(chorusGain3);
+        
+        chorusGain1.connect(chorusMix);
+        chorusGain2.connect(chorusMix);
+        chorusGain3.connect(chorusMix);
+        
+        chorusMix.gain.setValueAtTime(chorusWetLevel, actualStartTime);
+        
+        // Mix dry and wet
+        const chorusFinalMix = audioManager.audioContext.createGain();
+        chorusFinalMix.gain.setValueAtTime(1.0, actualStartTime);
+        
+        dryGain.connect(chorusFinalMix);
+        chorusMix.connect(chorusFinalMix);
+        
+        currentNode = chorusFinalMix;
+    }
+    
+    // Phaser connection
+    if (phaserIsActive) {
+        const phaserWetLevel = Math.min(0.6, voiceParams.phaserDepth);
+        const phaserDryLevel = 1.0 - phaserWetLevel;
+        
+        // Dry path
+        phaserDry.gain.setValueAtTime(phaserDryLevel, actualStartTime);
+        currentNode.connect(phaserDry);
+        
+        // Wet path through phaser stages
+        let phaserNode = currentNode;
+        phaserStages.forEach(stage => {
+            phaserNode.connect(stage);
+            phaserNode = stage;
+        });
+        
+        // Add feedback from last stage back to first stage
+        phaserNode.connect(phaserFeedback);
+        phaserFeedback.connect(phaserStage1);
+        
+        // Mix wet signal
+        phaserNode.connect(phaserMix);
+        phaserMix.gain.setValueAtTime(phaserWetLevel, actualStartTime);
+        
+        // Final phaser mix
+        const phaserFinalMix = audioManager.audioContext.createGain();
+        phaserFinalMix.gain.setValueAtTime(1.0, actualStartTime);
+        
+        phaserDry.connect(phaserFinalMix);
+        phaserMix.connect(phaserFinalMix);
+        
+        currentNode = phaserFinalMix;
+        
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH phaser (4-stage)`);
+    }
+    
+    // Reverb connection
+    if (reverbIsActive) {
+        const reverbWetLevel = Math.min(0.6, voiceParams.reverbDepth);
+        const reverbDryLevel = 1.0 - reverbWetLevel;
+        
+        // Set up reverb routing
+        reverbDry.gain.setValueAtTime(reverbDryLevel, actualStartTime);
+        
+        // Connect reverb chain
+        currentNode.connect(reverbDry);
+        currentNode.connect(reverbNode);
+        reverbNode.connect(reverbWet);
+        
+        // Mix dry and wet
+        const reverbFinalMix = audioManager.audioContext.createGain();
+        reverbFinalMix.gain.setValueAtTime(1.0, actualStartTime);
+        
+        reverbDry.connect(reverbFinalMix);
+        reverbWet.connect(reverbFinalMix);
+        
+        currentNode = reverbFinalMix;
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH reverb`);
+    }
+    
+    // Delay connection  
+    if (delayIsActive) {
+        const delayWetLevel = Math.min(0.7, voiceParams.delayDepth);
+        const delayDryLevel = 1.0 - delayWetLevel;
+        
+        // Set up delay routing
+        delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
+        
+        // Connect delay chain with feedback
+        currentNode.connect(delayDry);
+        currentNode.connect(delayNode);
+        delayNode.connect(delayWet);
+        delayNode.connect(delayFeedback);
+        delayFeedback.connect(delayNode); // Feedback loop
+        
+        // Mix dry and wet
+        const delayFinalMix = audioManager.audioContext.createGain();
+        delayFinalMix.gain.setValueAtTime(1.0, actualStartTime);
+        
+        delayDry.connect(delayFinalMix);
+        delayWet.connect(delayFinalMix);
+        
+        currentNode = delayFinalMix;
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH delay`);
+    }
+    
+    // Final connection
+    currentNode.connect(gainNode);
     gainNode.connect(panNode);
     panNode.connect(audioManager.masterGainNode);
     
-    // Schedule playback
+    // Start oscillator
     oscillator.start(actualStartTime);
     oscillator.stop(actualStartTime + duration);
     
-    // Cleanup when note ends
+    // Enhanced cleanup
     oscillator.onended = () => {
         try {
             oscillator.disconnect();
+            filterNode.disconnect();
             gainNode.disconnect();
             panNode.disconnect();
+            
+            if (tremoloIsActive) {
+                tremoloLFO.disconnect();
+                tremoloGain.disconnect();
+                tremoloDepth.disconnect();
+            }
+            
+            if (chorusIsActive) {
+                chorusDelay1.disconnect();
+                chorusDelay2.disconnect();
+                chorusDelay3.disconnect();
+                chorusLFO1.disconnect();
+                chorusLFO2.disconnect();
+                chorusLFO3.disconnect();
+                chorusGain1.disconnect();
+                chorusGain2.disconnect();
+                chorusGain3.disconnect();
+                chorusDepth1.disconnect();
+                chorusDepth2.disconnect();
+                chorusDepth3.disconnect();
+                chorusMix.disconnect();
+                dryGain.disconnect();
+            }
+            
+            if (phaserIsActive) {
+                phaserStages.forEach(stage => stage.disconnect());
+                phaserLFO.disconnect();
+                phaserDepth.disconnect();
+                phaserFeedback.disconnect();
+                phaserMix.disconnect();
+                phaserDry.disconnect();
+            }
+            
+            if (reverbIsActive) {
+                reverbNode.disconnect();
+                reverbGain.disconnect();
+                reverbDry.disconnect();
+                reverbWet.disconnect();
+            }
+            
+            if (delayIsActive) {
+                delayNode.disconnect();
+                delayFeedback.disconnect();
+                delayWet.disconnect();
+                delayDry.disconnect();
+            }
         } catch (e) {
             // Already disconnected
         }
@@ -5809,18 +6280,1104 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     
     return {
         oscillator,
+        filterNode,
         gainNode,
         panNode,
+        tremoloActive: tremoloIsActive,
+        chorusActive: chorusIsActive,
+        phaserActive: phaserIsActive,
+        reverbActive: reverbIsActive,
+        delayActive: delayIsActive,
         startTime: actualStartTime,
         duration,
         frequency,
-        voiceIndex: this.voiceIndex
+        voiceIndex: this.voiceIndex,
+        velocity: currentVelocity
+    };
+}
+
+createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
+    if (!audioManager?.audioContext) {
+        console.error('❌ No audio context available');
+        return null;
+    }
+    
+    const actualStartTime = startTime + (offset * 0.001);
+    const voiceParams = this.getAllCurrentVoiceParameters();
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Creating note with diffused reverb`);
+    
+    const oscillator = audioManager.audioContext.createOscillator();
+    const gainNode = audioManager.audioContext.createGain();
+    
+    // Basic oscillator setup
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, actualStartTime);
+    
+    // Simple envelope
+    gainNode.gain.setValueAtTime(0, actualStartTime);
+    gainNode.gain.linearRampToValueAtTime(0.1, actualStartTime + 0.01);
+    gainNode.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    oscillator.connect(gainNode);
+    // Apply balance first
+const panNode = audioManager.audioContext.createStereoPanner();
+const currentBalance = voiceParams.balance;
+panNode.pan.setValueAtTime(currentBalance, actualStartTime);
+
+// PERFECT DIFFUSED REVERB
+if (voiceParams.reverbDepth > 0.001) {
+    console.log(`🌊 Applying perfect diffused reverb (${(voiceParams.reverbDepth * 100).toFixed(0)}%)`);
+    
+    // Dry signal path
+    const dryGain = audioManager.audioContext.createGain();
+    dryGain.gain.setValueAtTime(0.6, actualStartTime);
+    gainNode.connect(dryGain);
+    dryGain.connect(panNode);
+    
+    // Perfect diffused reverb path
+    const convolver = audioManager.audioContext.createConvolver();
+    const reverbGain = audioManager.audioContext.createGain();
+    
+    reverbGain.gain.setValueAtTime(voiceParams.reverbDepth * 0.7, actualStartTime);
+    
+    // Create smooth 2-second impulse response
+    const sampleRate = audioManager.audioContext.sampleRate;
+    const impulseLength = sampleRate * 2;
+    const impulse = audioManager.audioContext.createBuffer(2, impulseLength, sampleRate);
+    
+    for (let channel = 0; channel < 2; channel++) {
+        const channelData = impulse.getChannelData(channel);
+        for (let i = 0; i < impulseLength; i++) {
+            const decay = Math.pow(1 - (i / impulseLength), 1.5);
+            const noise = (Math.random() * 2 - 1);
+            channelData[i] = noise * decay * 0.3;
+        }
+    }
+    
+    convolver.buffer = impulse;
+    
+    // Connect reverb path to panNode
+    gainNode.connect(convolver);
+    convolver.connect(reverbGain);
+    reverbGain.connect(panNode);
+    
+    console.log('🌊 Perfect diffused reverb applied');
+} else {
+    gainNode.connect(panNode);
+}
+
+// DELAY PROCESSING
+if (voiceParams.delayDepth > 0.001) {
+    console.log(`🔄 Voice ${this.voiceIndex + 1}: Applying crisp delay`);
+    
+    // Create delay nodes
+    const delayNode = audioManager.audioContext.createDelay(2.0);
+    const delayGain = audioManager.audioContext.createGain();
+    const feedbackGain = audioManager.audioContext.createGain();
+    const wetGain = audioManager.audioContext.createGain();
+    const dryGain = audioManager.audioContext.createGain();
+    
+    // Convert delay time from ms to seconds
+    const delayTimeSeconds = Math.min(voiceParams.delayTime / 1000, 2.0);
+    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+    
+    // Setup feedback and gains
+    const feedbackAmount = voiceParams.delayFeedback || 0;
+    feedbackGain.gain.setValueAtTime(feedbackAmount * 0.7, actualStartTime);
+    
+    const wetAmount = voiceParams.delayDepth;
+    const dryAmount = 1.0 - wetAmount;
+    wetGain.gain.setValueAtTime(wetAmount, actualStartTime);
+    dryGain.gain.setValueAtTime(dryAmount, actualStartTime);
+    
+    // Disconnect and reconnect with delay
+    panNode.disconnect();
+    
+    // Dry path
+    panNode.connect(dryGain);
+    dryGain.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
+    
+    // Wet path with delay
+    panNode.connect(delayNode);
+    delayNode.connect(delayGain);
+    delayGain.connect(wetGain);
+    wetGain.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
+    
+    // Feedback loop
+    delayGain.connect(feedbackGain);
+    feedbackGain.connect(delayNode);
+    
+    console.log('🔄 Delay applied');
+} else {
+    // No delay - connect panNode directly to output
+    panNode.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
+}
+
+
+    oscillator.start(actualStartTime);
+    oscillator.stop(actualStartTime + duration);
+    
+    return { oscillator, gainNode, reverbActive: voiceParams.reverbDepth > 0.001 };
+}
+
+
+
+/**
+ * Apply ADSR to volume/gain
+ */
+applyVolumeADSR(gainNode, envelope, voiceParams, startTime, duration) {
+    const baseGain = voiceParams.volume * voiceParams.velocityScale * voiceParams.polyphonyScale;
+    const peakGain = baseGain * envelope.peakLevel;
+    const sustainGain = baseGain * envelope.sustain;
+    
+    gainNode.gain.setValueAtTime(0, startTime);
+    gainNode.gain.linearRampToValueAtTime(peakGain, startTime + envelope.attack);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainGain), startTime + envelope.decayEnd);
+    gainNode.gain.setValueAtTime(sustainGain, startTime + envelope.sustainEnd);
+    gainNode.gain.linearRampToValueAtTime(0.001, startTime + duration);
+}
+
+/**
+ * Apply ADSR to filter (brightness evolution)
+ */
+applyFilterADSR(filterNode, envelope, frequency, velocityNormalized, instrumentName, startTime, duration) {
+    filterNode.type = 'lowpass';
+    filterNode.Q.setValueAtTime(1.0, startTime);
+    
+    // Calculate filter cutoff points
+    const baseCutoff = frequency * 4;
+    const peakCutoff = baseCutoff + (frequency * 8 * envelope.peakLevel);
+    const sustainCutoff = baseCutoff + (frequency * 4 * envelope.sustain);
+    const releaseCutoff = baseCutoff;
+    
+    // ADSR for filter cutoff (brightness)
+    filterNode.frequency.setValueAtTime(baseCutoff, startTime);
+    filterNode.frequency.exponentialRampToValueAtTime(peakCutoff, startTime + envelope.attack);
+    filterNode.frequency.exponentialRampToValueAtTime(sustainCutoff, startTime + envelope.decayEnd);
+    filterNode.frequency.setValueAtTime(sustainCutoff, startTime + envelope.sustainEnd);
+    filterNode.frequency.exponentialRampToValueAtTime(releaseCutoff, startTime + duration);
+}
+
+
+/**
+ * Apply ADSR to reverb (convolution reverb with ADSR evolution) - FIXED
+ */
+applyReverbADSR(reverbNode, reverbGain, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
+    // Debug: Check reverb parameters
+    console.log(`🔍 Debug Reverb: depth=${voiceParams.reverbDepth}, time=${voiceParams.reverbTime}`);
+    
+    // Check if reverb should be bypassed
+    if (voiceParams.reverbDepth <= 0.001) {
+        // BYPASS: Set reverb to dry only
+        reverbDry.gain.setValueAtTime(1.0, actualStartTime);
+        reverbWet.gain.setValueAtTime(0, actualStartTime);
+        reverbGain.gain.setValueAtTime(1.0, actualStartTime);
+        
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Reverb bypassed (depth = 0)`);
+        return false;
+    }
+    
+    // FIXED: Ensure minimum reverb time and proper buffer length
+    const sampleRate = audioManager.audioContext.sampleRate;
+    const minReverbTime = 0.1; // Minimum 100ms reverb
+    const maxReverbTime = 3.0; // Maximum 3 seconds reverb
+    const reverbTime = Math.max(minReverbTime, Math.min(maxReverbTime, voiceParams.reverbTime || 1.0));
+    const length = Math.floor(sampleRate * reverbTime);
+    
+    console.log(`🔍 Debug: sampleRate=${sampleRate}, reverbTime=${reverbTime}, bufferLength=${length}`);
+    
+    // Ensure buffer length is valid
+    if (length <= 0) {
+        console.warn(`Invalid buffer length: ${length}, bypassing reverb`);
+        reverbDry.gain.setValueAtTime(1.0, actualStartTime);
+        reverbWet.gain.setValueAtTime(0, actualStartTime);
+        return false;
+    }
+    
+    const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
+    
+    // Generate simple reverb impulse response
+    for (let channel = 0; channel < 2; channel++) {
+        const channelData = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            const n = length - i;
+            channelData[i] = (Math.random() * 2 - 1) * Math.pow(n / length, 2);
+        }
+    }
+    
+    reverbNode.buffer = impulse;
+    
+    const maxReverbDepth = voiceParams.reverbDepth;
+    const reverbDryLevel = 1.0 - maxReverbDepth;
+    const reverbWetLevel = maxReverbDepth;
+    
+    // Reverb send follows ADSR
+    const peakReverbSend = reverbWetLevel * envelope.peakLevel;
+    const sustainReverbSend = reverbWetLevel * envelope.sustain;
+    
+    // Dry signal (constant)
+    reverbDry.gain.setValueAtTime(reverbDryLevel, actualStartTime);
+    
+    // Wet signal follows ADSR
+    reverbWet.gain.setValueAtTime(0, actualStartTime);
+    reverbWet.gain.linearRampToValueAtTime(peakReverbSend, actualStartTime + envelope.attack);
+    reverbWet.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainReverbSend), actualStartTime + envelope.decayEnd);
+    reverbWet.gain.setValueAtTime(sustainReverbSend, actualStartTime + envelope.sustainEnd);
+    reverbWet.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
+    
+    // Main reverb gain
+    reverbGain.gain.setValueAtTime(1.0, actualStartTime);
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Reverb active (depth = ${voiceParams.reverbDepth.toFixed(3)}, time = ${reverbTime.toFixed(2)}s)`);
+    return true;
+}
+
+/**
+ * Apply ADSR to delay (echo effect with ADSR-controlled feedback and mix)
+ */
+applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voiceParams, actualStartTime, duration) {
+    // Check if delay should be bypassed
+    // IMPROVED DELAY PROCESSING
+if (voiceParams.delayDepth > 0.001) {
+    console.log(`🔄 Voice ${this.voiceIndex + 1}: Applying crisp delay (Time: ${voiceParams.delayTime}ms, Mix: ${(voiceParams.delayDepth * 100).toFixed(0)}%, Feedback: ${(voiceParams.delayFeedback * 100).toFixed(0)}%)`);
+    
+    // Create delay nodes
+    const delayNode = audioManager.audioContext.createDelay(2.0);
+    const delayGain = audioManager.audioContext.createGain();
+    const feedbackGain = audioManager.audioContext.createGain();
+    const wetGain = audioManager.audioContext.createGain();
+    const dryGain = audioManager.audioContext.createGain();
+    
+    // Convert delay time from ms to seconds
+    const delayTimeSeconds = voiceParams.delayTime / 1000;
+    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+    
+    // CRISP feedback with automatic decay for shorter tail
+    const feedbackAmount = voiceParams.delayFeedback || 0;
+    feedbackGain.gain.setValueAtTime(feedbackAmount * 0.8, actualStartTime); // Reduce initial feedback
+    
+    // Add automatic feedback decay to shorten tail
+    const tailDuration = Math.min(duration * 3, 2.0); // Tail lasts 3x note duration, max 2 seconds
+    feedbackGain.gain.exponentialRampToValueAtTime(0.001, actualStartTime + tailDuration);
+    
+    // LOUDER wet signal for more articulated echoes
+    const wetAmount = voiceParams.delayDepth;
+    const dryAmount = 1.0 - wetAmount;
+    wetGain.gain.setValueAtTime(wetAmount * 1.2, actualStartTime); // Increase wet gain for more punch
+    dryGain.gain.setValueAtTime(dryAmount, actualStartTime);
+    
+    // HIGH-PASS FILTER on delay to make echoes more articulated
+    const highpass = audioManager.audioContext.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.setValueAtTime(200, actualStartTime); // Remove muddy low frequencies
+    highpass.Q.setValueAtTime(0.7, actualStartTime);
+    
+    // Reconnect audio chain with improved delay
+    panNode.disconnect();
+    
+    // Dry path (direct signal)
+    panNode.connect(dryGain);
+    dryGain.connect(audioManager.audioContext.destination);
+    
+    // Wet path with high-pass filtered delay
+    panNode.connect(delayNode);
+    delayNode.connect(highpass);        // Add high-pass filter
+    highpass.connect(delayGain);
+    delayGain.connect(wetGain);
+    wetGain.connect(audioManager.audioContext.destination);
+    
+    // Feedback loop (also high-pass filtered)
+    delayGain.connect(feedbackGain);
+    feedbackGain.connect(delayNode);
+    
+    console.log(`🔄 Crisp delay: ${delayTimeSeconds.toFixed(3)}s, ${(wetAmount * 100).toFixed(0)}% wet, ${(feedbackAmount * 100).toFixed(0)}% feedback, ${tailDuration.toFixed(1)}s tail`);
+}
+
+
+    // Set delay time (convert from 0-100% range to seconds)
+    const delayTimeSeconds = (voiceParams.delayTime / 100) * 2.0; // 0-100% maps to 0-2 seconds
+    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+    
+    const maxDelayDepth = voiceParams.delayDepth;
+    const delayDryLevel = 1.0 - maxDelayDepth;
+    const delayWetLevel = maxDelayDepth;
+    
+    // Delay send follows ADSR
+    const peakDelaySend = delayWetLevel * envelope.peakLevel;
+    const sustainDelaySend = delayWetLevel * envelope.sustain;
+    
+    // Feedback amount (creates echoing effect)
+    const feedbackAmount = Math.min(0.7, maxDelayDepth * 0.6);
+    const peakFeedback = feedbackAmount * envelope.peakLevel;
+    const sustainFeedback = feedbackAmount * envelope.sustain;
+    
+    // Dry signal (constant)
+    delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
+    
+    // Wet signal follows ADSR
+    delayWet.gain.setValueAtTime(0, actualStartTime);
+    delayWet.gain.linearRampToValueAtTime(peakDelaySend, actualStartTime + envelope.attack);
+    delayWet.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainDelaySend), actualStartTime + envelope.decayEnd);
+    delayWet.gain.setValueAtTime(sustainDelaySend, actualStartTime + envelope.sustainEnd);
+    delayWet.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
+    
+    // Feedback follows ADSR (creates evolving echo patterns)
+    delayFeedback.gain.setValueAtTime(0, actualStartTime);
+    delayFeedback.gain.linearRampToValueAtTime(peakFeedback, actualStartTime + envelope.attack);
+    delayFeedback.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainFeedback), actualStartTime + envelope.decayEnd);
+    delayFeedback.gain.setValueAtTime(sustainFeedback, actualStartTime + envelope.sustainEnd);
+    delayFeedback.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Delay active (depth = ${voiceParams.delayDepth.toFixed(3)}, time = ${delayTimeSeconds.toFixed(3)}s)`);
+    return true;
+}
+
+/**
+ * Apply ADSR to tremolo (intensity evolution) - WITH BYPASS LOGIC
+ */
+applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, envelope, voiceParams, startTime, duration) {
+    // Check if tremolo should be bypassed
+    if (voiceParams.tremoloDepth <= 0.001) {
+        // BYPASS: Set tremolo to unity gain (no effect)
+        tremoloGain.gain.setValueAtTime(1.0, startTime);
+        tremoloDepth.gain.setValueAtTime(0, startTime);
+        
+        // Don't start the LFO if not needed
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo bypassed (depth = 0)`);
+        return false; // Indicates tremolo is bypassed
+    }
+    
+    const maxTremoloDepth = voiceParams.tremoloDepth * 0.5; // Max 50% modulation
+    
+    // Tremolo depth follows ADSR
+    const peakTremoloDepth = maxTremoloDepth * envelope.peakLevel;
+    const sustainTremoloDepth = maxTremoloDepth * envelope.sustain;
+    
+    tremoloDepth.gain.setValueAtTime(0, startTime);
+    tremoloDepth.gain.linearRampToValueAtTime(peakTremoloDepth, startTime + envelope.attack);
+    tremoloDepth.gain.exponentialRampToValueAtTime(sustainTremoloDepth, startTime + envelope.decayEnd);
+    tremoloDepth.gain.setValueAtTime(sustainTremoloDepth, startTime + envelope.sustainEnd);
+    tremoloDepth.gain.linearRampToValueAtTime(0, startTime + duration);
+    
+    // Base gain for tremolo
+    tremoloGain.gain.setValueAtTime(1.0, startTime); // Unity gain as base
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo active (depth = ${voiceParams.tremoloDepth.toFixed(3)})`);
+    return true; // Indicates tremolo is active
+}
+
+/**
+ * Apply ADSR to chorus (pitch/timing modulation with ADSR evolution)
+ */
+/**
+ * Apply ADSR to chorus (FIXED - no forEach)
+ */
+applyChorusADSR(chorusDelay1, chorusDelay2, chorusDelay3, chorusLFO1, chorusLFO2, chorusLFO3, 
+                chorusGain1, chorusGain2, chorusGain3, chorusDepth1, chorusDepth2, chorusDepth3,
+                envelope, voiceParams, actualStartTime, duration) {
+    
+    // Check if chorus should be bypassed
+    if (voiceParams.chorusDepth <= 0.001) {
+        // BYPASS: Set all chorus gains to zero
+        chorusGain1.gain.setValueAtTime(0, actualStartTime);
+        chorusGain2.gain.setValueAtTime(0, actualStartTime);
+        chorusGain3.gain.setValueAtTime(0, actualStartTime);
+        
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Chorus bypassed (depth = 0)`);
+        return false;
+    }
+    
+    const maxChorusDepth = voiceParams.chorusDepth * 0.003; // Max 3ms delay modulation
+    const chorusSpeed = voiceParams.chorusSpeed;
+    
+    // Chorus depth follows ADSR
+    const peakChorusDepth = maxChorusDepth * envelope.peakLevel;
+    const sustainChorusDepth = maxChorusDepth * envelope.sustain;
+    
+    // Set up chorus voice 1
+    chorusDelay1.delayTime.setValueAtTime(0.015, actualStartTime);
+    chorusLFO1.type = 'sine';
+    chorusLFO1.frequency.setValueAtTime(chorusSpeed, actualStartTime);
+    
+    chorusDepth1.gain.setValueAtTime(0, actualStartTime);
+    chorusDepth1.gain.linearRampToValueAtTime(peakChorusDepth, actualStartTime + envelope.attack);
+    chorusDepth1.gain.exponentialRampToValueAtTime(sustainChorusDepth, actualStartTime + envelope.decayEnd);
+    chorusDepth1.gain.setValueAtTime(sustainChorusDepth, actualStartTime + envelope.sustainEnd);
+    chorusDepth1.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    chorusGain1.gain.setValueAtTime(0.3, actualStartTime);
+    chorusLFO1.start(actualStartTime);
+    chorusLFO1.stop(actualStartTime + duration);
+    chorusLFO1.connect(chorusDepth1);
+    chorusDepth1.connect(chorusDelay1.delayTime);
+    
+    // Set up chorus voice 2
+    chorusDelay2.delayTime.setValueAtTime(0.025, actualStartTime);
+    chorusLFO2.type = 'sine';
+    chorusLFO2.frequency.setValueAtTime(chorusSpeed + 0.2, actualStartTime);
+    
+    chorusDepth2.gain.setValueAtTime(0, actualStartTime);
+    chorusDepth2.gain.linearRampToValueAtTime(peakChorusDepth, actualStartTime + envelope.attack);
+    chorusDepth2.gain.exponentialRampToValueAtTime(sustainChorusDepth, actualStartTime + envelope.decayEnd);
+    chorusDepth2.gain.setValueAtTime(sustainChorusDepth, actualStartTime + envelope.sustainEnd);
+    chorusDepth2.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    chorusGain2.gain.setValueAtTime(0.3, actualStartTime);
+    chorusLFO2.start(actualStartTime);
+    chorusLFO2.stop(actualStartTime + duration);
+    chorusLFO2.connect(chorusDepth2);
+    chorusDepth2.connect(chorusDelay2.delayTime);
+    
+    // Set up chorus voice 3
+    chorusDelay3.delayTime.setValueAtTime(0.035, actualStartTime);
+    chorusLFO3.type = 'sine';
+    chorusLFO3.frequency.setValueAtTime(chorusSpeed + 0.4, actualStartTime);
+    
+    chorusDepth3.gain.setValueAtTime(0, actualStartTime);
+    chorusDepth3.gain.linearRampToValueAtTime(peakChorusDepth, actualStartTime + envelope.attack);
+    chorusDepth3.gain.exponentialRampToValueAtTime(sustainChorusDepth, actualStartTime + envelope.decayEnd);
+    chorusDepth3.gain.setValueAtTime(sustainChorusDepth, actualStartTime + envelope.sustainEnd);
+    chorusDepth3.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    chorusGain3.gain.setValueAtTime(0.3, actualStartTime);
+    chorusLFO3.start(actualStartTime);
+    chorusLFO3.stop(actualStartTime + duration);
+    chorusLFO3.connect(chorusDepth3);
+    chorusDepth3.connect(chorusDelay3.delayTime);
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Chorus active (depth = ${voiceParams.chorusDepth.toFixed(3)})`);
+    return true;
+}
+
+/**
+ * Apply ADSR to phaser (all-pass filter frequency sweeping with ADSR evolution)
+ */
+applyPhaserADSR(phaserStages, phaserLFO, phaserDepth, phaserFeedback, envelope, voiceParams, actualStartTime, duration) {
+    // Check if phaser should be bypassed
+    if (voiceParams.phaserDepth <= 0.001) {
+        // BYPASS: Set phaser depth to zero
+        phaserDepth.gain.setValueAtTime(0, actualStartTime);
+        phaserFeedback.gain.setValueAtTime(0, actualStartTime);
+        
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Phaser bypassed (depth = 0)`);
+        return false;
+    }
+    
+    const maxPhaserDepth = voiceParams.phaserDepth * 1000; // Max 1000Hz sweep range
+    const phaserSpeed = voiceParams.phaserSpeed;
+    
+    // Phaser depth follows ADSR
+    const peakPhaserDepth = maxPhaserDepth * envelope.peakLevel;
+    const sustainPhaserDepth = maxPhaserDepth * envelope.sustain;
+    
+    // Set up phaser LFO
+    phaserLFO.type = 'sine';
+    phaserLFO.frequency.setValueAtTime(phaserSpeed, actualStartTime);
+    
+    // Phaser depth modulation follows ADSR
+    phaserDepth.gain.setValueAtTime(0, actualStartTime);
+    phaserDepth.gain.linearRampToValueAtTime(peakPhaserDepth, actualStartTime + envelope.attack);
+    phaserDepth.gain.exponentialRampToValueAtTime(sustainPhaserDepth, actualStartTime + envelope.decayEnd);
+    phaserDepth.gain.setValueAtTime(sustainPhaserDepth, actualStartTime + envelope.sustainEnd);
+    phaserDepth.gain.linearRampToValueAtTime(0, actualStartTime + duration);
+    
+    // Set up phaser stages (all-pass filters)
+    const baseFrequency = 800; // Base frequency for phaser sweep
+    phaserStages.forEach((stage, index) => {
+        stage.type = 'allpass';
+        stage.Q.setValueAtTime(10, actualStartTime); // High Q for pronounced effect
+        
+        // Each stage at different frequency for richer effect
+        const stageFreq = baseFrequency + (index * 200);
+        stage.frequency.setValueAtTime(stageFreq, actualStartTime);
+    });
+    
+    // Feedback amount (creates more intense phasing)
+    const feedbackAmount = Math.min(0.7, voiceParams.phaserDepth * 0.8);
+    phaserFeedback.gain.setValueAtTime(feedbackAmount, actualStartTime);
+    
+    // Connect LFO to modulate all filter frequencies
+    phaserLFO.connect(phaserDepth);
+    phaserStages.forEach(stage => {
+        phaserDepth.connect(stage.frequency);
+    });
+    
+    // Start LFO
+    phaserLFO.start(actualStartTime);
+    phaserLFO.stop(actualStartTime + duration);
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Phaser active (depth = ${voiceParams.phaserDepth.toFixed(3)}, speed = ${phaserSpeed.toFixed(1)})`);
+    return true;
+}
+
+
+
+
+/**
+ * Create chorus delay network
+ */
+createChorusNetwork(audioContext) {
+    const numChorusVoices = 3; // 3 chorus voices for rich effect
+    
+    const delays = [];
+    const lfos = [];
+    const gains = [];
+    const depths = [];
+    const mixGain = audioContext.createGain();
+    
+    for (let i = 0; i < numChorusVoices; i++) {
+        delays.push(audioContext.createDelay(0.1)); // Max 100ms delay
+        lfos.push(audioContext.createOscillator());
+        gains.push(audioContext.createGain());
+        depths.push(audioContext.createGain());
+    }
+    
+    return {
+        delays,
+        lfos,
+        gains,
+        depths,
+        mixGain,
+        numVoices: numChorusVoices
+    };
+}
+
+
+/**
+ * Apply ADSR to stereo panning (position evolution)
+ */
+applyPanADSR(panNode, envelope, voiceParams, startTime, duration) {
+    const basePan = voiceParams.balance;
+    const panSpread = 0.3; // How much panning can vary during ADSR
+    
+    // Panning can evolve during note
+    const attackPan = basePan + (panSpread * (envelope.peakLevel - 0.5));
+    const sustainPan = basePan;
+    const releasePan = basePan - (panSpread * envelope.sustain * 0.5);
+    
+    panNode.pan.setValueAtTime(basePan, startTime);
+    panNode.pan.linearRampToValueAtTime(attackPan, startTime + envelope.attack);
+    panNode.pan.linearRampToValueAtTime(sustainPan, startTime + envelope.decayEnd);
+    panNode.pan.setValueAtTime(sustainPan, startTime + envelope.sustainEnd);
+    panNode.pan.linearRampToValueAtTime(releasePan, startTime + duration);
+}
+
+/**
+ * Calculate reverb send envelope (for future effects chain integration)
+ */
+calculateReverbSendADSR(envelope, voiceParams) {
+    const baseReverbSend = voiceParams.reverb;
+    
+    return {
+        attack: baseReverbSend * 0.3,           // Low reverb during attack
+        peak: baseReverbSend * envelope.peakLevel, // Peak reverb
+        sustain: baseReverbSend * envelope.sustain, // Sustained reverb
+        release: baseReverbSend * 1.2           // Higher reverb during release
+    };
+}
+
+/**
+ * Get current velocity (helper method)
+ */
+getCurrentVelocity() {
+    const attackVelocityParam = voiceData[this.voiceIndex].parameters['ATTACK VELOCITY'];
+    
+    if (attackVelocityParam && attackVelocityParam.behavior > 0) {
+        if (attackVelocityParam.currentValue === undefined) {
+            attackVelocityParam.currentValue = (attackVelocityParam.min + attackVelocityParam.max) / 2;
+        }
+        
+        attackVelocityParam.currentValue = interpolateParameter(
+            attackVelocityParam.currentValue,
+            attackVelocityParam.min,
+            attackVelocityParam.max,
+            attackVelocityParam.behavior,
+            0.15
+        );
+        
+        return attackVelocityParam.currentValue;
+    } else if (attackVelocityParam) {
+        return (attackVelocityParam.min + attackVelocityParam.max) / 2;
+    }
+    
+    return 64; // Default MIDI velocity
+}
+
+/**
+ * Enhanced getAllCurrentVoiceParameters with reverb and delay support
+ */
+getAllCurrentVoiceParameters() {
+    const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
+    const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
+    const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
+    const tremoloParam = voiceData[this.voiceIndex].parameters['TREMOLO'];
+    const chorusParam = voiceData[this.voiceIndex].parameters['CHORUS'];
+    const phaserParam = voiceData[this.voiceIndex].parameters['PHASER'];
+    const reverbParam = voiceData[this.voiceIndex].parameters['REVERB']; // NEW
+    const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];   // NEW
+    
+    const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+    const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
+    const polyphonyCount = Math.max(1, (polyphonyParam.min + polyphonyParam.max) / 2);
+    
+    // Tremolo parameters
+    let tremoloSpeed = 4.0;
+    let tremoloDepth = 0.0;
+    
+    if (tremoloParam && tremoloParam.speed) {
+        tremoloSpeed = (tremoloParam.speed.min + tremoloParam.speed.max) / 2;
+        tremoloDepth = (tremoloParam.depth.min + tremoloParam.depth.max) / 2;
+    }
+    
+    // Chorus parameters
+    let chorusSpeed = 1.0;
+    let chorusDepth = 0.0;
+    
+    if (chorusParam && chorusParam.speed) {
+        chorusSpeed = (chorusParam.speed.min + chorusParam.speed.max) / 2;
+        chorusDepth = (chorusParam.depth.min + chorusParam.depth.max) / 2;
+    }
+    
+    // Phaser parameters
+    let phaserSpeed = 0.5;
+    let phaserDepth = 0.0;
+    
+    if (phaserParam && phaserParam.speed) {
+        phaserSpeed = (phaserParam.speed.min + phaserParam.speed.max) / 2;
+        phaserDepth = (phaserParam.depth.min + phaserParam.depth.max) / 2;
+    }
+    
+    // NEW: Reverb parameters (multi-dual)
+    let reverbTime = 1.0; // Default 1 second
+    let reverbDepth = 0.0; // Default no reverb
+    
+    if (reverbParam && reverbParam.speed && reverbParam.depth) {
+        reverbTime = ((reverbParam.speed.min + reverbParam.speed.max) / 2 / 100) * 3.0; // Convert to 0-3 seconds
+        reverbDepth = (reverbParam.depth.min + reverbParam.depth.max) / 2 / 100; // Convert to 0-1
+    }
+    
+    // NEW: Delay parameters (multi-dual)  
+    // NEW: Delay parameters (multi-dual)
+    let delayTime = 500; // Default 500ms
+    let delayDepth = 0.0; // Default no delay
+    let delayFeedback = 0.0; // Default no feedback
+
+    if (delayParam && delayParam.speed && delayParam.depth) {
+      delayTime = ((delayParam.speed.min + delayParam.speed.max) / 2 / 100) * 2000; // Convert to 0-2000ms
+      delayDepth = (delayParam.depth.min + delayParam.depth.max) / 2 / 100; // Convert to 0-1
+      
+      // Add feedback parameter
+      if (delayParam.feedback) {
+        delayFeedback = (delayParam.feedback.min + delayParam.feedback.max) / 2 / 100; // Convert to 0-1
+      }
+}
+
+    
+   return {
+    volume: (currentVolume / 100) * 0.15,
+    balance: Math.max(-1, Math.min(1, currentBalance / 100)),
+    polyphonyScale: Math.max(0.1, 1 / Math.sqrt(polyphonyCount)),
+    velocityScale: 1.0,
+    tremoloSpeed: Math.max(0.5, Math.min(20, tremoloSpeed / 10)),
+    tremoloDepth: tremoloDepth / 100,
+    chorusSpeed: Math.max(0.2, Math.min(5, chorusSpeed / 20)),
+    chorusDepth: chorusDepth / 100,
+    phaserSpeed: Math.max(0.1, Math.min(2, phaserSpeed / 50)),
+    phaserDepth: phaserDepth / 100,
+    reverbTime: reverbTime,     // NEW: 0-3 seconds
+    reverbDepth: reverbDepth,   // NEW: 0-1 range
+    delayTime: delayTime,       // NEW: 0-2000ms  
+    delayDepth: delayDepth,      // NEW: 0-1 range
+    delayFeedback: delayFeedback // ADD THIS LINE
+};
+}
+
+/**
+ * ENHANCED DELAY SYSTEM - Creates the perfect delay effect you discovered
+ */
+createEnhancedDelay(inputNode, delayParams, actualStartTime, duration) {
+    console.log('🔍 Creating ENHANCED DELAY (Time + Feedback + Wet/Dry)');
+    
+    const audioCtx = audioManager.audioContext;
+    
+    // Extract the three parameters
+    const delayTime = delayParams.time / 1000;      // Convert ms to seconds (0-2s)
+    const feedback = delayParams.feedback / 100;    // Convert % to 0-1 (0-95%)
+    const wetDry = delayParams.wetDry / 100;         // Convert % to 0-1 (0-100%)
+    
+    // Create multiple delay taps based on the base time
+    const delayTaps = [
+        delayTime * 0.25,  // Quarter delay
+        delayTime * 0.5,   // Half delay  
+        delayTime * 0.75,  // Three-quarter delay
+        delayTime * 1.0,   // Full delay
+        delayTime * 1.25,  // Extended delay 1
+        delayTime * 1.5,   // Extended delay 2
+        delayTime * 1.75,  // Extended delay 3
+        delayTime * 2.0    // Double delay
+    ];
+    
+    const delays = [];
+    const gains = [];
+    const feedbacks = [];
+    
+    delayTaps.forEach((time, index) => {
+        if (time > 0 && time <= 2.0) { // Valid delay range
+            const delay = audioCtx.createDelay(2.0);
+            const gain = audioCtx.createGain();
+            const feedbackGain = audioCtx.createGain();
+            
+            delay.delayTime.setValueAtTime(time, actualStartTime);
+            
+            // Exponential decay like your perfect reverb
+            const tapGain = 0.4 * Math.pow(0.75, index);
+            const tapFeedback = feedback * Math.pow(0.8, index);
+            
+            gain.gain.setValueAtTime(tapGain, actualStartTime);
+            feedbackGain.gain.setValueAtTime(tapFeedback, actualStartTime);
+            
+            delays.push(delay);
+            gains.push(gain);
+            feedbacks.push(feedbackGain);
+        }
+    });
+    
+    // Mix controls
+    const dryGain = audioCtx.createGain();
+    const wetGain = audioCtx.createGain();
+    
+    const dryLevel = 1.0 - wetDry;
+    const wetLevel = wetDry;
+    
+    dryGain.gain.setValueAtTime(dryLevel, actualStartTime);
+    wetGain.gain.setValueAtTime(wetLevel, actualStartTime);
+    
+    // Connect network
+    inputNode.connect(dryGain);
+    
+    delays.forEach((delay, index) => {
+        inputNode.connect(delay);
+        delay.connect(gains[index]);
+        
+        // Feedback loop (creates the sustaining effect)
+        gains[index].connect(feedbacks[index]);
+        feedbacks[index].connect(delay);
+        
+        // Wet output
+        gains[index].connect(wetGain);
+    });
+    
+    // Output
+    dryGain.connect(audioCtx.destination);
+    wetGain.connect(audioCtx.destination);
+    
+    console.log(`🎵 ENHANCED DELAY: ${delays.length} taps, time=${(delayTime*1000).toFixed(0)}ms, feedback=${(feedback*100).toFixed(0)}%, wet=${(wetDry*100).toFixed(0)}%`);
+    
+    return { delayActive: true, delays, gains, feedbacks, dryGain, wetGain };
+}
+
+/**
+ * SUSTAINED DIFFUSE REVERB - Creates extra long ambient tails
+ */
+/**
+ * MAXIMUM SUSTAIN REVERB - Replace in your scripts.js file
+ */
+createSustainedReverb(inputNode, voiceParams, actualStartTime, duration) {
+    console.log('🔍 Creating MAXIMUM SUSTAIN REVERB (infinite-like tail)');
+    
+    const audioCtx = audioManager.audioContext;
+    
+    // Dense delay network with maximum feedback
+    const denseDelays = [];
+    for (let i = 0; i < 32; i++) {
+        const time = 0.005 + (Math.random() * 0.145);
+        denseDelays.push(time);
+    }
+    denseDelays.sort((a, b) => a - b);
+    
+    const delays = [];
+    const gains = [];
+    const filters = [];
+    const feedbacks = [];
+    
+    denseDelays.forEach((time, index) => {
+        const delay = audioCtx.createDelay(0.5);
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        const feedback = audioCtx.createGain();
+        
+        delay.delayTime.setValueAtTime(time, actualStartTime);
+        
+        // Quiet individual delays (no articulation)
+        const gainValue = 0.15 / Math.sqrt(index + 1);
+        gain.gain.setValueAtTime(gainValue, actualStartTime);
+        
+        // Heavy filtering to blur delays
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3000 - (index * 80), actualStartTime);
+        filter.Q.setValueAtTime(0.5, actualStartTime);
+        
+        // MAXIMUM feedback for near-infinite sustain (close to 95% limit)
+        const feedbackAmount = 0.94 * Math.pow(0.995, index); // Very high, very slow decay
+        feedback.gain.setValueAtTime(feedbackAmount, actualStartTime);
+        
+        delays.push(delay);
+        gains.push(gain);
+        filters.push(filter);
+        feedbacks.push(feedback);
+    });
+    
+    // All-pass diffusion network (same as before)
+    const allpass1 = audioCtx.createBiquadFilter();
+    const allpass2 = audioCtx.createBiquadFilter();
+    const allpass3 = audioCtx.createBiquadFilter();
+    const allpass4 = audioCtx.createBiquadFilter();
+    
+    allpass1.type = 'allpass';
+    allpass1.frequency.setValueAtTime(347, actualStartTime);
+    allpass1.Q.setValueAtTime(8, actualStartTime);
+    
+    allpass2.type = 'allpass';
+    allpass2.frequency.setValueAtTime(1013, actualStartTime);
+    allpass2.Q.setValueAtTime(6, actualStartTime);
+    
+    allpass3.type = 'allpass';
+    allpass3.frequency.setValueAtTime(1759, actualStartTime);
+    allpass3.Q.setValueAtTime(4, actualStartTime);
+    
+    allpass4.type = 'allpass';
+    allpass4.frequency.setValueAtTime(2411, actualStartTime);
+    allpass4.Q.setValueAtTime(3, actualStartTime);
+    
+    // Mix controls
+    const preDelay = audioCtx.createDelay(0.1);
+    const dryGain = audioCtx.createGain();
+    const wetGain = audioCtx.createGain();
+    const diffusionGain = audioCtx.createGain();
+    
+    preDelay.delayTime.setValueAtTime(0.02, actualStartTime);
+    
+    const reverbDepth = voiceParams.reverbDepth || 0.8;
+    dryGain.gain.setValueAtTime(1.0 - reverbDepth, actualStartTime);
+    wetGain.gain.setValueAtTime(reverbDepth, actualStartTime);
+    diffusionGain.gain.setValueAtTime(1.0, actualStartTime);
+    
+    // Connect dry path
+    inputNode.connect(dryGain);
+    
+    // Connect diffused wet path
+    inputNode.connect(preDelay);
+    preDelay.connect(allpass1);
+    allpass1.connect(allpass2);
+    allpass2.connect(allpass3);
+    allpass3.connect(allpass4);
+    allpass4.connect(diffusionGain);
+    
+    // Connect delay network WITH MAXIMUM FEEDBACK
+    delays.forEach((delay, index) => {
+        diffusionGain.connect(delay);
+        delay.connect(filters[index]);
+        filters[index].connect(gains[index]);
+        gains[index].connect(wetGain);
+        
+        // Maximum feedback loop - creates near-infinite sustaining tail
+        gains[index].connect(feedbacks[index]);
+        feedbacks[index].connect(delay);
+    });
+    
+    // Output
+    dryGain.connect(audioCtx.destination);
+    wetGain.connect(audioCtx.destination);
+    
+    console.log(`🎵 MAXIMUM SUSTAIN REVERB: ${delays.length} delays with 94% feedback (near-infinite tail)`);
+    
+    // DON'T START DECAY FOR 60 SECONDS - let it sustain naturally
+    setTimeout(() => {
+        feedbacks.forEach((feedback, index) => {
+            const currentTime = audioCtx.currentTime;
+            const decayTime = 60.0; // 60 second gradual decay
+            feedback.gain.exponentialRampToValueAtTime(0.001, currentTime + decayTime);
+        });
+        console.log('🔄 Reverb feedback gradually decaying over 60 seconds');
+    }, (duration + 30.0) * 1000); // Wait 30 seconds before starting decay
+    
+    return { reverbActive: true, feedbacks };
+}
+
+
+/**
+ * Get velocity-sensitive waveform type
+ */
+getVelocitySensitiveWaveform(baseType, velocityNormalized, instrumentName) {
+    // Instrument-specific velocity response
+    if (instrumentName.includes('Piano')) {
+        // Piano: soft = sine (mellow), hard = square (bright/percussive)
+        if (velocityNormalized < 0.3) return 'sine';
+        if (velocityNormalized < 0.7) return 'triangle';
+        return 'square';
+    }
+    
+    if (instrumentName.includes('String') || instrumentName.includes('Violin') || instrumentName.includes('Cello')) {
+        // Strings: soft = sine (bow pressure), hard = sawtooth (aggressive bowing)
+        if (velocityNormalized < 0.4) return 'sine';
+        return 'sawtooth';
+    }
+    
+    if (instrumentName.includes('Brass') || instrumentName.includes('Trumpet') || instrumentName.includes('Horn')) {
+        // Brass: soft = triangle (gentle), hard = square (brassy)
+        if (velocityNormalized < 0.5) return 'triangle';
+        return 'square';
+    }
+    
+    if (instrumentName.includes('Organ')) {
+        // Organ: consistent waveform but different harmonics via filter
+        return 'sawtooth';
+    }
+    
+    // Default: use base type with subtle variation
+    return baseType;
+}
+
+/**
+ * Get velocity-sensitive filter cutoff frequency
+ */
+getVelocitySensitiveFilterCutoff(fundamentalFreq, velocityNormalized, instrumentName) {
+    // Base cutoff relative to fundamental frequency
+    let baseMultiplier = 4.0; // Default: 4x fundamental
+    let velocityRange = 8.0;  // How much velocity affects brightness
+    
+    // Instrument-specific filter response
+    if (instrumentName.includes('Piano')) {
+        baseMultiplier = 6.0;
+        velocityRange = 12.0; // Piano very velocity sensitive
+    } else if (instrumentName.includes('String')) {
+        baseMultiplier = 5.0;
+        velocityRange = 8.0;  // Strings moderately sensitive
+    } else if (instrumentName.includes('Brass')) {
+        baseMultiplier = 4.0;
+        velocityRange = 10.0; // Brass quite sensitive
+    } else if (instrumentName.includes('Flute') || instrumentName.includes('Clarinet')) {
+        baseMultiplier = 3.0;
+        velocityRange = 4.0;  // Winds less sensitive
+    }
+    
+    // Calculate cutoff: soft playing = darker, hard playing = brighter
+    const multiplier = baseMultiplier + (velocityRange * velocityNormalized);
+    const cutoff = fundamentalFreq * multiplier;
+    
+    // Clamp to reasonable range
+    return Math.max(200, Math.min(20000, cutoff));
+}
+
+/**
+ * Get velocity-sensitive ADSR envelope
+ */
+getVelocitySensitiveEnvelope(duration, velocityNormalized, instrumentName) {
+    const durationSeconds = duration;
+    let baseEnvelope;
+    
+    // Get base envelope from existing function
+    if (durationSeconds < 0.1) {
+        baseEnvelope = { attack: 0.005, decay: 0.020, sustain: 0.7, release: 0.020 };
+    } else if (durationSeconds < 0.2) {
+        baseEnvelope = { attack: 0.010, decay: 0.040, sustain: 0.8, release: 0.050 };
+    } else {
+        baseEnvelope = { attack: 0.020, decay: 0.080, sustain: 0.8, release: 0.100 };
+    }
+    
+    // Velocity modifications
+    let attackScale = 1.0;
+    let peakScale = 1.0;
+    let sustainScale = 1.0;
+    
+    if (instrumentName.includes('Piano')) {
+        // Piano: soft = slow attack, hard = fast attack + louder peak
+        attackScale = 1.5 - velocityNormalized; // Soft = slower attack
+        peakScale = 0.5 + (0.8 * velocityNormalized); // Hard = louder peak
+        sustainScale = 0.7 + (0.3 * velocityNormalized);
+    } else if (instrumentName.includes('String')) {
+        // Strings: soft = gradual, hard = aggressive
+        attackScale = 1.3 - (0.5 * velocityNormalized);
+        peakScale = 0.6 + (0.6 * velocityNormalized);
+        sustainScale = 0.8 + (0.2 * velocityNormalized);
+    } else if (instrumentName.includes('Brass')) {
+        // Brass: soft = gentle, hard = punchy
+        attackScale = 1.2 - (0.4 * velocityNormalized);
+        peakScale = 0.4 + (0.8 * velocityNormalized);
+        sustainScale = 0.7 + (0.3 * velocityNormalized);
+    }
+    
+    return {
+        attack: baseEnvelope.attack * attackScale,
+        decay: baseEnvelope.decay,
+        sustain: baseEnvelope.sustain * sustainScale,
+        release: baseEnvelope.release,
+        peakScale: peakScale
+    };
+}
+
+/**
+ * Get comprehensive ADSR envelope with all timing phases
+ */
+getComprehensiveADSR(duration, velocityNormalized, instrumentName) {
+    const durationSeconds = duration;
+    
+    // Base timing ratios (percentages of total duration)
+    let attackRatio = 0.1;   // 10% of duration
+    let decayRatio = 0.2;    // 20% of duration  
+    let sustainRatio = 0.5;  // 50% of duration
+    let releaseRatio = 0.2;  // 20% of duration
+    
+    // Instrument-specific timing
+    if (instrumentName.includes('Piano')) {
+        attackRatio = 0.05;  // Fast attack
+        decayRatio = 0.3;    // Longer decay
+        sustainRatio = 0.4;  // Medium sustain
+        releaseRatio = 0.25; // Natural release
+    } else if (instrumentName.includes('String')) {
+        attackRatio = 0.15;  // Gradual attack (bow pressure)
+        decayRatio = 0.1;    // Quick decay
+        sustainRatio = 0.65; // Long sustain
+        releaseRatio = 0.1;  // Quick release
+    } else if (instrumentName.includes('Brass')) {
+        attackRatio = 0.08;  // Medium attack
+        decayRatio = 0.15;   // Medium decay
+        sustainRatio = 0.6;  // Good sustain
+        releaseRatio = 0.17; // Natural release
+    } else if (instrumentName.includes('Organ')) {
+        attackRatio = 0.02;  // Very fast attack
+        decayRatio = 0.05;   // Minimal decay
+        sustainRatio = 0.88; // Long sustain
+        releaseRatio = 0.05; // Quick release
+    }
+    
+    // Calculate actual times
+    const attackTime = Math.max(0.005, durationSeconds * attackRatio);
+    const decayTime = Math.max(0.01, durationSeconds * decayRatio);
+    const sustainTime = Math.max(0.01, durationSeconds * sustainRatio);
+    const releaseTime = Math.max(0.005, durationSeconds * releaseRatio);
+    
+    // Velocity affects levels and curves
+    const peakLevel = 0.4 + (0.6 * velocityNormalized);      // Soft=0.4, Hard=1.0
+    const sustainLevel = peakLevel * (0.6 + 0.3 * velocityNormalized); // Sustain level
+    
+    return {
+        attack: attackTime,
+        decay: decayTime,
+        sustain: sustainLevel,
+        sustainTime: sustainTime,
+        release: releaseTime,
+        peakLevel: peakLevel,
+        // Timing points
+        attackEnd: attackTime,
+        decayEnd: attackTime + decayTime,
+        sustainEnd: attackTime + decayTime + sustainTime,
+        releaseEnd: attackTime + decayTime + sustainTime + releaseTime
     };
 }
 
   
-
-
 /**
  * Get envelope for note duration (adapted from existing function)
  */
@@ -5838,6 +7395,10 @@ getEnvelopeForDuration(noteDurationSeconds) {
   }
 }
 
+
+
+
+
   
   /**
    * Get current voice status for debugging
@@ -5853,6 +7414,11 @@ getEnvelopeForDuration(noteDurationSeconds) {
     };
   }
 }
+
+
+
+
+
 /**
  * Test VoiceClock class with master clock synchronization
  */
@@ -6838,7 +8404,9 @@ function generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behavi
 
 console.log('✅ Chord quality selection system loaded');
 
-
+//
+//
+//  
 
 
 
