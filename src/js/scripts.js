@@ -1,3 +1,5 @@
+// Test Commit Oct 10 25
+
 // Parameter definitions
 const parameterDefinitions = [
   // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
@@ -423,7 +425,7 @@ let voiceData = [];
 
 // INSERT THE COMPLETE FUNCTION HERE:
 // Initialize voice data structure - WITH SENSIBLE DEFAULTS
-// NEW TIMING PARAMETER ROW
+// SET PROPER DEFAULTS
 function initializeVoices() {
   voiceData = [];
   for (let i = 0; i < 16; i++) {
@@ -434,30 +436,24 @@ function initializeVoices() {
     };
     
     parameterDefinitions.forEach(param => {
-      if (param.name === 'POLYPHONY') {
-        voice.parameters[param.name] = {
-          min: 1,    // Minimum 1 note (monophonic)
-          max: 4,    // Default maximum 4 notes
-          behavior: 25  // Low behavior for stable chord changes
-        };
-      } else if (param.type === 'dropdown') {
-        // Set sensible defaults for dropdown parameters
+      if (param.type === 'dropdown') {
+        // INSTRUMENT: Acoustic Piano (first in GM sounds list)
         if (param.name === 'INSTRUMENT') {
-          voice.parameters[param.name] = 0; // First GM sound (Acoustic Grand Piano)
+          voice.parameters[param.name] = 0; // Acoustic Grand Piano
         } else {
           voice.parameters[param.name] = 0;
         }
       } else if (param.type === 'dual-dropdown') {
-        // Set sensible defaults for rhythm/rest dual dropdowns
+        // RHYTHMS and RESTS: Keep existing defaults
         if (param.name === 'RHYTHMS') {
           voice.parameters[param.name] = {
-            min: 7,  // Quarter Notes (index 7 in new system)
+            min: 7,  // Quarter Notes (index 7)
             max: 7,  // Quarter Notes
             behavior: 50
           };
         } else if (param.name === 'RESTS') {
           voice.parameters[param.name] = {
-            min: 0,  // No Rests (index 0 in new system)
+            min: 0,  // No Rests (index 0)
             max: 0,  // No Rests
             behavior: 50
           };
@@ -473,16 +469,44 @@ function initializeVoices() {
           console.error(`Missing min/max for parameter: ${param.name}`);
         }
         
-        // Set sensible defaults for single-dual parameters
         if (param.name === 'MELODIC RANGE') {
+          // MELODIC RANGE: Middle C
           voice.parameters[param.name] = {
             min: 60,  // Middle C (C4)
-            max: 60,  // Middle C (will be updated by piano to show single note)
+            max: 60,  // Middle C (single note)
             behavior: 50,
-            selectedNotes: [60] // Piano will load this as Middle C selected
+            selectedNotes: [60] // Piano shows Middle C selected
+          };
+        } else if (param.name === 'POLYPHONY') {
+          // POLYPHONY: One Voice
+          voice.parameters[param.name] = {
+            min: 1,   // Minimum 1 note (monophonic)
+            max: 1,   // Maximum 1 note (monophonic)
+            behavior: 0  // No behavior evolution
+          };
+        } else if (param.name === 'ATTACK VELOCITY') {
+          // ATTACK VELOCITY: 50%
+          voice.parameters[param.name] = {
+            min: 50,  // 50%
+            max: 50,  // 50%
+            behavior: 0  // No behavior evolution
+          };
+        } else if (param.name === 'DETUNING') {
+          // DETUNING: Off (0)
+          voice.parameters[param.name] = {
+            min: 0,   // No detuning
+            max: 0,   // No detuning
+            behavior: 0  // No behavior evolution
+          };
+        } else if (param.name === 'PORTAMENTO GLIDE TIME') {
+          // PORTAMENTO: Off (0)
+          voice.parameters[param.name] = {
+            min: 0,   // No portamento
+            max: 0,   // No portamento
+            behavior: 0  // No behavior evolution
           };
         } else {
-          // Use 25%-75% range for other parameters (existing logic)
+          // VOLUME, STEREO BALANCE, TEMPO (BPM): Keep existing defaults (25%-75% range)
           voice.parameters[param.name] = {
             min: param.min + (param.max - param.min) * 0.25,
             max: param.min + (param.max - param.min) * 0.75,
@@ -494,7 +518,7 @@ function initializeVoices() {
           console.error(`Missing min/max for parameter: ${param.name}`);
         }
         
-        // NEW: Set all ADSR effects to OFF by default
+        // ALL EFFECTS: Off (0-0 for all parameters)
         if (param.name === 'TREMOLO' || param.name === 'CHORUS' || param.name === 'PHASER') {
           voice.parameters[param.name] = {
             speed: {
@@ -507,33 +531,33 @@ function initializeVoices() {
             },
             behavior: 0  // No evolution when OFF
           };
-         } else if (param.name === 'REVERB') {
+        } else if (param.name === 'REVERB') {
           voice.parameters[param.name] = {
-            speed: {
-              min: 0,  // OFF
-              max: 0   // OFF (reverb time controlled differently)
+            speed: {     // Time
+              min: 0,    // OFF
+              max: 0     // OFF
             },
-            depth: {
-              min: 0,     // Starts at 0 (OFF)
-              max: 100    // Available up to 100% wet
+            depth: {     // Mix
+              min: 0,    // OFF
+              max: 0     // OFF
             },
             behavior: 0
           };
         } else if (param.name === 'DELAY') {
           voice.parameters[param.name] = {
-            speed: {      // Delay Time
-              min: 0,     // Starts at 0 (OFF)
-              max: 100    // Available up to 100% (maps to 0-2000ms via your formatter)
+            speed: {     // Time
+              min: 0,    // OFF
+              max: 0     // OFF
             },
-            depth: {      // Mix (wet/dry)
-              min: 0,     // Starts at 0 (OFF) 
-              max: 100    // Available up to 100% wet
+            depth: {     // Mix
+              min: 0,    // OFF
+              max: 0     // OFF
             },
-            feedback: {   // Feedback amount
-              min: 0,     // Starts at 0 (OFF)
-              max: 90     // Available up to 90% (not 100% to prevent runaway feedback)
+            feedback: {  // Feedback
+              min: 0,    // OFF
+              max: 0     // OFF
             },
-            behavior: 0   // No evolution behavior
+            behavior: 0
           };
         } else {
           // Other multi-dual parameters (if any)
@@ -550,6 +574,7 @@ function initializeVoices() {
           };
         }
       } else if (param.type === 'timing-controls') {
+        // LIFE SPAN: Keep existing defaults
         voice.parameters[param.name] = {
           entrance: 0,
           duration: 100,
@@ -557,7 +582,7 @@ function initializeVoices() {
         };
       }
     });
-    
+
     voiceData.push(voice);
   }
   
@@ -6295,132 +6320,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
         velocity: currentVelocity
     };
 }
-
-createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
-    if (!audioManager?.audioContext) {
-        console.error('❌ No audio context available');
-        return null;
-    }
-    
-    const actualStartTime = startTime + (offset * 0.001);
-    const voiceParams = this.getAllCurrentVoiceParameters();
-    
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Creating note with diffused reverb`);
-    
-    const oscillator = audioManager.audioContext.createOscillator();
-    const gainNode = audioManager.audioContext.createGain();
-    
-    // Basic oscillator setup
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(frequency, actualStartTime);
-    
-    // Simple envelope
-    gainNode.gain.setValueAtTime(0, actualStartTime);
-    gainNode.gain.linearRampToValueAtTime(0.1, actualStartTime + 0.01);
-    gainNode.gain.linearRampToValueAtTime(0, actualStartTime + duration);
-    
-    oscillator.connect(gainNode);
-    // Apply balance first
-const panNode = audioManager.audioContext.createStereoPanner();
-const currentBalance = voiceParams.balance;
-panNode.pan.setValueAtTime(currentBalance, actualStartTime);
-
-// PERFECT DIFFUSED REVERB
-if (voiceParams.reverbDepth > 0.001) {
-    console.log(`🌊 Applying perfect diffused reverb (${(voiceParams.reverbDepth * 100).toFixed(0)}%)`);
-    
-    // Dry signal path
-    const dryGain = audioManager.audioContext.createGain();
-    dryGain.gain.setValueAtTime(0.6, actualStartTime);
-    gainNode.connect(dryGain);
-    dryGain.connect(panNode);
-    
-    // Perfect diffused reverb path
-    const convolver = audioManager.audioContext.createConvolver();
-    const reverbGain = audioManager.audioContext.createGain();
-    
-    reverbGain.gain.setValueAtTime(voiceParams.reverbDepth * 0.7, actualStartTime);
-    
-    // Create smooth 2-second impulse response
-    const sampleRate = audioManager.audioContext.sampleRate;
-    const impulseLength = sampleRate * 2;
-    const impulse = audioManager.audioContext.createBuffer(2, impulseLength, sampleRate);
-    
-    for (let channel = 0; channel < 2; channel++) {
-        const channelData = impulse.getChannelData(channel);
-        for (let i = 0; i < impulseLength; i++) {
-            const decay = Math.pow(1 - (i / impulseLength), 1.5);
-            const noise = (Math.random() * 2 - 1);
-            channelData[i] = noise * decay * 0.3;
-        }
-    }
-    
-    convolver.buffer = impulse;
-    
-    // Connect reverb path to panNode
-    gainNode.connect(convolver);
-    convolver.connect(reverbGain);
-    reverbGain.connect(panNode);
-    
-    console.log('🌊 Perfect diffused reverb applied');
-} else {
-    gainNode.connect(panNode);
-}
-
-// DELAY PROCESSING
-if (voiceParams.delayDepth > 0.001) {
-    console.log(`🔄 Voice ${this.voiceIndex + 1}: Applying crisp delay`);
-    
-    // Create delay nodes
-    const delayNode = audioManager.audioContext.createDelay(2.0);
-    const delayGain = audioManager.audioContext.createGain();
-    const feedbackGain = audioManager.audioContext.createGain();
-    const wetGain = audioManager.audioContext.createGain();
-    const dryGain = audioManager.audioContext.createGain();
-    
-    // Convert delay time from ms to seconds
-    const delayTimeSeconds = Math.min(voiceParams.delayTime / 1000, 2.0);
-    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
-    
-    // Setup feedback and gains
-    const feedbackAmount = voiceParams.delayFeedback || 0;
-    feedbackGain.gain.setValueAtTime(feedbackAmount * 0.7, actualStartTime);
-    
-    const wetAmount = voiceParams.delayDepth;
-    const dryAmount = 1.0 - wetAmount;
-    wetGain.gain.setValueAtTime(wetAmount, actualStartTime);
-    dryGain.gain.setValueAtTime(dryAmount, actualStartTime);
-    
-    // Disconnect and reconnect with delay
-    panNode.disconnect();
-    
-    // Dry path
-    panNode.connect(dryGain);
-    dryGain.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
-    
-    // Wet path with delay
-    panNode.connect(delayNode);
-    delayNode.connect(delayGain);
-    delayGain.connect(wetGain);
-    wetGain.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
-    
-    // Feedback loop
-    delayGain.connect(feedbackGain);
-    feedbackGain.connect(delayNode);
-    
-    console.log('🔄 Delay applied');
-} else {
-    // No delay - connect panNode directly to output
-    panNode.connect(audioManager.masterGainNode || audioManager.audioContext.destination);
-}
-
-
-    oscillator.start(actualStartTime);
-    oscillator.stop(actualStartTime + duration);
-    
-    return { oscillator, gainNode, reverbActive: voiceParams.reverbDepth > 0.001 };
-}
-
 
 
 /**
