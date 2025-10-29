@@ -515,7 +515,7 @@ function initializeVoices() {
             },
             depth: {
               min: 0,     // Starts at 0 (OFF)
-              max: 100    // Available up to 100% wet
+              max: 0    // Available up to 100% wet
             },
             behavior: 0
           };
@@ -523,15 +523,15 @@ function initializeVoices() {
           voice.parameters[param.name] = {
             speed: {      // Delay Time
               min: 0,     // Starts at 0 (OFF)
-              max: 100    // Available up to 100% (maps to 0-2000ms via your formatter)
+              max: 0    // Available up to 100% (maps to 0-2000ms via your formatter)
             },
             depth: {      // Mix (wet/dry)
               min: 0,     // Starts at 0 (OFF) 
-              max: 100    // Available up to 100% wet
+              max: 0    // Available up to 100% wet
             },
             feedback: {   // Feedback amount
               min: 0,     // Starts at 0 (OFF)
-              max: 90     // Available up to 90% (not 100% to prevent runaway feedback)
+              max: 0     // Available up to 90% (not 100% to prevent runaway feedback)
             },
             behavior: 0   // No evolution behavior
           };
@@ -1827,7 +1827,7 @@ document.addEventListener('DOMContentLoaded', () => {
       tempoDownBtn.onmouseleave = stopTempoScroll;
     }
     
-    updateMasterTempoDisplay();
+    
   }, 200);
 });
 
@@ -2036,35 +2036,7 @@ function updateVoiceParameters(voiceIndex) {
   }
 }
 
-/**
- * Main parameter interpolation update loop
- * FIXED: Removed problematic slider updates
- *//* 
-function startParameterInterpolation() {
-  if (!isParameterInterpolationActive) {
-    return;
-  }
-  
-  // Update each enabled voice's parameters
-  for (let i = 0; i < 16; i++) {
-    if (voiceData[i] && voiceData[i].enabled) {
-      updateVoiceParameters(i);
-    }
-  }
-  
-  lastUpdateTime = Date.now();
-  
-  // Display current parameter values in console for debugging
-  if (currentVoice >= 0 && currentVoice < 16) {
-    const volumeParam = voiceData[currentVoice].parameters['VOLUME'];
-    const balanceParam = voiceData[currentVoice].parameters['STEREO BALANCE'];
-    
-    if (volumeParam && volumeParam.currentValue !== undefined) {
-      console.log(`Voice ${currentVoice + 1} - Volume: ${Math.round(volumeParam.currentValue)}%, Balance: ${Math.round(balanceParam.currentValue || 0)}%`);
-    }
-  }
-}
- */
+
 /**
  * Reset parameter evolution when stopping
  */
@@ -4729,7 +4701,7 @@ function testMasterTempoTracking() {
   
   // Restore original
   masterTempo = originalMaster;
-  updateMasterTempoDisplay();
+
 }
 
 // Add this diagnostic function
