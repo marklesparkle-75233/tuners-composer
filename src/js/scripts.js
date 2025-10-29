@@ -5981,20 +5981,21 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
     const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
     
-    // Get voice parameters before creating nodes
+    // MOVED UP: Get voice parameters before creating nodes
     const voiceParams = this.getAllCurrentVoiceParameters();
 
-    // Basic node creation first
+    // Create all audio nodes
     const oscillator = audioManager.audioContext.createOscillator();
     const gainNode = audioManager.audioContext.createGain();
     const panNode = audioManager.audioContext.createStereoPanner();
     const filterNode = audioManager.audioContext.createBiquadFilter();
     
-    // Create all other audio nodes
+    // Tremolo nodes
     const tremoloLFO = audioManager.audioContext.createOscillator();
     const tremoloGain = audioManager.audioContext.createGain();
     const tremoloDepth = audioManager.audioContext.createGain();
     
+    // Chorus nodes
     const chorusDelay1 = audioManager.audioContext.createDelay(0.1);
     const chorusDelay2 = audioManager.audioContext.createDelay(0.1);
     const chorusDelay3 = audioManager.audioContext.createDelay(0.1);
@@ -6010,6 +6011,7 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const chorusMix = audioManager.audioContext.createGain();
     const dryGain = audioManager.audioContext.createGain();
     
+    // Phaser nodes (4-stage phaser for rich effect)
     const phaserStage1 = audioManager.audioContext.createBiquadFilter();
     const phaserStage2 = audioManager.audioContext.createBiquadFilter();
     const phaserStage3 = audioManager.audioContext.createBiquadFilter();
@@ -6021,36 +6023,24 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const phaserMix = audioManager.audioContext.createGain();
     const phaserDry = audioManager.audioContext.createGain();
     
+    // Reverb nodes
     const reverbNode = audioManager.audioContext.createConvolver();
     const reverbGain = audioManager.audioContext.createGain();
     const reverbDry = audioManager.audioContext.createGain();
     const reverbWet = audioManager.audioContext.createGain();
     
+    // Delay nodes
     const delayNode = audioManager.audioContext.createDelay(2.0);
     const delayFeedback = audioManager.audioContext.createGain();
     const delayWet = audioManager.audioContext.createGain();
     const delayDry = audioManager.audioContext.createGain();
 
-
-
     // Set oscillator properties
     const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
     oscillator.type = velocitySensitiveWaveform;
     oscillator.frequency.setValueAtTime(frequency, actualStartTime);
-    oscillator.connect(filterNode);
-
-
-    // Initialize currentNode RIGHT HERE (before any effects)
-    let currentNode = filterNode;  // Start with filter as the current node
     
-    // NOW you can call effects that use currentNode
-    const delayIsActive = this.applyDelayADSR(
-        delayNode, delayFeedback, delayWet, delayDry,
-        adsrEnvelope, voiceParams, actualStartTime, duration, currentNode
-    );
-    
-
-    // Apply ADSR to all other effects
+    // Apply ADSR to all effects
     this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
     this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
     
@@ -6069,16 +6059,23 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
         adsrEnvelope, voiceParams, actualStartTime, duration
     );
     
+    // Apply Reverb ADSR
     const reverbIsActive = this.applyReverbADSR(
         reverbNode, reverbGain, reverbDry, reverbWet,
+        adsrEnvelope, voiceParams, actualStartTime, duration
+    );
+
+    // Apply Delay ADSR
+    const delayIsActive = this.applyDelayADSR(
+        delayNode, delayFeedback, delayWet, delayDry,
         adsrEnvelope, voiceParams, actualStartTime, duration
     );
     
     this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
     
     // Audio chain setup
-    
-    // currentNode is already set to filterNode above
+    oscillator.connect(filterNode);
+    let currentNode = filterNode;
     
     // Tremolo connection
     if (tremoloIsActive) {
@@ -6190,50 +6187,30 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     
     // Delay connection  
     if (delayIsActive) {
-    console.log("🔍 DELAY CONNECTION: Setting up audio routing");
-    const delayWetLevel = Math.min(0.7, voiceParams.delayDepth);
-    const delayDryLevel = 1.0 - delayWetLevel;
-    console.log(`🔍 DELAY LEVELS: wet=${delayWetLevel}, dry=${delayDryLevel}`);
-
-    // Set BOTH gains IMMEDIATELY
-    delayDry.gain.setValueAtTime(delayDryLevel, audioManager.audioContext.currentTime);
-    console.log(`🔍 SET IMMEDIATE delayDry.gain to ${delayDryLevel} at currentTime`);
-
-    delayWet.gain.setValueAtTime(delayWetLevel, audioManager.audioContext.currentTime);
-    console.log(`🔍 SET IMMEDIATE delayWet.gain to ${delayWetLevel} at currentTime`);
-
-    // Connect delay chain with feedback
-    currentNode.connect(delayDry);
-    currentNode.connect(delayNode);
-    delayNode.connect(delayWet);
-    delayNode.connect(delayFeedback);
-    delayFeedback.connect(delayNode); // Feedback loop
+        const delayWetLevel = Math.min(0.7, voiceParams.delayDepth);
+        const delayDryLevel = 1.0 - delayWetLevel;
+        
+        // Set up delay routing
+        delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
+        
+        // Connect delay chain with feedback
+        currentNode.connect(delayDry);
+        currentNode.connect(delayNode);
+        delayNode.connect(delayWet);
+        delayNode.connect(delayFeedback);
+        delayFeedback.connect(delayNode); // Feedback loop
+        
+        // Mix dry and wet
+        const delayFinalMix = audioManager.audioContext.createGain();
+        delayFinalMix.gain.setValueAtTime(1.0, actualStartTime);
+        
+        delayDry.connect(delayFinalMix);
+        delayWet.connect(delayFinalMix);
+        
+        currentNode = delayFinalMix;
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH delay`);
+    }
     
-    // Mix dry and wet
-    const delayFinalMix = audioManager.audioContext.createGain();
-    delayFinalMix.gain.setValueAtTime(1.0, audioManager.audioContext.currentTime); // ← ALSO IMMEDIATE
-    
-    delayDry.connect(delayFinalMix);
-    delayWet.connect(delayFinalMix);
-
-    // Check values after setting immediately
-    console.log("🔍 DELAY FINAL CHECK (should show new values now):");
-    console.log("  delayNode.delayTime.value:", delayNode.delayTime.value);
-    console.log("  delayWet.gain.value:", delayWet.gain.value);
-    console.log("  delayDry.gain.value:", delayDry.gain.value);
-    
-    currentNode = delayFinalMix;
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH delay`);
-}
-
-    
-    // Debug logging
-    console.log("About to connect final chain:");
-    console.log("currentNode:", currentNode);
-    console.log("gainNode:", gainNode);
-    console.log("panNode:", panNode);
-    console.log("masterGainNode:", audioManager.masterGainNode);
-
     // Final connection
     currentNode.connect(gainNode);
     gainNode.connect(panNode);
@@ -6446,7 +6423,6 @@ if (voiceParams.delayDepth > 0.001) {
 
 
 
-
 /**
  * Apply ADSR to volume/gain
  */
@@ -6557,47 +6533,105 @@ applyReverbADSR(reverbNode, reverbGain, reverbDry, reverbWet, envelope, voicePar
     return true;
 }
 
-
-
-applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voiceParams, actualStartTime, duration, currentNode) {
-    console.log('🔍 DEBUG applyDelayADSR - currentNode:', currentNode, 'type:', typeof currentNode);
-    console.log('🔍 DELAY CONDITION CHECK: delayDepth =', voiceParams.delayDepth);
+/**
+ * Apply ADSR to delay (echo effect with ADSR-controlled feedback and mix)
+ */
+applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voiceParams, actualStartTime, duration) {
+    // Check if delay should be bypassed
+    // IMPROVED DELAY PROCESSING
+if (voiceParams.delayDepth > 0.001) {
+    console.log(`🔄 Voice ${this.voiceIndex + 1}: Applying crisp delay (Time: ${voiceParams.delayTime}ms, Mix: ${(voiceParams.delayDepth * 100).toFixed(0)}%, Feedback: ${(voiceParams.delayFeedback * 100).toFixed(0)}%)`);
     
-    if (voiceParams.delayDepth > 0.001) {
-        console.log(`🔄 Voice ${this.voiceIndex + 1}: Applying crisp delay (Time: ${voiceParams.delayTime}s, Mix: ${(voiceParams.delayDepth * 100).toFixed(0)}%, Feedback: ${(voiceParams.delayFeedback * 100).toFixed(0)}%)`);
-
-        // Force clamp to 2 seconds max
-        voiceParams.delayTime = Math.min(2.0, voiceParams.delayTime);
-        console.log('🔍 CLAMPED delayTime to:', voiceParams.delayTime, 'seconds');
-        
-// ADD THIS DEBUG LINE:
-console.log(`🔍 DELAY TIME SCHEDULED: ${voiceParams.delayTime}s at time ${actualStartTime}, current audioContext.currentTime: ${audioManager.audioContext.currentTime}`);
-        
-        // USE THE PASSED-IN NODES (don't create new ones)
-        delayNode.delayTime.setValueAtTime(voiceParams.delayTime, actualStartTime);
-        
-        // Set up feedback with decay
-        const feedbackAmount = voiceParams.delayFeedback || 0;
-        delayFeedback.gain.setValueAtTime(feedbackAmount * 0.8, actualStartTime);
-        
-        // Add automatic feedback decay to shorten tail
-        const tailDuration = Math.min(duration * 3, 2.0);
-        if (feedbackAmount > 0) {
-            delayFeedback.gain.exponentialRampToValueAtTime(0.001, actualStartTime + tailDuration);
-        }
-        
-        // Set wet gain (dry will be set in main connection code)
-        const wetAmount = voiceParams.delayDepth;
-        // delayWet.gain.setValueAtTime(wetAmount * 1.2, actualStartTime);
-        
-        console.log(`🔄 Crisp delay: ${voiceParams.delayTime.toFixed(3)}s, ${(wetAmount * 100).toFixed(0)}% wet, ${(feedbackAmount * 100).toFixed(0)}% feedback, ${tailDuration.toFixed(1)}s tail`);
-        
-        return true; // Delay is active
-    }
+    // Create delay nodes
+    const delayNode = audioManager.audioContext.createDelay(2.0);
+    const delayGain = audioManager.audioContext.createGain();
+    const feedbackGain = audioManager.audioContext.createGain();
+    const wetGain = audioManager.audioContext.createGain();
+    const dryGain = audioManager.audioContext.createGain();
     
-    return false; // Delay is bypassed
+    // Convert delay time from ms to seconds
+    const delayTimeSeconds = voiceParams.delayTime / 1000;
+    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+    
+    // CRISP feedback with automatic decay for shorter tail
+    const feedbackAmount = voiceParams.delayFeedback || 0;
+    feedbackGain.gain.setValueAtTime(feedbackAmount * 0.8, actualStartTime); // Reduce initial feedback
+    
+    // Add automatic feedback decay to shorten tail
+    const tailDuration = Math.min(duration * 3, 2.0); // Tail lasts 3x note duration, max 2 seconds
+    feedbackGain.gain.exponentialRampToValueAtTime(0.001, actualStartTime + tailDuration);
+    
+    // LOUDER wet signal for more articulated echoes
+    const wetAmount = voiceParams.delayDepth;
+    const dryAmount = 1.0 - wetAmount;
+    wetGain.gain.setValueAtTime(wetAmount * 1.2, actualStartTime); // Increase wet gain for more punch
+    dryGain.gain.setValueAtTime(dryAmount, actualStartTime);
+    
+    // HIGH-PASS FILTER on delay to make echoes more articulated
+    const highpass = audioManager.audioContext.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.setValueAtTime(200, actualStartTime); // Remove muddy low frequencies
+    highpass.Q.setValueAtTime(0.7, actualStartTime);
+    
+    // Reconnect audio chain with improved delay
+    panNode.disconnect();
+    
+    // Dry path (direct signal)
+    panNode.connect(dryGain);
+    dryGain.connect(audioManager.audioContext.destination);
+    
+    // Wet path with high-pass filtered delay
+    panNode.connect(delayNode);
+    delayNode.connect(highpass);        // Add high-pass filter
+    highpass.connect(delayGain);
+    delayGain.connect(wetGain);
+    wetGain.connect(audioManager.audioContext.destination);
+    
+    // Feedback loop (also high-pass filtered)
+    delayGain.connect(feedbackGain);
+    feedbackGain.connect(delayNode);
+    
+    console.log(`🔄 Crisp delay: ${delayTimeSeconds.toFixed(3)}s, ${(wetAmount * 100).toFixed(0)}% wet, ${(feedbackAmount * 100).toFixed(0)}% feedback, ${tailDuration.toFixed(1)}s tail`);
 }
 
+
+    // Set delay time (convert from 0-100% range to seconds)
+    const delayTimeSeconds = (voiceParams.delayTime / 100) * 2.0; // 0-100% maps to 0-2 seconds
+    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+    
+    const maxDelayDepth = voiceParams.delayDepth;
+    const delayDryLevel = 1.0 - maxDelayDepth;
+    const delayWetLevel = maxDelayDepth;
+    
+    // Delay send follows ADSR
+    const peakDelaySend = delayWetLevel * envelope.peakLevel;
+    const sustainDelaySend = delayWetLevel * envelope.sustain;
+    
+    // Feedback amount (creates echoing effect)
+    const feedbackAmount = Math.min(0.7, maxDelayDepth * 0.6);
+    const peakFeedback = feedbackAmount * envelope.peakLevel;
+    const sustainFeedback = feedbackAmount * envelope.sustain;
+    
+    // Dry signal (constant)
+    delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
+    
+    // Wet signal follows ADSR
+    delayWet.gain.setValueAtTime(0, actualStartTime);
+    delayWet.gain.linearRampToValueAtTime(peakDelaySend, actualStartTime + envelope.attack);
+    delayWet.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainDelaySend), actualStartTime + envelope.decayEnd);
+    delayWet.gain.setValueAtTime(sustainDelaySend, actualStartTime + envelope.sustainEnd);
+    delayWet.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
+    
+    // Feedback follows ADSR (creates evolving echo patterns)
+    delayFeedback.gain.setValueAtTime(0, actualStartTime);
+    delayFeedback.gain.linearRampToValueAtTime(peakFeedback, actualStartTime + envelope.attack);
+    delayFeedback.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainFeedback), actualStartTime + envelope.decayEnd);
+    delayFeedback.gain.setValueAtTime(sustainFeedback, actualStartTime + envelope.sustainEnd);
+    delayFeedback.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Delay active (depth = ${voiceParams.delayDepth.toFixed(3)}, time = ${delayTimeSeconds.toFixed(3)}s)`);
+    return true;
+}
 
 /**
  * Apply ADSR to tremolo (intensity evolution) - WITH BYPASS LOGIC
@@ -6930,7 +6964,7 @@ getAllCurrentVoiceParameters() {
     let delayFeedback = 0.0; // Default no feedback
 
     if (delayParam && delayParam.speed && delayParam.depth) {
-      delayTime = ((delayParam.speed.min + delayParam.speed.max) / 2 / 100) * 2; // Convert to 0-2sec
+      delayTime = ((delayParam.speed.min + delayParam.speed.max) / 2 / 100) * 2000; // Convert to 0-2000ms
       delayDepth = (delayParam.depth.min + delayParam.depth.max) / 2 / 100; // Convert to 0-1
       
       // Add feedback parameter
