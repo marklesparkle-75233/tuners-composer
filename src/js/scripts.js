@@ -8032,10 +8032,10 @@ setTimeout(() => {
   }
 }, 2000); // Wait 2 seconds for DOM to be ready
 
-//
+
+
 //
 // Oct 7 25  -  POLYPHONY STARTS HERE
-//
 //
 /**
  * Generate harmonically related notes
@@ -8148,41 +8148,41 @@ function selectBaseNote(voiceIndex, minNote, maxNote) {
 /**
  * Test polyphony with different settings
  */
-async function testPolyphony() {
-    console.log('=== TESTING POLYPHONY IMPLEMENTATION ===');
+// async function testPolyphony() {
+//     console.log('=== TESTING POLYPHONY IMPLEMENTATION ===');
     
-    // Initialize audio if needed
-    if (!audioManager || !audioManager.isInitialized) {
-        await audioManager.initialize();
-    }
+//     // Initialize audio if needed
+//     if (!audioManager || !audioManager.isInitialized) {
+//         await audioManager.initialize();
+//     }
     
-    if (!masterClock) masterClock = new MasterClock();
-    if (!voiceClockManager) voiceClockManager = new VoiceClockManager();
-    voiceClockManager.initialize(masterClock);
+//     if (!masterClock) masterClock = new MasterClock();
+//     if (!voiceClockManager) voiceClockManager = new VoiceClockManager();
+//     voiceClockManager.initialize(masterClock);
     
-    // Set up Voice 1 for polyphonic testing
-    voiceData[0].enabled = true;
-    voiceData[0].parameters['POLYPHONY'].min = 3;
-    voiceData[0].parameters['POLYPHONY'].max = 6;
-    voiceData[0].parameters['POLYPHONY'].behavior = 75;
+//     // Set up Voice 1 for polyphonic testing
+//     voiceData[0].enabled = true;
+//     voiceData[0].parameters['POLYPHONY'].min = 3;
+//     voiceData[0].parameters['POLYPHONY'].max = 6;
+//     voiceData[0].parameters['POLYPHONY'].behavior = 75;
     
-    // Set a nice melodic range
-    voiceData[0].parameters['MELODIC RANGE'].min = 60; // C4
-    voiceData[0].parameters['MELODIC RANGE'].max = 72; // C5
-    voiceData[0].parameters['MELODIC RANGE'].behavior = 50;
+//     // Set a nice melodic range
+//     voiceData[0].parameters['MELODIC RANGE'].min = 60; // C4
+//     voiceData[0].parameters['MELODIC RANGE'].max = 72; // C5
+//     voiceData[0].parameters['MELODIC RANGE'].behavior = 50;
     
-    console.log('🎹 Starting polyphonic test - you should hear 3-6 notes playing simultaneously');
+//     console.log('🎹 Starting polyphonic test - you should hear 3-6 notes playing simultaneously');
     
-    masterClock.start();
-    voiceClockManager.startAllVoices();
+//     masterClock.start();
+//     voiceClockManager.startAllVoices();
     
-    // Play for 15 seconds
-    setTimeout(() => {
-        voiceClockManager.stopAllVoices();
-        masterClock.stop();
-        console.log('🎹 Polyphonic test complete!');
-    }, 15000);
-}
+//     // Play for 15 seconds
+//     setTimeout(() => {
+//         voiceClockManager.stopAllVoices();
+//         masterClock.stop();
+//         console.log('🎹 Polyphonic test complete!');
+//     }, 15000);
+// }
 
 /**
  * Test chord generation algorithms
@@ -8203,6 +8203,8 @@ function testChordGeneration() {
         }
     }
 }
+
+
 
 
 /**
