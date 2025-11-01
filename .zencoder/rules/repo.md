@@ -1,0 +1,69 @@
+﻿---
+description: Repository Information Overview
+alwaysApply: true
+---
+
+# Tuner's Composer - Phase 1
+
+## Summary
+A 16-voice algorithmic music composition tool built with vanilla JavaScript and the Web Audio API. The application provides an interactive interface for creating evolving musical landscapes with parametric control over multiple instrumental voices, effects processing, and real-time audio synthesis.
+
+## Structure
+- **index.html**: Main application entry point with responsive UI layout
+- **src/js/scripts.js**: Core application logic (300KB+) containing parameter definitions, voice management, UI controllers, and audio event handlers
+- **src/js/audio/**: Web Audio API implementation modules for audio synthesis and processing
+  - **AudioManager.js**: Audio context initialization, oscillator management, and real-time audio control
+  - **Voice.js**: Individual voice implementation and MIDI synthesis
+- **src/css/styles.css**: Responsive styling for desktop, tablet, and mobile layouts (~1700 lines)
+- **assets/**: Resource files and multimedia assets
+
+## Language & Runtime
+**Language**: JavaScript (ES6+)
+**Runtime**: Browser-based (Web Audio API)
+**Execution**: Client-side JavaScript with no build/transpilation required
+**Browser Requirements**: Modern browsers with Web Audio API support and ES6 compatibility
+
+## Dependencies
+**External Libraries**:
+- nouislider v15.6.1 (CSS framework from CDN) - Slider UI components
+
+**No Package Manager**: Project uses vanilla JavaScript without npm/yarn dependency management
+
+## Build & Installation
+No build process required. Direct execution via HTTP server:
+
+\\\ash
+# Clone and navigate to repository
+git clone https://github.com/[username]/tuners-composer.git
+cd tuners-composer
+
+# Start local development server
+python -m http.server 8000
+
+# Access application
+# Navigate to http://localhost:8000 in browser
+\\\
+
+## Main Entry Points
+**Application Start**: \index.html\ loads the UI framework and initializes JavaScript modules
+**Primary Logic**: \src/js/scripts.js\ contains:
+- Parameter definitions and GM sound instrument mappings
+- Voice data management (16 voices)
+- Master Clock system for parameter evolution
+- Real-time audio parameter controls
+- UI event handlers and state management
+
+**Audio Synthesis**: \src/js/audio/AudioManager.js\ handles:
+- Web Audio API context initialization
+- Oscillator creation and control
+- Gain node and effects processing
+- Real-time audio parameter updates
+
+## Key Features
+- **16-Voice Architecture**: Independent polyphonic voice management
+- **Parameter System**: Hierarchical parameter organization (Instrument, Rhythm, Mixing, Modulation, Spatial)
+- **Real-Time Effects**: Tremolo, Chorus, Phaser, Reverb, Delay processing
+- **Master Clock**: 1ms resolution update loop for smooth parameter evolution
+- **Responsive UI**: Adaptive layouts for desktop, tablet, and mobile devices
+- **GM Sound Support**: Access to General MIDI instrument palette (Piano, Guitar, Strings, Brass, Woodwinds, etc.)
+
