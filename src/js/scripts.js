@@ -1027,41 +1027,60 @@ function createMultiDualSlider(param, voiceIndex) {
   };
   
   // Custom time formatters for REVERB
-  if (param.name === 'REVERB') {
+  // if (param.name === 'REVERB') {
+  //   speedFormatter = {
+  //     to: value => {
+  //       const timeSeconds = (value / 100) * 3.0;
+  //       return timeSeconds.toFixed(1) + 's';
+  //     },
+  //     from: value => {
+  //       const numStr = value.replace('s', '');
+  //       const seconds = parseFloat(numStr);
+  //       return (seconds / 3.0) * 100;
+  //     }
+  //   };
+  // } else if (param.name === 'DELAY') {
+  //   speedFormatter = {
+  //     to: value => {
+  //       const timeMs = (value / 100) * 2000;
+  //       if (timeMs >= 1000) {
+  //         return (timeMs / 1000).toFixed(1) + 's';
+  //       } else {
+  //         return Math.round(timeMs) + 'ms';
+  //       }
+  //     },
+  //     from: value => {
+  //       let timeMs;
+  //       if (value.includes('s')) {
+  //         const seconds = parseFloat(value.replace('s', ''));
+  //         timeMs = seconds * 1000;
+  //       } else {
+  //         timeMs = parseFloat(value.replace('ms', ''));
+  //       }
+  //       return (timeMs / 2000) * 100;
+  //     }
+  //   };
+  // }
+  
+if (param.name === 'REVERB') {
     speedFormatter = {
       to: value => {
-        const timeSeconds = (value / 100) * 3.0;
+        const timeSeconds = (value / 100) * 5.5 + 0.5; // 0.5-6.0 seconds
         return timeSeconds.toFixed(1) + 's';
       },
       from: value => {
         const numStr = value.replace('s', '');
         const seconds = parseFloat(numStr);
-        return (seconds / 3.0) * 100;
+        return ((seconds - 0.3) / 3.7) * 100;
       }
     };
   } else if (param.name === 'DELAY') {
-    speedFormatter = {
-      to: value => {
-        const timeMs = (value / 100) * 2000;
-        if (timeMs >= 1000) {
-          return (timeMs / 1000).toFixed(1) + 's';
-        } else {
-          return Math.round(timeMs) + 'ms';
-        }
-      },
-      from: value => {
-        let timeMs;
-        if (value.includes('s')) {
-          const seconds = parseFloat(value.replace('s', ''));
-          timeMs = seconds * 1000;
-        } else {
-          timeMs = parseFloat(value.replace('ms', ''));
-        }
-        return (timeMs / 2000) * 100;
-      }
-    };
+    // Use musical notation formatter
+    const musicalFormatter = createDelayTimeFormatter(voiceIndex);
+    speedFormatter = musicalFormatter;
   }
-  
+
+
   // FIXED: Read actual values from voiceParam
   const speedMin = Number(voiceParam.speed?.min) || 0;
   const speedMax = Number(voiceParam.speed?.max) || 0;
@@ -6386,6 +6405,92 @@ console.log(`🔗 Audio chain complete!\n`);
     //     }
     // };
 
+// oscillator.onended = () => {
+//     try {
+//         // Disconnect oscillator immediately
+//         oscillator.disconnect();
+//         filterNode.disconnect();
+        
+//         // Disconnect other effects immediately
+//         if (tremoloIsActive) {
+//             tremoloLFO.disconnect();
+//             tremoloGain.disconnect();
+//             tremoloDepth.disconnect();
+//         }
+        
+//         if (chorusIsActive) {
+//             chorusDelay1.disconnect();
+//             chorusDelay2.disconnect();
+//             chorusDelay3.disconnect();
+//             chorusLFO1.disconnect();
+//             chorusLFO2.disconnect();
+//             chorusLFO3.disconnect();
+//             chorusGain1.disconnect();
+//             chorusGain2.disconnect();
+//             chorusGain3.disconnect();
+//             chorusDepth1.disconnect();
+//             chorusDepth2.disconnect();
+//             chorusDepth3.disconnect();
+//             chorusMix.disconnect();
+//             dryGain.disconnect();
+//         }
+        
+//         if (phaserIsActive) {
+//             phaserStages.forEach(stage => stage.disconnect());
+//             phaserLFO.disconnect();
+//             phaserDepth.disconnect();
+//             phaserFeedback.disconnect();
+//             phaserMix.disconnect();
+//             phaserDry.disconnect();
+//         }
+        
+//         // CRITICAL: Delay cleanup AFTER the echoes finish
+//         if (reverbIsActive || delayIsActive) {
+//             const maxTailTime = 5000; // 5 seconds for reverb/delay tails
+            
+//             setTimeout(() => {
+//                 try {
+//                     if (reverbIsActive) {
+//                         reverbNode.disconnect();
+//                         reverbDry.disconnect();
+//                         reverbWet.disconnect();
+//                     }
+                    
+//                     if (delayIsActive) {
+//                         delayNode.disconnect();
+//                         delayFeedback.disconnect();
+//                         delayWet.disconnect();
+//                         delayDry.disconnect();
+//                     }
+                    
+//                     // Disconnect main gain/pan at the end
+//                     gainNode.disconnect();
+//                     panNode.disconnect();
+                    
+//                     console.log('🧹 Delay/reverb cleanup completed after tail');
+//                 } catch (e) {
+//                     console.warn('Cleanup warning:', e);
+//                 }
+//             }, maxTailTime);
+//         } else {
+//             // No delay/reverb, disconnect immediately
+//             gainNode.disconnect();
+//             panNode.disconnect();
+//         }
+        
+//         // Remove from preview tracking immediately
+//         if (audioManager.previewGainNodes) {
+//             audioManager.previewGainNodes.delete(gainNode);
+//         }
+//         if (audioManager.previewPanNodes) {
+//             audioManager.previewPanNodes.delete(panNode);
+//         }
+        
+//     } catch (e) {
+//         console.warn('Cleanup warning:', e);
+//     }
+// };
+
 oscillator.onended = () => {
     try {
         // Disconnect oscillator immediately
@@ -6425,9 +6530,47 @@ oscillator.onended = () => {
             phaserDry.disconnect();
         }
         
-        // CRITICAL: Delay cleanup AFTER the echoes finish
+        // CRITICAL: Calculate actual tail time for reverb/delay
         if (reverbIsActive || delayIsActive) {
-            const maxTailTime = 5000; // 5 seconds for reverb/delay tails
+            let maxTailTime = 1000; // Default 1 second
+            
+            // Calculate reverb tail time
+       // In the cleanup section of oscillator.onended, find the reverb tail calculation:
+
+        // Calculate reverb tail time
+        // In the cleanup section of oscillator.onended:
+
+        // Calculate reverb tail time
+        if (reverbIsActive) {
+            const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+            const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+            const reverbTime = 0.5 + (timeValue / 100) * 5.5; // 0.5-6.0 seconds
+            
+            // MASSIVELY EXTENDED: 15x multiplier (was 5x)
+            const reverbTail = reverbTime * 15000; // 15 seconds per second of reverb time!
+            maxTailTime = Math.max(maxTailTime, reverbTail);
+            
+            console.log(`🏛️ Extended reverb tail: ${(reverbTail/1000).toFixed(1)}s for ${reverbTime.toFixed(1)}s reverb time`);
+        }
+
+
+
+            // Calculate delay tail time based on feedback
+            if (delayIsActive) {
+                const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+                const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+                const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
+                
+                const delayTimeSeconds = (100 + (timeValue / 100) * 1900) / 1000;
+                const feedbackAmount = feedbackValue / 100;
+                
+                const delayTail = calculateDelayTailTime(delayTimeSeconds, feedbackAmount);
+                maxTailTime = Math.max(maxTailTime, delayTail);
+                
+                console.log(`🧹 Delay tail calculated: ${(delayTail/1000).toFixed(2)}s (feedback=${(feedbackAmount*100).toFixed(0)}%)`);
+            }
+            
+            console.log(`🧹 Scheduling cleanup in ${(maxTailTime/1000).toFixed(2)}s`);
             
             setTimeout(() => {
                 try {
@@ -6444,11 +6587,10 @@ oscillator.onended = () => {
                         delayDry.disconnect();
                     }
                     
-                    // Disconnect main gain/pan at the end
                     gainNode.disconnect();
                     panNode.disconnect();
                     
-                    console.log('🧹 Delay/reverb cleanup completed after tail');
+                    console.log('🧹 Cleanup completed after tail');
                 } catch (e) {
                     console.warn('Cleanup warning:', e);
                 }
@@ -6471,7 +6613,6 @@ oscillator.onended = () => {
         console.warn('Cleanup warning:', e);
     }
 };
-
 
 
     return {
@@ -6606,25 +6747,140 @@ applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voicePara
         return false;
     }
     
-    // ENHANCED: Better delay time range (100ms to 2000ms is good, keep it)
-    // ENHANCED: More aggressive wet/dry for obvious effect
-    const delayDryLevel = 1.0 - (delayDepth * 0.9); // Increased from 0.7
-    const delayWetLevel = delayDepth * 2.5; // Increased from 1.8
-    const feedbackLevel = Math.min(0.9, feedbackValue / 100); // Increased from 0.85
+    const delayDryLevel = 1.0 - (delayDepth * 0.9);
+    const delayWetLevel = delayDepth * 2.5;
+    
+    // Calculate delay time
+    const delayTimeMs = 100 + (timeValue / 100) * 1900;
+    const delayTimeSeconds = delayTimeMs / 1000;
+    
+    // RELAXED FEEDBACK LIMITING - allow higher feedback for long tails
+    let feedbackLevel = feedbackValue / 100;
+    
+    if (delayTimeMs > 1800) {
+        // Very long delays (>1.8s): cap at 85% (was 75%)
+        feedbackLevel = Math.min(feedbackLevel, 0.85);
+        console.log(`🔧 Very long delay (${delayTimeMs.toFixed(0)}ms): feedback capped at 85%`);
+    } else if (delayTimeMs > 1500) {
+        // Long delays (1.5-1.8s): cap at 88% (was 75%)
+        feedbackLevel = Math.min(feedbackLevel, 0.88);
+    } else if (delayTimeMs > 1000) {
+        // Medium delays (1-1.5s): cap at 90% (was 85%)
+        feedbackLevel = Math.min(feedbackLevel, 0.90);
+    } else {
+        // Short delays: allow up to 92% (was 90%)
+        feedbackLevel = Math.min(feedbackLevel, 0.92);
+    }
     
     delayDry.gain.value = delayDryLevel;
     delayWet.gain.value = delayWetLevel;
     delayFeedback.gain.value = feedbackLevel;
     
-    console.log(`🔧 DELAY SET: dry=${delayDryLevel.toFixed(2)}, wet=${delayWetLevel.toFixed(2)}, feedback=${feedbackLevel.toFixed(2)}`);
+    // Calculate and log expected tail time
+    const expectedTail = calculateDelayTailTime(delayTimeSeconds, feedbackLevel);
+    
+    console.log(`🔧 DELAY SET: time=${delayTimeMs.toFixed(0)}ms, dry=${delayDryLevel.toFixed(2)}, wet=${delayWetLevel.toFixed(2)}, feedback=${(feedbackLevel*100).toFixed(0)}% → tail=${(expectedTail/1000).toFixed(1)}s`);
     
     return true;
 }
 
 
+
+
 /**
  * Apply reverb settings - SIMPLIFIED (no ADSR on wet/dry)
- */
+//  */
+// applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
+//     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+//     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+//     const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+    
+//     const reverbDepth = mixValue / 100;
+    
+//     if (reverbDepth <= 0.001) {
+//         return false;
+//     }
+    
+//     // ENHANCED: Much longer reverb times
+//     const reverbTime = 1.0 + (timeValue / 100) * 7.0; // 1.0-8.0 seconds (was 0.5-5.5)
+//     const sampleRate = audioManager.audioContext.sampleRate;
+//     const length = Math.floor(sampleRate * reverbTime);
+    
+//     if (length <= 0) {
+//         return false;
+//     }
+    
+//     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
+    
+//     // ENHANCED: Much louder, denser reverb impulse
+//     for (let channel = 0; channel < 2; channel++) {
+//         const channelData = impulse.getChannelData(channel);
+//         for (let i = 0; i < length; i++) {
+//             const n = length - i;
+//             // BOOSTED: 5x louder impulse, slower decay
+//             const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 1.2); // Changed from 3.0 and 1.5
+//             channelData[i] = amplitude;
+//         }
+//     }
+    
+//     reverbNode.buffer = impulse;
+    
+//     // ENHANCED: More pronounced wet/dry balance
+//     const reverbDryLevel = 1.0 - (reverbDepth * 0.9); // Increased from 0.7
+//     const reverbWetLevel = reverbDepth * 2.5; // Increased from 1.5
+    
+//     reverbDry.gain.value = reverbDryLevel;
+//     reverbWet.gain.value = reverbWetLevel;
+    
+//     console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s`);
+    
+//     return true;
+// }
+// applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
+//     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+//     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+//     const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+    
+//     const reverbDepth = mixValue / 100;
+    
+//     if (reverbDepth <= 0.001) {
+//         return false;
+//     }
+    
+//     const reverbTime = 0.3 + (timeValue / 100) * 3.7; // 0.3-4.0 seconds
+//     const sampleRate = audioManager.audioContext.sampleRate;
+//     const length = Math.floor(sampleRate * reverbTime);
+    
+//     if (length <= 0) {
+//         return false;
+//     }
+    
+//     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
+    
+//     // MUCH LONGER TAILS: Slower decay curve + louder amplitude
+//     for (let channel = 0; channel < 2; channel++) {
+//         const channelData = impulse.getChannelData(channel);
+//         for (let i = 0; i < length; i++) {
+//             const n = length - i;
+//             // CRITICAL: Changed from 1.0 to 0.7 - much slower decay!
+//             // 10x amplitude maintained for loudness
+//             const amplitude = 10.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 0.7);
+//             channelData[i] = amplitude;
+//         }
+//     }
+    
+//     reverbNode.buffer = impulse;
+    
+//     const reverbDryLevel = 1.0 - (reverbDepth * 0.95);
+//     const reverbWetLevel = reverbDepth * 4.0;
+    
+//     reverbDry.gain.value = reverbDryLevel;
+//     reverbWet.gain.value = reverbWetLevel;
+    
+//     console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s (long tail)`);
+    
+//     return true;
+// }
 applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
@@ -6636,8 +6892,7 @@ applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualS
         return false;
     }
     
-    // ENHANCED: Much longer reverb times
-    const reverbTime = 1.0 + (timeValue / 100) * 7.0; // 1.0-8.0 seconds (was 0.5-5.5)
+    const reverbTime = 0.5 + (timeValue / 100) * 5.5; // 0.5-6.0 seconds
     const sampleRate = audioManager.audioContext.sampleRate;
     const length = Math.floor(sampleRate * reverbTime);
     
@@ -6647,27 +6902,51 @@ applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualS
     
     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
     
-    // ENHANCED: Much louder, denser reverb impulse
+    // Ultra-long tail with 0.9 decay
     for (let channel = 0; channel < 2; channel++) {
         const channelData = impulse.getChannelData(channel);
         for (let i = 0; i < length; i++) {
             const n = length - i;
-            // BOOSTED: 5x louder impulse, slower decay
-            const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 1.2); // Changed from 3.0 and 1.5
+            const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 0.9);
             channelData[i] = amplitude;
         }
     }
     
     reverbNode.buffer = impulse;
     
-    // ENHANCED: More pronounced wet/dry balance
-    const reverbDryLevel = 1.0 - (reverbDepth * 0.9); // Increased from 0.7
-    const reverbWetLevel = reverbDepth * 2.5; // Increased from 1.5
+// Add this inside applyReverbADSR, right after creating the impulse buffer:
+
+// ENHANCED: Add strong early reflections for immediate reverb presence
+for (let channel = 0; channel < 2; channel++) {
+    const channelData = impulse.getChannelData(channel);
     
+    // Create strong early reflections in first 50ms
+    const earlyReflectionTime = Math.min(Math.floor(sampleRate * 0.05), length);
+    
+    for (let i = 0; i < earlyReflectionTime; i++) {
+        // Boost early reflections significantly
+        const earlyBoost = 3.0;
+        channelData[i] *= earlyBoost;
+    }
+    
+    // Then continue with normal decay for the tail
+    for (let i = earlyReflectionTime; i < length; i++) {
+        const n = length - i;
+        const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 0.9);
+        channelData[i] = amplitude;
+    }
+}
+
+
+    // FIXED: Set wet/dry immediately at full level (no ADSR ramping)
+    const reverbDryLevel = 1.0 - (reverbDepth * 0.8);
+    const reverbWetLevel = reverbDepth * 2.0;
+    
+    // Direct assignment - no ramping, immediate full reverb
     reverbDry.gain.value = reverbDryLevel;
     reverbWet.gain.value = reverbWetLevel;
     
-    console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s`);
+    console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s (immediate, constant)`);
     
     return true;
 }
@@ -8632,6 +8911,154 @@ function verifyReverbDelayConnection() {
     }
 }
 
+//////
+//
+//
+//
+/**
+ * Convert delay time in milliseconds to musical note value at given tempo
+ * @param {number} delayTimeMs - Delay time in milliseconds
+ * @param {number} tempo - Tempo in BPM
+ * @returns {object} - {noteName: string, exact: boolean, closestBeats: number}
+ */
+function delayTimeToMusicalNote(delayTimeMs, tempo) {
+    const delayTimeSeconds = delayTimeMs / 1000;
+    const beatDuration = 60 / tempo; // Duration of one quarter note in seconds
+    const delayInBeats = delayTimeSeconds / beatDuration;
+    
+    // Musical note definitions (matching your rhythm system)
+    const musicalNotes = [
+        { name: "Thirty-second Note", beats: 0.125, symbol: "1/32" },
+        { name: "Thirty-second Triplet", beats: 1/12, symbol: "1/32T" },
+        { name: "Sixteenth Note", beats: 0.25, symbol: "1/16" },
+        { name: "Sixteenth Triplet", beats: 1/6, symbol: "1/16T" },
+        { name: "Eighth Note", beats: 0.5, symbol: "1/8" },
+        { name: "Eighth Triplet", beats: 1/3, symbol: "1/8T" },
+        { name: "Dotted Eighth", beats: 0.75, symbol: "1/8." },
+        { name: "Quarter Triplet", beats: 2/3, symbol: "1/4T" },
+        { name: "Quarter Note", beats: 1.0, symbol: "1/4" },
+        { name: "Dotted Quarter", beats: 1.5, symbol: "1/4." },
+        { name: "Half Triplet", beats: 4/3, symbol: "1/2T" },
+        { name: "Half Note", beats: 2.0, symbol: "1/2" },
+        { name: "Dotted Half", beats: 3.0, symbol: "1/2." },
+        { name: "Whole Triplet", beats: 8/3, symbol: "1/1T" },
+        { name: "Whole Note", beats: 4.0, symbol: "1/1" },
+        { name: "Two Whole Notes", beats: 8.0, symbol: "2/1" }
+    ];
+    
+    // Find closest musical note
+    let closestNote = musicalNotes[0];
+    let smallestDiff = Math.abs(delayInBeats - musicalNotes[0].beats);
+    
+    for (const note of musicalNotes) {
+        const diff = Math.abs(delayInBeats - note.beats);
+        if (diff < smallestDiff) {
+            smallestDiff = diff;
+            closestNote = note;
+        }
+    }
+    
+    // Check if it's an exact match (within 5% tolerance)
+    const tolerance = 0.05;
+    const isExact = smallestDiff < (closestNote.beats * tolerance);
+    
+    return {
+        noteName: closestNote.name,
+        symbol: closestNote.symbol,
+        exact: isExact,
+        delayInBeats: delayInBeats.toFixed(2),
+        closestBeats: closestNote.beats
+    };
+}
+
+/**
+ * Format delay time tooltip with both ms and musical notation
+ * @param {number} delayTimeMs - Delay time in milliseconds
+ * @param {number} tempo - Current tempo in BPM
+ * @returns {string} - Formatted tooltip string
+ */
+function formatDelayTooltip(delayTimeMs, tempo) {
+    const musical = delayTimeToMusicalNote(delayTimeMs, tempo);
+    
+    if (musical.exact) {
+        // Exact match - show note name
+        return `${delayTimeMs.toFixed(0)}ms = ${musical.symbol} (${musical.noteName})`;
+    } else {
+        // Approximate - show both
+        return `${delayTimeMs.toFixed(0)}ms ≈ ${musical.symbol} (${musical.noteName})`;
+    }
+}
+
+/**
+ * Enhanced DELAY tooltip formatter for noUiSlider
+ * Call this when creating the DELAY time slider
+ */
+function createDelayTimeFormatter(voiceIndex) {
+    return {
+        to: function(value) {
+            // Get current voice tempo
+            const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+            const currentTempo = tempoParam ? 
+                (tempoParam.min + tempoParam.max) / 2 : 120;
+            
+            // Convert slider value (0-100) to delay time (100-2000ms)
+            const delayTimeMs = 100 + (value / 100) * 1900;
+            
+            // Return musical notation tooltip
+            return formatDelayTooltip(delayTimeMs, currentTempo);
+        },
+        from: function(value) {
+            // Parse back from string (extract ms value)
+            const match = value.match(/(\d+)ms/);
+            if (match) {
+                const delayTimeMs = parseFloat(match[1]);
+                // Convert back to slider value (0-100)
+                return ((delayTimeMs - 100) / 1900) * 100;
+            }
+            return parseFloat(value);
+        }
+    };
+}
+
+/**
+ * Calculate how long delay echoes will last based on feedback
+ * @param {number} delayTime - Delay time in seconds
+ * @param {number} feedback - Feedback amount (0-1)
+ * @returns {number} Tail time in milliseconds
+ */
+/**
+ * Calculate how long delay echoes will last based on feedback
+ * @param {number} delayTime - Delay time in seconds
+ * @param {number} feedback - Feedback amount (0-1)
+ * @returns {number} Tail time in milliseconds
+ */
+function calculateDelayTailTime(delayTime, feedback) {
+    // Each echo is feedback^n of the original amplitude
+    // Stop when amplitude drops below -60dB (0.001 = 1/1000)
+    const minAudibleAmplitude = 0.001;
+    
+    if (feedback < 0.01) {
+        return delayTime * 1000; // Just one echo
+    }
+    
+    // Calculate number of echoes until inaudible
+    const numberOfEchoes = Math.log(minAudibleAmplitude) / Math.log(feedback);
+    
+    // Total time = number of echoes * delay time between each
+    let tailTime = numberOfEchoes * delayTime * 1000; // Convert to ms
+    
+    // EXTENDED: Much longer maximum for sustained echoes
+    const MAX_TAIL_TIME = 60000; // 60 seconds (was 20 seconds)
+    const WARN_TAIL_TIME = 45000; // 45 seconds
+    
+    if (tailTime > WARN_TAIL_TIME) {
+        const echoCount = Math.floor(numberOfEchoes);
+        console.log(`🔄 Long delay tail: ${(tailTime/1000).toFixed(1)}s (${echoCount} echoes)`);
+    }
+    
+    // Add generous safety margin for long tails
+    return Math.min(tailTime * 1.5, MAX_TAIL_TIME); // 1.5x safety margin
+}
 
 
 
