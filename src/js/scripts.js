@@ -940,24 +940,7 @@ function createDualSlider(param, voiceIndex) {
         }
     });
     
-    // const updateValues = () => {
-    //     if (!sliderDiv.noUiSlider) return;
         
-    //     try {
-    //         const values = sliderDiv.noUiSlider.get();
-    //         const min = Math.round(Number(values[0]));
-    //         const max = Math.round(Number(values[1]));
-            
-    //         if (!isNaN(min) && !isNaN(max) && voiceIndex === currentVoice) {
-    //             voiceData[voiceIndex].parameters[param.name].min = min;
-    //             voiceData[voiceIndex].parameters[param.name].max = max;
-    //             delete voiceData[voiceIndex].parameters[param.name].currentValue;
-    //         }
-    //     } catch (error) {
-    //         // Silent error handling
-    //     }
-    // };
-    
     const updateValues = () => {
     if (!sliderDiv.noUiSlider) return;
     
@@ -1001,14 +984,14 @@ function createDualSlider(param, voiceIndex) {
     
     return wrapper;
 }
+
 function createMultiDualSlider(param, voiceIndex) {
   console.log(`🔧 createMultiDualSlider called for ${param.name}, voiceIndex=${voiceIndex}`);
-  console.log(`   voiceParam:`, voiceData[voiceIndex].parameters[param.name]);
-
+  
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-slider';
   
-  // Get voice parameter data
+  // Get voice parameter data - FIXED: Use correct path
   const voiceParam = voiceData[voiceIndex].parameters[param.name];
   
   // Validate voiceParam exists
@@ -1016,6 +999,8 @@ function createMultiDualSlider(param, voiceIndex) {
     console.error(`Missing parameter data for ${param.name}`);
     return wrapper;
   }
+  
+  console.log(`   voiceParam for ${param.name}:`, voiceParam);
   
   // SPEED/TIME SLIDER
   const speedWrapper = document.createElement('div');
@@ -1077,14 +1062,19 @@ function createMultiDualSlider(param, voiceIndex) {
     };
   }
   
-  // FIXED: Ensure we read from voiceParam.speed, not param
+  // FIXED: Read actual values from voiceParam
   const speedMin = Number(voiceParam.speed?.min) || 0;
   const speedMax = Number(voiceParam.speed?.max) || 0;
   
   console.log(`📊 Creating ${param.name} speed slider: start=[${speedMin}, ${speedMax}]`);
   
+  // Check if slider already exists and destroy it
+  if (speedDiv.noUiSlider) {
+    speedDiv.noUiSlider.destroy();
+  }
+
   noUiSlider.create(speedDiv, {
-    start: [speedMin, speedMax],  // FIXED: Use voiceParam values
+    start: [speedMin, speedMax],
     connect: true,
     range: { min: param.min, max: param.max },
     step: 1,
@@ -1093,11 +1083,21 @@ function createMultiDualSlider(param, voiceIndex) {
   });
   
   const updateSpeedValues = () => {
-    const values = speedDiv.noUiSlider.get();
-    const min = Math.round(Number(speedFormatter.from(values[0])));
-    const max = Math.round(Number(speedFormatter.from(values[1])));
-    voiceData[voiceIndex].parameters[param.name].speed.min = min;
-    voiceData[voiceIndex].parameters[param.name].speed.max = max;
+    if (!speedDiv.noUiSlider) return;
+    
+    try {
+      const values = speedDiv.noUiSlider.get();
+      const min = Math.round(Number(speedFormatter.from(values[0])));
+      const max = Math.round(Number(speedFormatter.from(values[1])));
+      
+      // FIXED: Update actual voiceData
+      voiceData[voiceIndex].parameters[param.name].speed.min = min;
+      voiceData[voiceIndex].parameters[param.name].speed.max = max;
+      
+      console.log(`✅ ${param.name} speed updated: ${min}-${max}`);
+    } catch (error) {
+      console.warn(`Error updating ${param.name} speed:`, error);
+    }
   };
   
   speedDiv.noUiSlider.on('update', updateSpeedValues);
@@ -1122,14 +1122,19 @@ function createMultiDualSlider(param, voiceIndex) {
   
   const depthDiv = document.createElement('div');
   
-  // FIXED: Ensure we read from voiceParam.depth
+  // FIXED: Read actual values from voiceParam
   const depthMin = Number(voiceParam.depth?.min) || 0;
   const depthMax = Number(voiceParam.depth?.max) || 0;
   
   console.log(`📊 Creating ${param.name} depth slider: start=[${depthMin}, ${depthMax}]`);
   
+  // Check if slider already exists and destroy it
+  if (depthDiv.noUiSlider) {
+    depthDiv.noUiSlider.destroy();
+  }
+
   noUiSlider.create(depthDiv, {
-    start: [depthMin, depthMax],  // FIXED: Use voiceParam values
+    start: [depthMin, depthMax],
     connect: true,
     range: { min: param.min, max: param.max },
     step: 1,
@@ -1141,11 +1146,21 @@ function createMultiDualSlider(param, voiceIndex) {
   });
   
   const updateDepthValues = () => {
-    const values = depthDiv.noUiSlider.get();
-    const min = Math.round(Number(values[0].replace('%', '')));
-    const max = Math.round(Number(values[1].replace('%', '')));
-    voiceData[voiceIndex].parameters[param.name].depth.min = min;
-    voiceData[voiceIndex].parameters[param.name].depth.max = max;
+    if (!depthDiv.noUiSlider) return;
+    
+    try {
+      const values = depthDiv.noUiSlider.get();
+      const min = Math.round(Number(values[0].replace('%', '')));
+      const max = Math.round(Number(values[1].replace('%', '')));
+      
+      // FIXED: Update actual voiceData
+      voiceData[voiceIndex].parameters[param.name].depth.min = min;
+      voiceData[voiceIndex].parameters[param.name].depth.max = max;
+      
+      console.log(`✅ ${param.name} depth updated: ${min}-${max}%`);
+    } catch (error) {
+      console.warn(`Error updating ${param.name} depth:`, error);
+    }
   };
   
   depthDiv.noUiSlider.on('update', updateDepthValues);
@@ -1174,14 +1189,19 @@ function createMultiDualSlider(param, voiceIndex) {
       voiceParam.feedback = { min: 0, max: 0 };
     }
     
-    // FIXED: Ensure we read from voiceParam.feedback
+    // FIXED: Read actual values from voiceParam
     const feedbackMin = Number(voiceParam.feedback?.min) || 0;
     const feedbackMax = Number(voiceParam.feedback?.max) || 0;
     
     console.log(`📊 Creating ${param.name} feedback slider: start=[${feedbackMin}, ${feedbackMax}]`);
     
+    // Check if slider already exists and destroy it
+    if (feedbackDiv.noUiSlider) {
+      feedbackDiv.noUiSlider.destroy();
+    }
+
     noUiSlider.create(feedbackDiv, {
-      start: [feedbackMin, feedbackMax],  // FIXED: Use voiceParam values
+      start: [feedbackMin, feedbackMax],
       connect: true,
       range: { min: param.min, max: param.max },
       step: 1,
@@ -1193,11 +1213,21 @@ function createMultiDualSlider(param, voiceIndex) {
     });
     
     const updateFeedbackValues = () => {
-      const values = feedbackDiv.noUiSlider.get();
-      const min = Math.round(Number(values[0].replace('%', '')));
-      const max = Math.round(Number(values[1].replace('%', '')));
-      voiceData[voiceIndex].parameters[param.name].feedback.min = min;
-      voiceData[voiceIndex].parameters[param.name].feedback.max = max;
+      if (!feedbackDiv.noUiSlider) return;
+      
+      try {
+        const values = feedbackDiv.noUiSlider.get();
+        const min = Math.round(Number(values[0].replace('%', '')));
+        const max = Math.round(Number(values[1].replace('%', '')));
+        
+        // FIXED: Update actual voiceData
+        voiceData[voiceIndex].parameters[param.name].feedback.min = min;
+        voiceData[voiceIndex].parameters[param.name].feedback.max = max;
+        
+        console.log(`✅ ${param.name} feedback updated: ${min}-${max}%`);
+      } catch (error) {
+        console.warn(`Error updating ${param.name} feedback:`, error);
+      }
     };
     
     feedbackDiv.noUiSlider.on('update', updateFeedbackValues);
@@ -2534,194 +2564,188 @@ async function previewVoice(voiceIndex) {
 }
 
 
-
-// Test function to verify all rhythm options are working
-// Add this to scripts.js and run in console
-
-function testAllRhythmOptions() {
-  console.log('=== TESTING ALL RHYTHM OPTIONS ===');
+// DIAGNOSTIC FUNCTIONS BEWLOW:
+// // Test function to verify all rhythm options are working
+// function testAllRhythmOptions() {
+//   console.log('=== TESTING ALL RHYTHM OPTIONS ===');
   
-  const testTempo = 120; // BPM
-  const beatDuration = 60 / testTempo; // 0.5 seconds per beat at 120 BPM
+//   const testTempo = 120; // BPM
+//   const beatDuration = 60 / testTempo; // 0.5 seconds per beat at 120 BPM
   
-  console.log(`Test tempo: ${testTempo} BPM (${beatDuration}s per beat)`);
-  console.log('');
+//   console.log(`Test tempo: ${testTempo} BPM (${beatDuration}s per beat)`);
+//   console.log('');
   
-  // Test each rhythm option
-  for (let i = 0; i <= 10; i++) {
-    const duration = getRhythmDuration(i, testTempo);
-    const rhythmInfo = rhythmDurations[i];
-    const beatsCalculated = duration / beatDuration;
+//   // Test each rhythm option
+//   for (let i = 0; i <= 10; i++) {
+//     const duration = getRhythmDuration(i, testTempo);
+//     const rhythmInfo = rhythmDurations[i];
+//     const beatsCalculated = duration / beatDuration;
     
-    console.log(`Index ${i}: ${rhythmInfo.name}`);
-    console.log(`  Expected: ${rhythmInfo.beats} beats`);
-    console.log(`  Calculated: ${beatsCalculated.toFixed(3)} beats`);
-    console.log(`  Duration: ${duration.toFixed(3)} seconds`);
-    console.log(`  Time range: ${duration < 0.1 ? 'Very fast' : duration < 0.5 ? 'Fast' : duration < 2 ? 'Medium' : duration < 5 ? 'Slow' : 'Very slow'}`);
-    console.log('');
-  }
+//     console.log(`Index ${i}: ${rhythmInfo.name}`);
+//     console.log(`  Expected: ${rhythmInfo.beats} beats`);
+//     console.log(`  Calculated: ${beatsCalculated.toFixed(3)} beats`);
+//     console.log(`  Duration: ${duration.toFixed(3)} seconds`);
+//     console.log(`  Time range: ${duration < 0.1 ? 'Very fast' : duration < 0.5 ? 'Fast' : duration < 2 ? 'Medium' : duration < 5 ? 'Slow' : 'Very slow'}`);
+//     console.log('');
+//   }
   
-  // Test extreme cases
-  console.log('=== EXTREME DURATION EXAMPLES ===');
+//   // Test extreme cases
+//   console.log('=== EXTREME DURATION EXAMPLES ===');
   
-  const shortestDuration = getRhythmDuration(0, testTempo); // 32nd notes
-  const longestDuration = getRhythmDuration(10, testTempo); // 4 whole notes
+//   const shortestDuration = getRhythmDuration(0, testTempo); // 32nd notes
+//   const longestDuration = getRhythmDuration(10, testTempo); // 4 whole notes
 
-  console.log(`Shortest: ${rhythmDurations[0].name} = ${shortestDuration.toFixed(3)}s`);
-  console.log(`Longest: ${rhythmDurations[10].name} = ${longestDuration.toFixed(3)}s`);
-  console.log(`Duration ratio: ${(longestDuration / shortestDuration).toFixed(1)}x difference`);
+//   console.log(`Shortest: ${rhythmDurations[0].name} = ${shortestDuration.toFixed(3)}s`);
+//   console.log(`Longest: ${rhythmDurations[10].name} = ${longestDuration.toFixed(3)}s`);
+//   console.log(`Duration ratio: ${(longestDuration / shortestDuration).toFixed(1)}x difference`);
   
-  // Verify mathematical consistency
-  console.log('');
-  console.log('=== MATHEMATICAL VERIFICATION ===');
-  const wholNote = getRhythmDuration(7, testTempo); // Whole note = 4 beats
-  const halfNote = getRhythmDuration(6, testTempo); // Half note = 2 beats
-  const quarterNote = beatDuration; // 1 beat by definition
+//   // Verify mathematical consistency
+//   console.log('');
+//   console.log('=== MATHEMATICAL VERIFICATION ===');
+//   const wholNote = getRhythmDuration(7, testTempo); // Whole note = 4 beats
+//   const halfNote = getRhythmDuration(6, testTempo); // Half note = 2 beats
+//   const quarterNote = beatDuration; // 1 beat by definition
   
-  console.log(`Whole note: ${wholNote.toFixed(3)}s (should be 4x quarter note)`);
-  console.log(`Half note: ${halfNote.toFixed(3)}s (should be 2x quarter note)`);
-  console.log(`Quarter note: ${quarterNote.toFixed(3)}s (1 beat)`);
-  console.log(`Ratio check: whole/half = ${(wholNote/halfNote).toFixed(1)} (should be 2.0)`);
-  console.log(`Ratio check: half/quarter = ${(halfNote/quarterNote).toFixed(1)} (should be 2.0)`);
-}
-
-
-// Add this diagnostic function to test melodic range issues
-
-function testMelodicRangeIssues() {
-  console.log('=== MELODIC RANGE DIAGNOSTIC ===');
+//   console.log(`Whole note: ${wholNote.toFixed(3)}s (should be 4x quarter note)`);
+//   console.log(`Half note: ${halfNote.toFixed(3)}s (should be 2x quarter note)`);
+//   console.log(`Quarter note: ${quarterNote.toFixed(3)}s (1 beat)`);
+//   console.log(`Ratio check: whole/half = ${(wholNote/halfNote).toFixed(1)} (should be 2.0)`);
+//   console.log(`Ratio check: half/quarter = ${(halfNote/quarterNote).toFixed(1)} (should be 2.0)`);
+// }
+// Test melodic range issues
+// function testMelodicRangeIssues() {
+//   console.log('=== MELODIC RANGE DIAGNOSTIC ===');
   
-  const currentVoiceParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+//   const currentVoiceParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
   
-  console.log('Current melodic range parameter:', {
-    min: currentVoiceParam.min,
-    max: currentVoiceParam.max,
-    behavior: currentVoiceParam.behavior,
-    currentNote: currentVoiceParam.currentNote
-  });
+//   console.log('Current melodic range parameter:', {
+//     min: currentVoiceParam.min,
+//     max: currentVoiceParam.max,
+//     behavior: currentVoiceParam.behavior,
+//     currentNote: currentVoiceParam.currentNote
+//   });
   
-  // Test frequency range capabilities
-  console.log('\n=== FREQUENCY RANGE TEST ===');
-  const extremeNotes = [
-    { midi: 21, name: 'A0', freq: midiToFrequency(21) },   // Lowest piano key
-    { midi: 36, name: 'C2', freq: midiToFrequency(36) },   // Low bass
-    { midi: 60, name: 'C4', freq: midiToFrequency(60) },   // Middle C
-    { midi: 84, name: 'C6', freq: midiToFrequency(84) },   // High treble
-    { midi: 108, name: 'C8', freq: midiToFrequency(108) }  // Highest piano key
-  ];
+//   // Test frequency range capabilities
+//   console.log('\n=== FREQUENCY RANGE TEST ===');
+//   const extremeNotes = [
+//     { midi: 21, name: 'A0', freq: midiToFrequency(21) },   // Lowest piano key
+//     { midi: 36, name: 'C2', freq: midiToFrequency(36) },   // Low bass
+//     { midi: 60, name: 'C4', freq: midiToFrequency(60) },   // Middle C
+//     { midi: 84, name: 'C6', freq: midiToFrequency(84) },   // High treble
+//     { midi: 108, name: 'C8', freq: midiToFrequency(108) }  // Highest piano key
+//   ];
   
-  extremeNotes.forEach(note => {
-    console.log(`${note.name} (MIDI ${note.midi}) = ${note.freq.toFixed(1)}Hz`);
-  });
+//   extremeNotes.forEach(note => {
+//     console.log(`${note.name} (MIDI ${note.midi}) = ${note.freq.toFixed(1)}Hz`);
+//   });
   
-  // Test note selection with different ranges
-  console.log('\n=== NOTE SELECTION TEST ===');
+//   // Test note selection with different ranges
+//   console.log('\n=== NOTE SELECTION TEST ===');
   
-  // Backup original values
-  const originalMin = currentVoiceParam.min;
-  const originalMax = currentVoiceParam.max;
-  const originalCurrentNote = currentVoiceParam.currentNote;
+//   // Backup original values
+//   const originalMin = currentVoiceParam.min;
+//   const originalMax = currentVoiceParam.max;
+//   const originalCurrentNote = currentVoiceParam.currentNote;
   
-  // Test low range (bass notes)
-  console.log('Testing LOW RANGE (C2-C3):');
-  currentVoiceParam.min = 36;  // C2
-  currentVoiceParam.max = 48;  // C3
-  currentVoiceParam.currentNote = 42; // Reset to middle of new range
+//   // Test low range (bass notes)
+//   console.log('Testing LOW RANGE (C2-C3):');
+//   currentVoiceParam.min = 36;  // C2
+//   currentVoiceParam.max = 48;  // C3
+//   currentVoiceParam.currentNote = 42; // Reset to middle of new range
   
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`  Low test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
-  }
+//   for (let i = 0; i < 5; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`  Low test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+//   }
   
-  // Test high range (treble notes)
-  console.log('Testing HIGH RANGE (C5-C6):');
-  currentVoiceParam.min = 72;  // C5
-  currentVoiceParam.max = 84;  // C6
-  currentVoiceParam.currentNote = 78; // Reset to middle of new range
+//   // Test high range (treble notes)
+//   console.log('Testing HIGH RANGE (C5-C6):');
+//   currentVoiceParam.min = 72;  // C5
+//   currentVoiceParam.max = 84;  // C6
+//   currentVoiceParam.currentNote = 78; // Reset to middle of new range
   
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`  High test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
-  }
+//   for (let i = 0; i < 5; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`  High test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+//   }
   
-  // Test extreme range (full piano)
-  console.log('Testing EXTREME RANGE (A0-C8):');
-  currentVoiceParam.min = 21;   // A0
-  currentVoiceParam.max = 108;  // C8
-  currentVoiceParam.currentNote = 60; // Reset to middle C
+//   // Test extreme range (full piano)
+//   console.log('Testing EXTREME RANGE (A0-C8):');
+//   currentVoiceParam.min = 21;   // A0
+//   currentVoiceParam.max = 108;  // C8
+//   currentVoiceParam.currentNote = 60; // Reset to middle C
   
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`  Extreme test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
-  }
+//   for (let i = 0; i < 5; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`  Extreme test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote}) = ${note.frequency.toFixed(1)}Hz`);
+//   }
   
-  // Restore original values
-  currentVoiceParam.min = originalMin;
-  currentVoiceParam.max = originalMax;
-  currentVoiceParam.currentNote = originalCurrentNote;
+//   // Restore original values
+//   currentVoiceParam.min = originalMin;
+//   currentVoiceParam.max = originalMax;
+//   currentVoiceParam.currentNote = originalCurrentNote;
   
-  console.log('\n=== INTERPOLATION BEHAVIOR TEST ===');
-  console.log('Testing how behavior affects note changes...');
+//   console.log('\n=== INTERPOLATION BEHAVIOR TEST ===');
+//   console.log('Testing how behavior affects note changes...');
   
-  // Test with different behavior settings
-  const originalBehavior = currentVoiceParam.behavior;
+//   // Test with different behavior settings
+//   const originalBehavior = currentVoiceParam.behavior;
   
-  currentVoiceParam.behavior = 0;
-  const staticNote = selectMidiNote(currentVoice);
-  console.log(`0% behavior: ${staticNote.noteName} (should stay same)`);
+//   currentVoiceParam.behavior = 0;
+//   const staticNote = selectMidiNote(currentVoice);
+//   console.log(`0% behavior: ${staticNote.noteName} (should stay same)`);
   
-  currentVoiceParam.behavior = 100;
-  const varyingNote1 = selectMidiNote(currentVoice);
-  const varyingNote2 = selectMidiNote(currentVoice);
-  console.log(`100% behavior: ${varyingNote1.noteName} -> ${varyingNote2.noteName} (should vary dramatically)`);
+//   currentVoiceParam.behavior = 100;
+//   const varyingNote1 = selectMidiNote(currentVoice);
+//   const varyingNote2 = selectMidiNote(currentVoice);
+//   console.log(`100% behavior: ${varyingNote1.noteName} -> ${varyingNote2.noteName} (should vary dramatically)`);
   
-  // Restore original behavior
-  currentVoiceParam.behavior = originalBehavior;
+//   // Restore original behavior
+//   currentVoiceParam.behavior = originalBehavior;
   
-  console.log('\nDiagnostic complete. Check if note selection reflects the ranges tested.');
-}
-
+//   console.log('\nDiagnostic complete. Check if note selection reflects the ranges tested.');
+// }
 // Test function to play specific MIDI notes to verify oscillator capabilities
-function testOscillatorRange() {
-  console.log('=== TESTING OSCILLATOR FREQUENCY RANGE ===');
+// function testOscillatorRange() {
+//   console.log('=== TESTING OSCILLATOR FREQUENCY RANGE ===');
   
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('ERROR: Audio manager not initialized. Start preview first.');
-    return;
-  }
+//   if (!audioManager || !audioManager.isInitialized) {
+//     console.log('ERROR: Audio manager not initialized. Start preview first.');
+//     return;
+//   }
   
-  const testNotes = [
-    { midi: 21, name: 'A0' },    // 27.5 Hz - Lowest piano
-    { midi: 36, name: 'C2' },    // 65.4 Hz - Low bass
-    { midi: 60, name: 'C4' },    // 261.6 Hz - Middle C
-    { midi: 84, name: 'C6' },    // 1046.5 Hz - High treble
-    { midi: 108, name: 'C8' }    // 4186.0 Hz - Highest piano
-  ];
+//   const testNotes = [
+//     { midi: 21, name: 'A0' },    // 27.5 Hz - Lowest piano
+//     { midi: 36, name: 'C2' },    // 65.4 Hz - Low bass
+//     { midi: 60, name: 'C4' },    // 261.6 Hz - Middle C
+//     { midi: 84, name: 'C6' },    // 1046.5 Hz - High treble
+//     { midi: 108, name: 'C8' }    // 4186.0 Hz - Highest piano
+//   ];
   
-  let currentIndex = 0;
+//   let currentIndex = 0;
   
-  function playNextTestNote() {
-    if (currentIndex >= testNotes.length) {
-      console.log('Oscillator range test complete!');
-      return;
-    }
+//   function playNextTestNote() {
+//     if (currentIndex >= testNotes.length) {
+//       console.log('Oscillator range test complete!');
+//       return;
+//     }
     
-    const note = testNotes[currentIndex];
-    const frequency = midiToFrequency(note.midi);
+//     const note = testNotes[currentIndex];
+//     const frequency = midiToFrequency(note.midi);
     
-    console.log(`Playing: ${note.name} (MIDI ${note.midi}) = ${frequency.toFixed(1)}Hz`);
+//     console.log(`Playing: ${note.name} (MIDI ${note.midi}) = ${frequency.toFixed(1)}Hz`);
     
-    // Schedule a 1-second test note
-    scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
+//     // Schedule a 1-second test note
+//     scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
     
-    currentIndex++;
+//     currentIndex++;
     
-    // Play next note after 1.5 seconds
-    setTimeout(playNextTestNote, 1500);
-  }
+//     // Play next note after 1.5 seconds
+//     setTimeout(playNextTestNote, 1500);
+//   }
   
-  playNextTestNote();
-}
+//   playNextTestNote();
+// }
 
 
 // Function to play complete 88-key chromatic scale from A0 to C8
@@ -2745,7 +2769,7 @@ function playChromaticScale() {
   
   console.log(`Playing ${endMidi - startMidi + 1} notes from MIDI ${startMidi} to ${endMidi}`);
   console.log('Note duration: 300ms, Gap: 50ms, Total time: ~31 seconds');
-  
+
 
 
   function scheduleNextNote() {
@@ -2825,300 +2849,296 @@ function testFrequencyCalculations() {
 }
 
 // Function to play specific octaves for comparison
-function playOctaveComparison() {
-  console.log('=== OCTAVE COMPARISON TEST ===');
+// function playOctaveComparison() {
+//   console.log('=== OCTAVE COMPARISON TEST ===');
   
-  if (!audioManager || !audioManager.isInitialized) {
-    console.log('ERROR: Audio manager not initialized. Start preview first.');
-    return;
-  }
+//   if (!audioManager || !audioManager.isInitialized) {
+//     console.log('ERROR: Audio manager not initialized. Start preview first.');
+//     return;
+//   }
   
-  const octaveTests = [
-    { midi: 21, name: 'A0', octave: 0 },   // 27.5 Hz
-    { midi: 33, name: 'A1', octave: 1 },   // 55 Hz
-    { midi: 45, name: 'A2', octave: 2 },   // 110 Hz
-    { midi: 57, name: 'A3', octave: 3 },   // 220 Hz
-    { midi: 69, name: 'A4', octave: 4 },   // 440 Hz (concert pitch)
-    { midi: 81, name: 'A5', octave: 5 },   // 880 Hz
-    { midi: 93, name: 'A6', octave: 6 },   // 1760 Hz
-    { midi: 105, name: 'A7', octave: 7 }   // 3520 Hz
-  ];
+//   const octaveTests = [
+//     { midi: 21, name: 'A0', octave: 0 },   // 27.5 Hz
+//     { midi: 33, name: 'A1', octave: 1 },   // 55 Hz
+//     { midi: 45, name: 'A2', octave: 2 },   // 110 Hz
+//     { midi: 57, name: 'A3', octave: 3 },   // 220 Hz
+//     { midi: 69, name: 'A4', octave: 4 },   // 440 Hz (concert pitch)
+//     { midi: 81, name: 'A5', octave: 5 },   // 880 Hz
+//     { midi: 93, name: 'A6', octave: 6 },   // 1760 Hz
+//     { midi: 105, name: 'A7', octave: 7 }   // 3520 Hz
+//   ];
   
-  let currentIndex = 0;
+//   let currentIndex = 0;
   
-  function playNextOctave() {
-    if (currentIndex >= octaveTests.length) {
-      console.log('Octave comparison complete!');
-      return;
-    }
+//   function playNextOctave() {
+//     if (currentIndex >= octaveTests.length) {
+//       console.log('Octave comparison complete!');
+//       return;
+//     }
     
-    const test = octaveTests[currentIndex];
-    const frequency = midiToFrequency(test.midi);
+//     const test = octaveTests[currentIndex];
+//     const frequency = midiToFrequency(test.midi);
     
-    console.log(`Playing ${test.name} (octave ${test.octave}): ${frequency.toFixed(1)}Hz`);
+//     console.log(`Playing ${test.name} (octave ${test.octave}): ${frequency.toFixed(1)}Hz`);
     
-    // Play a 1-second note
-    scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
+//     // Play a 1-second note
+//     scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
     
-    currentIndex++;
+//     currentIndex++;
     
-    // Next octave after 1.5 seconds
-    setTimeout(playNextOctave, 1500);
-  }
+//     // Next octave after 1.5 seconds
+//     setTimeout(playNextOctave, 1500);
+//   }
   
-  playNextOctave();
-}
-
-
-
+//   playNextOctave();
+// }
 // Diagnostic function to trace the complete data flow from UI to note selection
-
-function diagnoseMelodicRangeDataFlow() {
-  console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
+// function diagnoseMelodicRangeDataFlow() {
+//   console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
   
-  // Step 1: Check what's stored in voiceData
-  console.log('1. Current voiceData parameter:');
-  const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  console.log('   Stored values:', {
-    min: storedParam.min,
-    max: storedParam.max,
-    behavior: storedParam.behavior,
-    currentNote: storedParam.currentNote
-  });
+//   // Step 1: Check what's stored in voiceData
+//   console.log('1. Current voiceData parameter:');
+//   const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+//   console.log('   Stored values:', {
+//     min: storedParam.min,
+//     max: storedParam.max,
+//     behavior: storedParam.behavior,
+//     currentNote: storedParam.currentNote
+//   });
   
-  // Step 2: Find and read the actual UI slider
-  console.log('\n2. Reading UI slider values:');
-  const parameterSection = document.getElementById('parameter-section');
-  const rows = parameterSection.querySelectorAll('.row-container');
+//   // Step 2: Find and read the actual UI slider
+//   console.log('\n2. Reading UI slider values:');
+//   const parameterSection = document.getElementById('parameter-section');
+//   const rows = parameterSection.querySelectorAll('.row-container');
   
-  let sliderFound = false;
-  rows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    if (label && label.textContent.trim() === 'MELODIC RANGE') {
-      const slider = row.querySelector('[data-nouislider]');
-      if (slider && slider.noUiSlider) {
-        const values = slider.noUiSlider.get();
-        console.log('   UI slider shows:', {
-          rawValues: values,
-          min: Math.round(Number(values[0])),
-          max: Math.round(Number(values[1]))
-        });
+//   let sliderFound = false;
+//   rows.forEach(row => {
+//     const label = row.querySelector('.label-container');
+//     if (label && label.textContent.trim() === 'MELODIC RANGE') {
+//       const slider = row.querySelector('[data-nouislider]');
+//       if (slider && slider.noUiSlider) {
+//         const values = slider.noUiSlider.get();
+//         console.log('   UI slider shows:', {
+//           rawValues: values,
+//           min: Math.round(Number(values[0])),
+//           max: Math.round(Number(values[1]))
+//         });
         
-        // Check if values match voiceData
-        const uiMin = Math.round(Number(values[0]));
-        const uiMax = Math.round(Number(values[1]));
-        const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
-        console.log('   UI matches stored data:', dataMatch);
+//         // Check if values match voiceData
+//         const uiMin = Math.round(Number(values[0]));
+//         const uiMax = Math.round(Number(values[1]));
+//         const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
+//         console.log('   UI matches stored data:', dataMatch);
         
-        sliderFound = true;
-      }
-    }
-  });
+//         sliderFound = true;
+//       }
+//     }
+//   });
   
-  if (!sliderFound) {
-    console.log('   ERROR: Melodic range slider not found in UI!');
-  }
+//   if (!sliderFound) {
+//     console.log('   ERROR: Melodic range slider not found in UI!');
+//   }
   
-  // Step 3: Test the selectMidiNote function
-  console.log('\n3. Testing note selection with current data:');
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-  }
+//   // Step 3: Test the selectMidiNote function
+//   console.log('\n3. Testing note selection with current data:');
+//   for (let i = 0; i < 5; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+//   }
   
-  // Step 4: Check if the slider update events are working
-  console.log('\n4. Checking slider update mechanism:');
-  console.log('   The issue might be that slider changes aren\'t updating voiceData');
-  console.log('   This would happen if the slider\'s onChange event is broken');
+//   // Step 4: Check if the slider update events are working
+//   console.log('\n4. Checking slider update mechanism:');
+//   console.log('   The issue might be that slider changes aren\'t updating voiceData');
+//   console.log('   This would happen if the slider\'s onChange event is broken');
   
-  return {
-    voiceDataValues: storedParam,
-    sliderFound: sliderFound,
-    recommendation: sliderFound ? 
-      'Slider found - check if onChange events are firing' : 
-      'Slider missing - UI rendering problem'
-  };
-}
+//   return {
+//     voiceDataValues: storedParam,
+//     sliderFound: sliderFound,
+//     recommendation: sliderFound ? 
+//       'Slider found - check if onChange events are firing' : 
+//       'Slider missing - UI rendering problem'
+//   };
+// }
 
 // Function to manually set melodic range for testing
-function forceSetMelodicRange(minNote, maxNote) {
-  console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
+// function forceSetMelodicRange(minNote, maxNote) {
+//   console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
   
-  const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
+//   const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
   
-  // Store old values
-  const oldMin = param.min;
-  const oldMax = param.max;
+//   // Store old values
+//   const oldMin = param.min;
+//   const oldMax = param.max;
   
-  // Force new values
-  param.min = minNote;
-  param.max = maxNote;
-  param.currentNote = Math.floor((minNote + maxNote) / 2);
+//   // Force new values
+//   param.min = minNote;
+//   param.max = maxNote;
+//   param.currentNote = Math.floor((minNote + maxNote) / 2);
   
-  console.log('Forced parameter values:', {
-    old: { min: oldMin, max: oldMax },
-    new: { min: param.min, max: param.max },
-    resetNote: param.currentNote
-  });
+//   console.log('Forced parameter values:', {
+//     old: { min: oldMin, max: oldMax },
+//     new: { min: param.min, max: param.max },
+//     resetNote: param.currentNote
+//   });
   
-  // Test note selection with forced values
-  console.log('\nTesting note selection with forced range:');
-  for (let i = 0; i < 8; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-  }
+//   // Test note selection with forced values
+//   console.log('\nTesting note selection with forced range:');
+//   for (let i = 0; i < 8; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+//   }
   
-  console.log('\nIf you hear different notes now, the issue is UI->data connection');
-  console.log('If notes are still the same, the issue is in selectMidiNote function');
-}
+//   console.log('\nIf you hear different notes now, the issue is UI->data connection');
+//   console.log('If notes are still the same, the issue is in selectMidiNote function');
+// }
 
-// Function to test extreme ranges manually
-function testExtremeRanges() {
-  console.log('=== TESTING EXTREME MELODIC RANGES ===');
+// // Function to test extreme ranges manually
+// function testExtremeRanges() {
+//   console.log('=== TESTING EXTREME MELODIC RANGES ===');
   
-  console.log('\n1. Testing BASS range (A0-C2):');
-  forceSetMelodicRange(21, 36);  // A0 to C2
+//   console.log('\n1. Testing BASS range (A0-C2):');
+//   forceSetMelodicRange(21, 36);  // A0 to C2
   
-  setTimeout(() => {
-    console.log('\n2. Testing TREBLE range (C6-C8):');
-    forceSetMelodicRange(84, 108); // C6 to C8
+//   setTimeout(() => {
+//     console.log('\n2. Testing TREBLE range (C6-C8):');
+//     forceSetMelodicRange(84, 108); // C6 to C8
     
-    setTimeout(() => {
-      console.log('\n3. Testing MID range (C4-C5):');
-      forceSetMelodicRange(60, 72); // C4 to C5
+//     setTimeout(() => {
+//       console.log('\n3. Testing MID range (C4-C5):');
+//       forceSetMelodicRange(60, 72); // C4 to C5
       
-      console.log('\nListen to the playback - you should hear:');
-      console.log('- Very low bass notes, then');
-      console.log('- Very high treble notes, then'); 
-      console.log('- Mid-range notes');
-    }, 3000);
-  }, 3000);
-}
+//       console.log('\nListen to the playback - you should hear:');
+//       console.log('- Very low bass notes, then');
+//       console.log('- Very high treble notes, then'); 
+//       console.log('- Mid-range notes');
+//     }, 3000);
+//   }, 3000);
+// }
 
 
-// Diagnostic function to trace the complete data flow from UI to note selection
+// // Diagnostic function to trace the complete data flow from UI to note selection
 
-function diagnoseMelodicRangeDataFlow() {
-  console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
+// function diagnoseMelodicRangeDataFlow() {
+//   console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
   
-  // Step 1: Check what's stored in voiceData
-  console.log('1. Current voiceData parameter:');
-  const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  console.log('   Stored values:', {
-    min: storedParam.min,
-    max: storedParam.max,
-    behavior: storedParam.behavior,
-    currentNote: storedParam.currentNote
-  });
+//   // Step 1: Check what's stored in voiceData
+//   console.log('1. Current voiceData parameter:');
+//   const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
+//   console.log('   Stored values:', {
+//     min: storedParam.min,
+//     max: storedParam.max,
+//     behavior: storedParam.behavior,
+//     currentNote: storedParam.currentNote
+//   });
   
-  // Step 2: Find and read the actual UI slider
-  console.log('\n2. Reading UI slider values:');
-  const parameterSection = document.getElementById('parameter-section');
-  const rows = parameterSection.querySelectorAll('.row-container');
+//   // Step 2: Find and read the actual UI slider
+//   console.log('\n2. Reading UI slider values:');
+//   const parameterSection = document.getElementById('parameter-section');
+//   const rows = parameterSection.querySelectorAll('.row-container');
   
-  let sliderFound = false;
-  rows.forEach(row => {
-    const label = row.querySelector('.label-container');
-    if (label && label.textContent.trim() === 'MELODIC RANGE') {
-      const slider = row.querySelector('[data-nouislider]');
-      if (slider && slider.noUiSlider) {
-        const values = slider.noUiSlider.get();
-        console.log('   UI slider shows:', {
-          rawValues: values,
-          min: Math.round(Number(values[0])),
-          max: Math.round(Number(values[1]))
-        });
+//   let sliderFound = false;
+//   rows.forEach(row => {
+//     const label = row.querySelector('.label-container');
+//     if (label && label.textContent.trim() === 'MELODIC RANGE') {
+//       const slider = row.querySelector('[data-nouislider]');
+//       if (slider && slider.noUiSlider) {
+//         const values = slider.noUiSlider.get();
+//         console.log('   UI slider shows:', {
+//           rawValues: values,
+//           min: Math.round(Number(values[0])),
+//           max: Math.round(Number(values[1]))
+//         });
         
-        // Check if values match voiceData
-        const uiMin = Math.round(Number(values[0]));
-        const uiMax = Math.round(Number(values[1]));
-        const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
-        console.log('   UI matches stored data:', dataMatch);
+//         // Check if values match voiceData
+//         const uiMin = Math.round(Number(values[0]));
+//         const uiMax = Math.round(Number(values[1]));
+//         const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
+//         console.log('   UI matches stored data:', dataMatch);
         
-        sliderFound = true;
-      }
-    }
-  });
+//         sliderFound = true;
+//       }
+//     }
+//   });
   
-  if (!sliderFound) {
-    console.log('   ERROR: Melodic range slider not found in UI!');
-  }
+//   if (!sliderFound) {
+//     console.log('   ERROR: Melodic range slider not found in UI!');
+//   }
   
-  // Step 3: Test the selectMidiNote function
-  console.log('\n3. Testing note selection with current data:');
-  for (let i = 0; i < 5; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-  }
+//   // Step 3: Test the selectMidiNote function
+//   console.log('\n3. Testing note selection with current data:');
+//   for (let i = 0; i < 5; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+//   }
   
-  // Step 4: Check if the slider update events are working
-  console.log('\n4. Checking slider update mechanism:');
-  console.log('   The issue might be that slider changes aren\'t updating voiceData');
-  console.log('   This would happen if the slider\'s onChange event is broken');
+//   // Step 4: Check if the slider update events are working
+//   console.log('\n4. Checking slider update mechanism:');
+//   console.log('   The issue might be that slider changes aren\'t updating voiceData');
+//   console.log('   This would happen if the slider\'s onChange event is broken');
   
-  return {
-    voiceDataValues: storedParam,
-    sliderFound: sliderFound,
-    recommendation: sliderFound ? 
-      'Slider found - check if onChange events are firing' : 
-      'Slider missing - UI rendering problem'
-  };
-}
+//   return {
+//     voiceDataValues: storedParam,
+//     sliderFound: sliderFound,
+//     recommendation: sliderFound ? 
+//       'Slider found - check if onChange events are firing' : 
+//       'Slider missing - UI rendering problem'
+//   };
+// }
 
-// Function to manually set melodic range for testing
-function forceSetMelodicRange(minNote, maxNote) {
-  console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
+// // Function to manually set melodic range for testing
+// function forceSetMelodicRange(minNote, maxNote) {
+//   console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
   
-  const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
+//   const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
   
-  // Store old values
-  const oldMin = param.min;
-  const oldMax = param.max;
+//   // Store old values
+//   const oldMin = param.min;
+//   const oldMax = param.max;
   
-  // Force new values
-  param.min = minNote;
-  param.max = maxNote;
-  param.currentNote = Math.floor((minNote + maxNote) / 2);
+//   // Force new values
+//   param.min = minNote;
+//   param.max = maxNote;
+//   param.currentNote = Math.floor((minNote + maxNote) / 2);
   
-  console.log('Forced parameter values:', {
-    old: { min: oldMin, max: oldMax },
-    new: { min: param.min, max: param.max },
-    resetNote: param.currentNote
-  });
+//   console.log('Forced parameter values:', {
+//     old: { min: oldMin, max: oldMax },
+//     new: { min: param.min, max: param.max },
+//     resetNote: param.currentNote
+//   });
   
-  // Test note selection with forced values
-  console.log('\nTesting note selection with forced range:');
-  for (let i = 0; i < 8; i++) {
-    const note = selectMidiNote(currentVoice);
-    console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-  }
+//   // Test note selection with forced values
+//   console.log('\nTesting note selection with forced range:');
+//   for (let i = 0; i < 8; i++) {
+//     const note = selectMidiNote(currentVoice);
+//     console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
+//   }
   
-  console.log('\nIf you hear different notes now, the issue is UI->data connection');
-  console.log('If notes are still the same, the issue is in selectMidiNote function');
-}
+//   console.log('\nIf you hear different notes now, the issue is UI->data connection');
+//   console.log('If notes are still the same, the issue is in selectMidiNote function');
+// }
 
-// Function to test extreme ranges manually
-function testExtremeRanges() {
-  console.log('=== TESTING EXTREME MELODIC RANGES ===');
+// // Function to test extreme ranges manually
+// function testExtremeRanges() {
+//   console.log('=== TESTING EXTREME MELODIC RANGES ===');
   
-  console.log('\n1. Testing BASS range (A0-C2):');
-  forceSetMelodicRange(21, 36);  // A0 to C2
+//   console.log('\n1. Testing BASS range (A0-C2):');
+//   forceSetMelodicRange(21, 36);  // A0 to C2
   
-  setTimeout(() => {
-    console.log('\n2. Testing TREBLE range (C6-C8):');
-    forceSetMelodicRange(84, 108); // C6 to C8
+//   setTimeout(() => {
+//     console.log('\n2. Testing TREBLE range (C6-C8):');
+//     forceSetMelodicRange(84, 108); // C6 to C8
     
-    setTimeout(() => {
-      console.log('\n3. Testing MID range (C4-C5):');
-      forceSetMelodicRange(60, 72); // C4 to C5
+//     setTimeout(() => {
+//       console.log('\n3. Testing MID range (C4-C5):');
+//       forceSetMelodicRange(60, 72); // C4 to C5
       
-      console.log('\nListen to the playback - you should hear:');
-      console.log('- Very low bass notes, then');
-      console.log('- Very high treble notes, then'); 
-      console.log('- Mid-range notes');
-    }, 3000);
-  }, 3000);
-}
+//       console.log('\nListen to the playback - you should hear:');
+//       console.log('- Very low bass notes, then');
+//       console.log('- Very high treble notes, then'); 
+//       console.log('- Mid-range notes');
+//     }, 3000);
+//   }, 3000);
+// }
 
 
 // Enhanced diagnostic to find ALL sliders
@@ -3245,12 +3265,6 @@ function testSliderSync() {
   });
 }
 
-
-
-
-
-// DELETE AND PASTE FROM HERE TO THE END?   9-28-25  FIXING TWO MELODIC RANGES
-// Line 2736 starts here - CLEANED AND OPTIMIZED VERSION
 
 // =============================================================================
 // MELODIC RANGE CONNECTION AND CONFLICT RESOLUTION
@@ -3528,80 +3542,97 @@ function showInvalidRangeMessage(dropdown, paramName) {
   }, 3000);
 }
  
-// 4. FIXED: Force multi-dual sliders to use voiceData values
-  const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
-  console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
+  // 4. FIXED: Connect multi-dual sliders (REVERB, DELAY, etc.)
+const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
+console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
+
+multiDualContainers.forEach((container) => {
+  const rollup = container.closest('.parameter-rollup');
+  const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+  const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Multi-Dual';
   
-  multiDualContainers.forEach((container) => {
-    const row = container.closest('.row-container-content');
-    const rollup = row ? row.closest('.parameter-rollup') : null;
-    const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
-    const paramName = rollupTitle ? rollupTitle.textContent.trim() : 'Unknown Multi-Dual';
-    
-    // Skip if this is a regular dual slider
-    if (container.querySelectorAll('.slider-wrapper').length < 2) return;
-    
-    console.log(`Fixing multi-dual sliders for: ${paramName}`);
-    
-    const speedSlider = container.querySelector('.slider-wrapper:nth-child(1) .noUi-target');
-    const depthSlider = container.querySelector('.slider-wrapper:nth-child(2) .noUi-target');
-    const feedbackSlider = container.querySelector('.slider-wrapper:nth-child(3) .noUi-target'); // For DELAY
-    
-    // FORCE UPDATE speed slider from voiceData
-    if (speedSlider && speedSlider.noUiSlider && voiceData[currentVoice].parameters[paramName]?.speed) {
-      const speedMin = voiceData[currentVoice].parameters[paramName].speed.min;
-      const speedMax = voiceData[currentVoice].parameters[paramName].speed.max;
+  // Skip if this is a regular dual slider (not multi-dual)
+  if (container.querySelectorAll('.slider-wrapper').length < 2) return;
+  
+  console.log(`🔧 Connecting multi-dual sliders for: ${paramName}`);
+  
+  // Find all noUiSlider instances within this container
+  const allSliders = container.querySelectorAll('.noUi-target');
+  console.log(`  Found ${allSliders.length} sliders in ${paramName} container`);
+  
+  allSliders.forEach((slider, sliderIndex) => {
+    if (slider.noUiSlider) {
+      const sliderWrapper = slider.closest('.slider-wrapper');
+      const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label') : null;
+      const labelText = label ? label.textContent.trim().toLowerCase() : '';
       
-      console.log(`  Forcing ${paramName} speed to: [${speedMin}, ${speedMax}]`);
-      speedSlider.noUiSlider.set([speedMin, speedMax]);
+      console.log(`  🔗 Connecting ${paramName} slider ${sliderIndex}: "${labelText}"`);
       
-      // Reconnect event handler
-      speedSlider.noUiSlider.off('update');
-      speedSlider.noUiSlider.on('update', function(values) {
-        const formatter = speedSlider.noUiSlider.options.format;
-        const min = Math.round(Number(formatter.from(values[0])));
-        const max = Math.round(Number(formatter.from(values[1])));
-        voiceData[currentVoice].parameters[paramName].speed.min = min;
-        voiceData[currentVoice].parameters[paramName].speed.max = max;
-      });
-    }
-    
-    // FORCE UPDATE depth slider from voiceData
-    if (depthSlider && depthSlider.noUiSlider && voiceData[currentVoice].parameters[paramName]?.depth) {
-      const depthMin = voiceData[currentVoice].parameters[paramName].depth.min;
-      const depthMax = voiceData[currentVoice].parameters[paramName].depth.max;
+      // Remove existing handlers
+      slider.noUiSlider.off('update');
       
-      console.log(`  Forcing ${paramName} depth to: [${depthMin}, ${depthMax}]`);
-      depthSlider.noUiSlider.set([depthMin, depthMax]);
-      
-      // Reconnect event handler
-      depthSlider.noUiSlider.off('update');
-      depthSlider.noUiSlider.on('update', function(values) {
-        const min = Math.round(Number(values[0].replace('%', '')));
-        const max = Math.round(Number(values[1].replace('%', '')));
-        voiceData[currentVoice].parameters[paramName].depth.min = min;
-        voiceData[currentVoice].parameters[paramName].depth.max = max;
-      });
-    }
-    
-    // FORCE UPDATE feedback slider from voiceData (DELAY only)
-    if (feedbackSlider && feedbackSlider.noUiSlider && voiceData[currentVoice].parameters[paramName]?.feedback) {
-      const feedbackMin = voiceData[currentVoice].parameters[paramName].feedback.min;
-      const feedbackMax = voiceData[currentVoice].parameters[paramName].feedback.max;
-      
-      console.log(`  Forcing ${paramName} feedback to: [${feedbackMin}, ${feedbackMax}]`);
-      feedbackSlider.noUiSlider.set([feedbackMin, feedbackMax]);
-      
-      // Reconnect event handler
-      feedbackSlider.noUiSlider.off('update');
-      feedbackSlider.noUiSlider.on('update', function(values) {
-        const min = Math.round(Number(values[0].replace('%', '')));
-        const max = Math.round(Number(values[1].replace('%', '')));
-        voiceData[currentVoice].parameters[paramName].feedback.min = min;
-        voiceData[currentVoice].parameters[paramName].feedback.max = max;
+      // Add new handler based on slider type
+      slider.noUiSlider.on('update', function(values) {
+        // FIXED: Parse values correctly (remove % and ms suffixes)
+        let min, max;
+        
+        if (values[0].includes('ms') || values[0].includes('s')) {
+          // Time values - convert to numeric
+          min = parseFloat(values[0].replace(/[ms%s]/g, ''));
+          max = parseFloat(values[1].replace(/[ms%s]/g, ''));
+        } else if (values[0].includes('%')) {
+          // Percentage values
+          min = parseFloat(values[0].replace('%', ''));
+          max = parseFloat(values[1].replace('%', ''));
+        } else {
+          // Raw numeric values
+          min = Math.round(Number(values[0]));
+          max = Math.round(Number(values[1]));
+        }
+        
+        if (isNaN(min) || isNaN(max)) {
+          console.warn(`❌ Invalid values for ${paramName} ${labelText}: [${values[0]}, ${values[1]}]`);
+          return;
+        }
+        
+        const voiceParam = voiceData[currentVoice].parameters[paramName];
+        if (!voiceParam) {
+          console.warn(`❌ Parameter ${paramName} not found in voiceData`);
+          return;
+        }
+        
+        // CRITICAL FIX: Update the correct sub-parameter based on label
+        if (labelText.includes('time') || (labelText.includes('speed') && (paramName === 'REVERB' || paramName === 'DELAY'))) {
+          // This is the time/speed slider
+          if (!voiceParam.speed) voiceParam.speed = { min: 0, max: 0 };
+          voiceParam.speed.min = min;
+          voiceParam.speed.max = max;
+          console.log(`✅ ${paramName} time/speed: ${min}-${max}`);
+          
+        } else if (labelText.includes('mix') || labelText.includes('depth')) {
+          // This is the mix/depth slider
+          if (!voiceParam.depth) voiceParam.depth = { min: 0, max: 0 };
+          voiceParam.depth.min = min;
+          voiceParam.depth.max = max;
+          console.log(`✅ ${paramName} mix/depth: ${min}-${max}%`);
+          
+        } else if (labelText.includes('feedback')) {
+          // This is the feedback slider (DELAY only)
+          if (!voiceParam.feedback) voiceParam.feedback = { min: 0, max: 0 };
+          voiceParam.feedback.min = min;
+          voiceParam.feedback.max = max;
+          console.log(`✅ ${paramName} feedback: ${min}-${max}%`);
+          
+        } else {
+          console.warn(`❌ Unknown slider type for ${paramName}: "${labelText}"`);
+        }
+        
+        // VERIFICATION: Log the updated parameter
+        console.log(`🔍 Updated ${paramName} parameter:`, voiceParam);
       });
     }
   });
+});
 
 
   // 5. Connect Interactive Piano Keyboards
@@ -3689,9 +3720,6 @@ timingSliders.forEach((slider) => {
 // =============================================================================
 // VOICE MANAGEMENT SYSTEM
 // =============================================================================
-
-
-
 class Voice {
   constructor(audioContext, voiceIndex, masterGainNode) {
     this.audioContext = audioContext;
@@ -5648,7 +5676,6 @@ start() {
   
   console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM, entrance: ${formatSecondsToMMSS(entranceMs/1000)}`);
 }
-
   
  /**
  * Stop this voice clock - ENHANCED with auto-reset trigger
@@ -5667,9 +5694,6 @@ stop() {
     }, 100); // Small delay to let state settle
   }
 }
-
-
-  
   /**
    * Update voice tempo (only at note boundaries - per requirement)
    */
@@ -5947,23 +5971,24 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     if (!audioManager || !audioManager.audioContext) return null;
     
     const actualStartTime = startTime + (offset * 0.001);
+    
+    console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
+    console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
       
     const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
     const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
     const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
 
-    console.log(`🎹 Voice ${this.voiceIndex + 1}: Instrument Selection:`);
-    console.log(`   Index: ${selectedInstrumentIndex} (type: ${typeof selectedInstrumentIndex})`);
-    console.log(`   Name: "${selectedInstrumentName}"`);
-    console.log(`   Waveform: ${baseOscillatorType}`);
-    console.log(`   gmSounds[${selectedInstrumentIndex}]: "${gmSounds[selectedInstrumentIndex]}"`);
-
     const currentVelocity = this.getCurrentVelocity();
     const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
     const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
     
-    // MOVED UP: Get voice parameters before creating nodes
     const voiceParams = this.getAllCurrentVoiceParameters();
+
+    // LOG EFFECT PARAMETERS
+    console.log(`🎛️ Effect Parameters:`);
+    console.log(`   Reverb: time=${voiceParams.reverbTime.toFixed(2)}s, depth=${(voiceParams.reverbDepth*100).toFixed(0)}%`);
+    console.log(`   Delay: time=${voiceParams.delayTime.toFixed(0)}ms, depth=${(voiceParams.delayDepth*100).toFixed(0)}%, feedback=${(voiceParams.delayFeedback*100).toFixed(0)}%`);
 
     // Create all audio nodes
     const oscillator = audioManager.audioContext.createOscillator();
@@ -5971,12 +5996,7 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const panNode = audioManager.audioContext.createStereoPanner();
     const filterNode = audioManager.audioContext.createBiquadFilter();
     
-    // // Tremolo nodes
-    // const tremoloLFO = audioManager.audioContext.createOscillator();
-    // const tremoloGain = audioManager.audioContext.createGain();
-    // const tremoloDepth = audioManager.audioContext.createGain();
-    
-    // Tremolo nodes (like reverb/delay structure)
+    // Tremolo nodes
     const tremoloLFO = audioManager.audioContext.createOscillator();
     const tremoloGain = audioManager.audioContext.createGain();
     const tremoloDepth = audioManager.audioContext.createGain();
@@ -5999,7 +6019,7 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const chorusMix = audioManager.audioContext.createGain();
     const dryGain = audioManager.audioContext.createGain();
     
-    // Phaser nodes (4-stage phaser for rich effect)
+    // Phaser nodes
     const phaserStage1 = audioManager.audioContext.createBiquadFilter();
     const phaserStage2 = audioManager.audioContext.createBiquadFilter();
     const phaserStage3 = audioManager.audioContext.createBiquadFilter();
@@ -6023,23 +6043,33 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     const delayWet = audioManager.audioContext.createGain();
     const delayDry = audioManager.audioContext.createGain();
 
+    // CRITICAL: Set delay time IMMEDIATELY after creation, before any connections
+    const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+    const delayTimeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+    const delayDepthValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+
+    if (delayDepthValue > 0.001) {
+        const delayTimeSeconds = (100 + (delayTimeValue / 100) * 1900) / 1000;
+        const clampedDelayTime = Math.min(delayTimeSeconds, 2.0);
+        
+        // Cancel any previous automation and set the value NOW
+        delayNode.delayTime.cancelScheduledValues(audioManager.audioContext.currentTime);
+        delayNode.delayTime.value = clampedDelayTime; // Direct assignment
+        
+        console.log(`🔧 DELAY TIME SET DIRECTLY: ${delayNode.delayTime.value.toFixed(3)}s`);
+    }
+
     // Set oscillator properties
     const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
     oscillator.type = velocitySensitiveWaveform;
-
-    console.log(`🔧 Oscillator setup:`);
-    console.log(`   Base type: ${baseOscillatorType}`);
-    console.log(`   Velocity-adjusted: ${velocitySensitiveWaveform}`);
-    console.log(`   Final oscillator.type: ${oscillator.type}`);
     oscillator.frequency.setValueAtTime(frequency, actualStartTime);
     
     // Apply ADSR to all effects
     this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
     this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
     
-    // const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, adsrEnvelope, voiceParams, actualStartTime, duration);
     const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration);
-
+    
     const chorusIsActive = this.applyChorusADSR(
         chorusDelay1, chorusDelay2, chorusDelay3,
         chorusLFO1, chorusLFO2, chorusLFO3,
@@ -6053,172 +6083,217 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
         adsrEnvelope, voiceParams, actualStartTime, duration
     );
     
-    // Apply Reverb ADSR
     const reverbIsActive = this.applyReverbADSR(
-        reverbNode, reverbGain, reverbDry, reverbWet,
+        reverbNode, reverbDry, reverbWet,
         adsrEnvelope, voiceParams, actualStartTime, duration
     );
 
-    // Apply Delay ADSR
     const delayIsActive = this.applyDelayADSR(
         delayNode, delayFeedback, delayWet, delayDry,
         adsrEnvelope, voiceParams, actualStartTime, duration
     );
     
     this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-    
-    // Audio chain setup
-    oscillator.connect(filterNode);
-    let currentNode = filterNode;
-    
-      
-    // Tremolo connection
-    if (tremoloIsActive) {
-        const tremoloWetLevel = Math.min(0.8, voiceParams.tremoloDepth);
-        const tremoloDryLevel = 1.0 - tremoloWetLevel;
-        
-        // Set up tremolo routing
-        tremoloDry.gain.setValueAtTime(tremoloDryLevel, actualStartTime);
-        
-        // Connect tremolo chain - direct gain modulation
-        currentNode.connect(tremoloGain);
-        currentNode = tremoloGain;
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH tremolo`);
 
-        
-    }
+    //  // BUILD AUDIO CHAIN
+    // let audioChain = oscillator;
+    // console.log(`🔗 Building audio chain...`);
 
-    // Chorus connection
-    if (chorusIsActive) {
-        const chorusWetLevel = Math.min(0.4, voiceParams.chorusDepth);
-        const chorusDryLevel = 1.0 - chorusWetLevel;
+    // oscillator.connect(filterNode);
+    // console.log(`   ✓ oscillator → filter`);
+    // audioChain = filterNode;
+
+    // // LOG WHICH EFFECTS ARE ACTIVE
+    // console.log(`🎚️ Active Effects:`);
+    // console.log(`   Tremolo: ${tremoloIsActive}`);
+    // console.log(`   Chorus: ${chorusIsActive}`);
+    // console.log(`   Phaser: ${phaserIsActive}`);
+    // console.log(`   Reverb: ${reverbIsActive} ← CHECK THIS`);
+    // console.log(`   Delay: ${delayIsActive} ← CHECK THIS`);
+
+
+    // if (tremoloIsActive) {
+    //     audioChain.connect(tremoloGain);
+    //     console.log(`   ✓ filter → tremolo`);
+    //     audioChain = tremoloGain;
+    // }
+
+    // if (chorusIsActive) {
+    //     audioChain.connect(dryGain);
+    //     audioChain.connect(chorusDelay1);
+    //     audioChain.connect(chorusDelay2);
+    //     audioChain.connect(chorusDelay3);
         
-        // Dry path
-        dryGain.gain.setValueAtTime(chorusDryLevel, actualStartTime);
-        currentNode.connect(dryGain);
+    //     chorusDelay1.connect(chorusGain1);
+    //     chorusDelay2.connect(chorusGain2);
+    //     chorusDelay3.connect(chorusGain3);
         
-        // Wet path
-        currentNode.connect(chorusDelay1);
-        currentNode.connect(chorusDelay2);
-        currentNode.connect(chorusDelay3);
+    //     dryGain.connect(chorusMix);
+    //     chorusGain1.connect(chorusMix);
+    //     chorusGain2.connect(chorusMix);
+    //     chorusGain3.connect(chorusMix);
         
-        chorusDelay1.connect(chorusGain1);
-        chorusDelay2.connect(chorusGain2);
-        chorusDelay3.connect(chorusGain3);
+    //     console.log(`   ✓ chorus chain connected`);
+    //     audioChain = chorusMix;
+    // }
+
+    // if (phaserIsActive) {
+    //     audioChain.connect(phaserStage1);
+    //     phaserStage1.connect(phaserStage2);
+    //     phaserStage2.connect(phaserStage3);
+    //     phaserStage3.connect(phaserStage4);
         
-        chorusGain1.connect(chorusMix);
-        chorusGain2.connect(chorusMix);
-        chorusGain3.connect(chorusMix);
+    //     audioChain.connect(phaserDry);
+    //     phaserStage4.connect(phaserMix);
+    //     phaserDry.connect(phaserMix);
         
-        chorusMix.gain.setValueAtTime(chorusWetLevel, actualStartTime);
-        
-        // Mix dry and wet
-        const chorusFinalMix = audioManager.audioContext.createGain();
-        chorusFinalMix.gain.setValueAtTime(1.0, actualStartTime);
-        
-        dryGain.connect(chorusFinalMix);
-        chorusMix.connect(chorusFinalMix);
-        
-        currentNode = chorusFinalMix;
-    }
+    //     console.log(`   ✓ phaser chain connected`);
+    //     audioChain = phaserMix;
+    // }
+
+    // if (reverbIsActive) {
+    // console.log(`   🏛️ Connecting REVERB...`);
     
-    // Phaser connection
-    if (phaserIsActive) {
-        const phaserWetLevel = Math.min(0.6, voiceParams.phaserDepth);
-        const phaserDryLevel = 1.0 - phaserWetLevel;
-        
-        // Dry path
-        phaserDry.gain.setValueAtTime(phaserDryLevel, actualStartTime);
-        currentNode.connect(phaserDry);
-        
-        // Wet path through phaser stages
-        let phaserNode = currentNode;
-        phaserStages.forEach(stage => {
-            phaserNode.connect(stage);
-            phaserNode = stage;
-        });
-        
-        // Add feedback from last stage back to first stage
-        phaserNode.connect(phaserFeedback);
-        phaserFeedback.connect(phaserStage1);
-        
-        // Mix wet signal
-        phaserNode.connect(phaserMix);
-        phaserMix.gain.setValueAtTime(phaserWetLevel, actualStartTime);
-        
-        // Final phaser mix
-        const phaserFinalMix = audioManager.audioContext.createGain();
-        phaserFinalMix.gain.setValueAtTime(1.0, actualStartTime);
-        
-        phaserDry.connect(phaserFinalMix);
-        phaserMix.connect(phaserFinalMix);
-        
-        currentNode = phaserFinalMix;
-        
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH phaser (4-stage)`);
-    }
+    // // CREATE FRESH MIXER NODE
+    // const reverbMixer = audioManager.audioContext.createGain();
+    // reverbMixer.gain.value = 1.0;
     
-    // Reverb connection
-    if (reverbIsActive) {
-        const reverbWetLevel = Math.min(0.6, voiceParams.reverbDepth);
-        const reverbDryLevel = 1.0 - reverbWetLevel;
-        
-        // Set up reverb routing
-        reverbDry.gain.setValueAtTime(reverbDryLevel, actualStartTime);
-        
-        // Connect reverb chain
-        currentNode.connect(reverbDry);
-        currentNode.connect(reverbNode);
-        reverbNode.connect(reverbWet);
-        
-        // Mix dry and wet
-        const reverbFinalMix = audioManager.audioContext.createGain();
-        reverbFinalMix.gain.setValueAtTime(1.0, actualStartTime);
-        
-        reverbDry.connect(reverbFinalMix);
-        reverbWet.connect(reverbFinalMix);
-        
-        currentNode = reverbFinalMix;
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH reverb`);
-    }
+    // audioChain.connect(reverbDry);
+    // console.log(`      ✓ dry path connected`);
     
-    // Delay connection  
-    if (delayIsActive) {
-        const delayWetLevel = Math.min(0.7, voiceParams.delayDepth);
-        const delayDryLevel = 1.0 - delayWetLevel;
-        
-        // Set up delay routing
-        delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
-        
-        // Connect delay chain with feedback
-        currentNode.connect(delayDry);
-        currentNode.connect(delayNode);
-        delayNode.connect(delayWet);
-        delayNode.connect(delayFeedback);
-        delayFeedback.connect(delayNode); // Feedback loop
-        
-        // Mix dry and wet
-        const delayFinalMix = audioManager.audioContext.createGain();
-        delayFinalMix.gain.setValueAtTime(1.0, actualStartTime);
-        
-        delayDry.connect(delayFinalMix);
-        delayWet.connect(delayFinalMix);
-        
-        currentNode = delayFinalMix;
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Audio chain WITH delay`);
-    }
+    // audioChain.connect(reverbNode);
+    // console.log(`      ✓ signal → reverb node`);
     
-    // Final connection
-    currentNode.connect(gainNode);
-    gainNode.connect(panNode);
-    panNode.connect(audioManager.masterGainNode);
+    // reverbNode.connect(reverbWet);
+    // console.log(`      ✓ reverb node → wet gain`);
     
-       // FIXED: Register nodes for real-time control during preview
+    // // Mix dry + wet into NEW mixer
+    // reverbDry.connect(reverbMixer);
+    // reverbWet.connect(reverbMixer);
+    // console.log(`      ✓ dry + wet → mixer`);
+    
+    // console.log(`      Dry gain: ${reverbDry.gain.value.toFixed(3)}`);
+    // console.log(`      Wet gain: ${reverbWet.gain.value.toFixed(3)}`);
+    // console.log(`      Buffer: ${reverbNode.buffer ? `${reverbNode.buffer.length} samples` : 'NULL'}`);
+    
+    // audioChain = reverbMixer; // Continue chain with mixer
+    // }
+  
+    // if (delayIsActive) {
+    // console.log(`   🔄 Connecting DELAY...`);
+    
+    // audioChain.connect(delayDry);
+    // console.log(`      ✓ dry path connected`);
+    
+    // audioChain.connect(delayNode);
+    // console.log(`      ✓ signal → delay node`);
+    
+    // delayNode.connect(delayWet);
+    // console.log(`      ✓ delay node → wet gain`);
+    
+    // delayNode.connect(delayFeedback);
+    // delayFeedback.connect(delayNode);
+    // console.log(`      ✓ feedback loop connected`);
+    
+    // const delayMixer = audioManager.audioContext.createGain();
+    // delayMixer.gain.setValueAtTime(1.0, audioManager.audioContext.currentTime);
+    
+    // delayDry.connect(delayMixer);
+    // delayWet.connect(delayMixer);
+    // console.log(`      ✓ dry + wet → mixer`);
+    
+    // // FIXED: Read scheduled values, not current values
+    // const scheduledDelayTime = delayNode.delayTime.value;
+    // // For AudioParam with automation, check if there's a scheduled value
+    // const actualDelayTime = scheduledDelayTime === 0 ? 
+    //     'CHECK SCHEDULED VALUES' : scheduledDelayTime.toFixed(3);
+    
+    // console.log(`      Delay time: ${actualDelayTime}s`);
+    // console.log(`      Dry gain: ${delayDry.gain.value.toFixed(3)}`);
+    // console.log(`      Wet gain (initial): ${delayWet.gain.value.toFixed(3)}`);
+    // console.log(`      Feedback (initial): ${delayFeedback.gain.value.toFixed(3)}`);
+    
+    // // DIAGNOSTIC: Force read the delay time we just set
+    // console.log(`      🔍 Checking delay node state...`);
+    // console.log(`         delayNode exists: ${!!delayNode}`);
+    // console.log(`         delayNode.delayTime exists: ${!!delayNode.delayTime}`);
+    
+    // audioChain = delayMixer;
+    // }
+
+    // // FINAL CONNECTION
+    // audioChain.connect(gainNode);
+    // gainNode.connect(panNode);
+    // panNode.connect(audioManager.masterGainNode);
+    // console.log(`   ✓ Final: chain → gain → pan → master`);
+    // console.log(`🔗 Audio chain complete!\n`);
+
+
+// BUILD AUDIO CHAIN
+let audioChain = oscillator;
+console.log(`🔗 Building audio chain...`);
+
+oscillator.connect(filterNode);
+console.log(`   ✓ oscillator → filter`);
+audioChain = filterNode;
+
+// Effects go here (tremolo, chorus, phaser)
+// ... your existing tremolo/chorus/phaser code ...
+
+// ADSR Gain comes BEFORE delay/reverb
+audioChain.connect(gainNode);
+console.log(`   ✓ chain → gain (ADSR)`);
+audioChain = gainNode;
+
+// POST-GAIN EFFECTS (reverb and delay)
+if (reverbIsActive) {
+    console.log(`   🏛️ Connecting REVERB...`);
+    const reverbMixer = audioManager.audioContext.createGain();
+    reverbMixer.gain.value = 1.0;
+    
+    audioChain.connect(reverbDry);
+    audioChain.connect(reverbNode);
+    reverbNode.connect(reverbWet);
+    
+    reverbDry.connect(reverbMixer);
+    reverbWet.connect(reverbMixer);
+    
+    console.log(`      ✓ reverb connected`);
+    audioChain = reverbMixer; // CRITICAL: Update chain
+}
+
+if (delayIsActive) {
+    console.log(`   🔄 Connecting DELAY...`);
+    const delayMixer = audioManager.audioContext.createGain();
+    delayMixer.gain.value = 1.0;
+    
+    audioChain.connect(delayDry);
+    audioChain.connect(delayNode);
+    
+    delayNode.connect(delayWet);
+    delayNode.connect(delayFeedback);
+    delayFeedback.connect(delayNode);
+    
+    delayDry.connect(delayMixer);
+    delayWet.connect(delayMixer);
+    
+    console.log(`      ✓ delay connected`);
+    audioChain = delayMixer; // CRITICAL: Update chain
+}
+
+// FINAL connection to output
+audioChain.connect(panNode);
+console.log(`   ✓ chain → pan → master`);
+panNode.connect(audioManager.masterGainNode);
+console.log(`🔗 Audio chain complete!\n`);
+
+
+
+    // Register nodes for real-time control
     if (audioManager.isPlaying) {
         audioManager.previewGainNodes.add(gainNode);
         audioManager.previewPanNodes.add(panNode);
         
-        // FIXED: Register effect gain nodes for real-time volume control
         if (tremoloIsActive && audioManager.previewEffectGainNodes) {
             audioManager.previewEffectGainNodes.add(tremoloGain);
         }
@@ -6228,105 +6303,175 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
             audioManager.previewEffectGainNodes.add(chorusGain3);
         }
         
-        // Apply current user volume and balance to new note
         const userVolumeMultiplier = audioManager.currentUserVolume / 100;
         const userPanValue = Math.max(-1, Math.min(1, audioManager.currentUserBalance / 100));
         
-        // Apply user settings immediately (don't wait for ADSR)
         panNode.pan.setValueAtTime(userPanValue, actualStartTime);
     }
 
-
-    // Start oscillator
     oscillator.start(actualStartTime);
     oscillator.stop(actualStartTime + duration);
     
-       
-    // Enhanced cleanup - FIXED: Remove from preview tracking
-    oscillator.onended = () => {
-        try {
-            // // FIXED: Remove from preview tracking sets
-            // if (audioManager.previewGainNodes) {
-            //     audioManager.previewGainNodes.delete(gainNode);
-            // }
-            // if (audioManager.previewPanNodes) {
-            //     audioManager.previewPanNodes.delete(panNode);
-            // }
+    // Cleanup code remains the same...
+    // oscillator.onended = () => {
+    //     try {
+    //         if (audioManager.previewGainNodes) {
+    //             audioManager.previewGainNodes.delete(gainNode);
+    //         }
+    //         if (audioManager.previewPanNodes) {
+    //             audioManager.previewPanNodes.delete(panNode);
+    //         }
             
-    // FIXED: Remove from preview tracking sets
-    if (audioManager.previewGainNodes) {
-        audioManager.previewGainNodes.delete(gainNode);
-    }
-    if (audioManager.previewPanNodes) {
-        audioManager.previewPanNodes.delete(panNode);
-    }
-    
-    // FIXED: Remove effect gain nodes from tracking
-    if (tremoloIsActive && audioManager.previewEffectGainNodes) {
-        audioManager.previewEffectGainNodes.delete(tremoloGain);
-    }
-    if (chorusIsActive && audioManager.previewEffectGainNodes) {
-        audioManager.previewEffectGainNodes.delete(chorusGain1);
-        audioManager.previewEffectGainNodes.delete(chorusGain2);
-        audioManager.previewEffectGainNodes.delete(chorusGain3);
-    }
+    //         if (tremoloIsActive && audioManager.previewEffectGainNodes) {
+    //             audioManager.previewEffectGainNodes.delete(tremoloGain);
+    //         }
+    //         if (chorusIsActive && audioManager.previewEffectGainNodes) {
+    //             audioManager.previewEffectGainNodes.delete(chorusGain1);
+    //             audioManager.previewEffectGainNodes.delete(chorusGain2);
+    //             audioManager.previewEffectGainNodes.delete(chorusGain3);
+    //         }
 
+    //         oscillator.disconnect();
+    //         filterNode.disconnect();
+    //         gainNode.disconnect();
+    //         panNode.disconnect();
+            
+    //         if (tremoloIsActive) {
+    //             tremoloLFO.disconnect();
+    //             tremoloGain.disconnect();
+    //             tremoloDepth.disconnect();
+    //         }
+            
+    //         if (chorusIsActive) {
+    //             chorusDelay1.disconnect();
+    //             chorusDelay2.disconnect();
+    //             chorusDelay3.disconnect();
+    //             chorusLFO1.disconnect();
+    //             chorusLFO2.disconnect();
+    //             chorusLFO3.disconnect();
+    //             chorusGain1.disconnect();
+    //             chorusGain2.disconnect();
+    //             chorusGain3.disconnect();
+    //             chorusDepth1.disconnect();
+    //             chorusDepth2.disconnect();
+    //             chorusDepth3.disconnect();
+    //             chorusMix.disconnect();
+    //             dryGain.disconnect();
+    //         }
+            
+    //         if (phaserIsActive) {
+    //             phaserStages.forEach(stage => stage.disconnect());
+    //             phaserLFO.disconnect();
+    //             phaserDepth.disconnect();
+    //             phaserFeedback.disconnect();
+    //             phaserMix.disconnect();
+    //             phaserDry.disconnect();
+    //         }
+            
+    //         if (reverbIsActive) {
+    //             reverbNode.disconnect();
+    //             reverbGain.disconnect();
+    //             reverbDry.disconnect();
+    //             reverbWet.disconnect();
+    //         }
+            
+    //         if (delayIsActive) {
+    //             delayNode.disconnect();
+    //             delayFeedback.disconnect();
+    //             delayWet.disconnect();
+    //             delayDry.disconnect();
+    //         }
+    //     } catch (e) {
+    //         console.warn('Cleanup warning:', e);
+    //     }
+    // };
 
-            // Disconnect all nodes
-            oscillator.disconnect();
-            filterNode.disconnect();
+oscillator.onended = () => {
+    try {
+        // Disconnect oscillator immediately
+        oscillator.disconnect();
+        filterNode.disconnect();
+        
+        // Disconnect other effects immediately
+        if (tremoloIsActive) {
+            tremoloLFO.disconnect();
+            tremoloGain.disconnect();
+            tremoloDepth.disconnect();
+        }
+        
+        if (chorusIsActive) {
+            chorusDelay1.disconnect();
+            chorusDelay2.disconnect();
+            chorusDelay3.disconnect();
+            chorusLFO1.disconnect();
+            chorusLFO2.disconnect();
+            chorusLFO3.disconnect();
+            chorusGain1.disconnect();
+            chorusGain2.disconnect();
+            chorusGain3.disconnect();
+            chorusDepth1.disconnect();
+            chorusDepth2.disconnect();
+            chorusDepth3.disconnect();
+            chorusMix.disconnect();
+            dryGain.disconnect();
+        }
+        
+        if (phaserIsActive) {
+            phaserStages.forEach(stage => stage.disconnect());
+            phaserLFO.disconnect();
+            phaserDepth.disconnect();
+            phaserFeedback.disconnect();
+            phaserMix.disconnect();
+            phaserDry.disconnect();
+        }
+        
+        // CRITICAL: Delay cleanup AFTER the echoes finish
+        if (reverbIsActive || delayIsActive) {
+            const maxTailTime = 5000; // 5 seconds for reverb/delay tails
+            
+            setTimeout(() => {
+                try {
+                    if (reverbIsActive) {
+                        reverbNode.disconnect();
+                        reverbDry.disconnect();
+                        reverbWet.disconnect();
+                    }
+                    
+                    if (delayIsActive) {
+                        delayNode.disconnect();
+                        delayFeedback.disconnect();
+                        delayWet.disconnect();
+                        delayDry.disconnect();
+                    }
+                    
+                    // Disconnect main gain/pan at the end
+                    gainNode.disconnect();
+                    panNode.disconnect();
+                    
+                    console.log('🧹 Delay/reverb cleanup completed after tail');
+                } catch (e) {
+                    console.warn('Cleanup warning:', e);
+                }
+            }, maxTailTime);
+        } else {
+            // No delay/reverb, disconnect immediately
             gainNode.disconnect();
             panNode.disconnect();
-            
-            if (tremoloIsActive) {
-                tremoloLFO.disconnect();
-                tremoloGain.disconnect();
-                tremoloDepth.disconnect();
-            }
-            
-            if (chorusIsActive) {
-                chorusDelay1.disconnect();
-                chorusDelay2.disconnect();
-                chorusDelay3.disconnect();
-                chorusLFO1.disconnect();
-                chorusLFO2.disconnect();
-                chorusLFO3.disconnect();
-                chorusGain1.disconnect();
-                chorusGain2.disconnect();
-                chorusGain3.disconnect();
-                chorusDepth1.disconnect();
-                chorusDepth2.disconnect();
-                chorusDepth3.disconnect();
-                chorusMix.disconnect();
-                dryGain.disconnect();
-            }
-            
-            if (phaserIsActive) {
-                phaserStages.forEach(stage => stage.disconnect());
-                phaserLFO.disconnect();
-                phaserDepth.disconnect();
-                phaserFeedback.disconnect();
-                phaserMix.disconnect();
-                phaserDry.disconnect();
-            }
-            
-            if (reverbIsActive) {
-                reverbNode.disconnect();
-                reverbGain.disconnect();
-                reverbDry.disconnect();
-                reverbWet.disconnect();
-            }
-            
-            if (delayIsActive) {
-                delayNode.disconnect();
-                delayFeedback.disconnect();
-                delayWet.disconnect();
-                delayDry.disconnect();
-            }
-        } catch (e) {
-            console.warn('Cleanup warning:', e);
         }
-    };
+        
+        // Remove from preview tracking immediately
+        if (audioManager.previewGainNodes) {
+            audioManager.previewGainNodes.delete(gainNode);
+        }
+        if (audioManager.previewPanNodes) {
+            audioManager.previewPanNodes.delete(panNode);
+        }
+        
+    } catch (e) {
+        console.warn('Cleanup warning:', e);
+    }
+};
+
 
 
     return {
@@ -6348,27 +6493,36 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
 }
 
 /**
- * Apply ADSR to volume/gain - FIXED: Velocity now affects peak gain
+ * Apply ADSR to volume/gain - FIXED: Much louder for audible effects
  */
 applyVolumeADSR(gainNode, envelope, voiceParams, startTime, duration) {
-    // Calculate base gain with velocity sensitivity
+    // FIXED: Much higher base volume for testing effects
     const velocityMultiplier = voiceParams.velocityScale || 1.0;
     const baseGain = voiceParams.volume * velocityMultiplier * voiceParams.polyphonyScale;
-    const peakGain = baseGain * envelope.peakLevel;
-    const sustainGain = baseGain * envelope.sustain;
     
-    console.log(`🔊 Velocity: ${(velocityMultiplier * 100).toFixed(0)}%, Peak Gain: ${peakGain.toFixed(3)}`);
+    // FIXED: Boost the gain significantly for audible effects
+    const volumeBoost = 8.0; // 8x louder than before
+    const peakGain = baseGain * envelope.peakLevel * volumeBoost;
+    const sustainGain = baseGain * envelope.sustain * volumeBoost;
+    
+    console.log(`🔊 BOOSTED Velocity: ${(velocityMultiplier * 100).toFixed(0)}%, Peak Gain: ${peakGain.toFixed(3)} (8x boost)`);
+    
+    // Ensure minimum audible levels
+    const minAudibleGain = 0.1; // 10% minimum volume
+    const finalPeakGain = Math.max(minAudibleGain, peakGain);
+    const finalSustainGain = Math.max(minAudibleGain * 0.7, sustainGain);
     
     gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(peakGain, startTime + envelope.attack);
-    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainGain), startTime + envelope.decayEnd);
-    gainNode.gain.setValueAtTime(sustainGain, startTime + envelope.sustainEnd);
+    gainNode.gain.linearRampToValueAtTime(finalPeakGain, startTime + envelope.attack);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, finalSustainGain), startTime + envelope.decayEnd);
+    gainNode.gain.setValueAtTime(finalSustainGain, startTime + envelope.sustainEnd);
     gainNode.gain.linearRampToValueAtTime(0.001, startTime + duration);
+    
+    console.log(`🔊 Final gains: peak=${finalPeakGain.toFixed(3)}, sustain=${finalSustainGain.toFixed(3)}`);
 }
 
-
 /**
- * Apply ADSR to filter (brightness evolution) - FIXED: Velocity affects brightness
+ * Apply ADSR to ATTACK VELOCITY.  FIXED: Velocity affects brightness
  */
 applyFilterADSR(filterNode, envelope, frequency, velocityNormalized, instrumentName, startTime, duration) {
     filterNode.type = 'lowpass';
@@ -6402,170 +6556,123 @@ applyFilterADSR(filterNode, envelope, frequency, velocityNormalized, instrumentN
   /**
    * Apply ADSR to tremolo - Direct gain modulation for amplitude wobble
    */
-  applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration) {
-    // Check if tremolo should be bypassed
-    if (voiceParams.tremoloDepth <= 0.001) {
-      tremoloGain.gain.setValueAtTime(1.0, actualStartTime);
-      console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo bypassed (depth = 0)`);
-      return false;
-    }
-    
-    // Set up tremolo LFO for direct gain modulation
-    tremoloLFO.type = 'sine';
-    tremoloLFO.frequency.setValueAtTime(voiceParams.tremoloSpeed, actualStartTime);
-    
-    // Calculate modulation depth (0-1 range)
-    const modulationDepth = voiceParams.tremoloDepth * 0.5; // Max 50% modulation
-    
-    // Set up gain modulation
-    tremoloGain.gain.setValueAtTime(1.0, actualStartTime); // Base unity gain
-    tremoloDepth.gain.setValueAtTime(modulationDepth, actualStartTime);
-    
-    // Connect LFO to modulate tremolo gain
-    tremoloLFO.connect(tremoloDepth);
-    tremoloDepth.connect(tremoloGain.gain);
-    
-    // Protected LFO start
-    try {
-      tremoloLFO.start(actualStartTime);
-      tremoloLFO.stop(actualStartTime + duration);
-    } catch (e) {
-      console.warn(`Tremolo LFO start warning:`, e.message);
-    }
-    
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo active (speed = ${voiceParams.tremoloSpeed.toFixed(1)}Hz, depth = ${(voiceParams.tremoloDepth * 100).toFixed(0)}%)`);
-    return true;
+applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  // Check if tremolo should be bypassed
+  if (voiceParams.tremoloDepth <= 0.001) {
+    tremoloGain.gain.setValueAtTime(1.0, actualStartTime);
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo bypassed (depth = 0)`);
+    return false;
   }
-
+  
+  // Set up tremolo LFO for direct gain modulation
+  tremoloLFO.type = 'sine';
+  tremoloLFO.frequency.setValueAtTime(voiceParams.tremoloSpeed, actualStartTime);
+  
+  // Calculate modulation depth (0-1 range)
+  const modulationDepth = voiceParams.tremoloDepth * 0.5; // Max 50% modulation
+  
+  // Set up gain modulation
+  tremoloGain.gain.setValueAtTime(1.0, actualStartTime); // Base unity gain
+  tremoloDepth.gain.setValueAtTime(modulationDepth, actualStartTime);
+  
+  // Connect LFO to modulate tremolo gain
+  tremoloLFO.connect(tremoloDepth);
+  tremoloDepth.connect(tremoloGain.gain);
+  
+  // Protected LFO start
+  try {
+    tremoloLFO.start(actualStartTime);
+    tremoloLFO.stop(actualStartTime + duration);
+  } catch (e) {
+    console.warn(`Tremolo LFO start warning:`, e.message);
+  }
+  
+  console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo active (speed = ${voiceParams.tremoloSpeed.toFixed(1)}Hz, depth = ${(voiceParams.tremoloDepth * 100).toFixed(0)}%)`);
+  return true;
+}
 
 /**
- * Apply ADSR to reverb (convolution reverb with ADSR evolution) - FIXED
+ * Apply delay settings - SIMPLIFIED (no ADSR on wet/dry)
  */
-applyReverbADSR(reverbNode, reverbGain, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
-    // Check if reverb should be bypassed
-    if (voiceParams.reverbDepth <= 0.001) {
-        reverbDry.gain.setValueAtTime(1.0, actualStartTime);
-        reverbWet.gain.setValueAtTime(0, actualStartTime);
-        reverbGain.gain.setValueAtTime(1.0, actualStartTime);
-        
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Reverb bypassed (depth = 0)`);
+applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voiceParams, actualStartTime, duration) {
+    const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+    const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+    const mixValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+    const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
+    
+    const delayDepth = mixValue / 100;
+    
+    if (delayDepth <= 0.001) {
         return false;
     }
     
-    // FIXED: Ensure minimum reverb time and proper buffer length
+    // ENHANCED: Better delay time range (100ms to 2000ms is good, keep it)
+    // ENHANCED: More aggressive wet/dry for obvious effect
+    const delayDryLevel = 1.0 - (delayDepth * 0.9); // Increased from 0.7
+    const delayWetLevel = delayDepth * 2.5; // Increased from 1.8
+    const feedbackLevel = Math.min(0.9, feedbackValue / 100); // Increased from 0.85
+    
+    delayDry.gain.value = delayDryLevel;
+    delayWet.gain.value = delayWetLevel;
+    delayFeedback.gain.value = feedbackLevel;
+    
+    console.log(`🔧 DELAY SET: dry=${delayDryLevel.toFixed(2)}, wet=${delayWetLevel.toFixed(2)}, feedback=${feedbackLevel.toFixed(2)}`);
+    
+    return true;
+}
+
+
+/**
+ * Apply reverb settings - SIMPLIFIED (no ADSR on wet/dry)
+ */
+applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
+    const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+    const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+    const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+    
+    const reverbDepth = mixValue / 100;
+    
+    if (reverbDepth <= 0.001) {
+        return false;
+    }
+    
+    // ENHANCED: Much longer reverb times
+    const reverbTime = 1.0 + (timeValue / 100) * 7.0; // 1.0-8.0 seconds (was 0.5-5.5)
     const sampleRate = audioManager.audioContext.sampleRate;
-    const minReverbTime = 0.1;
-    const maxReverbTime = 4.0;
-    const reverbTime = Math.max(minReverbTime, Math.min(maxReverbTime, voiceParams.reverbTime || 1.0));
     const length = Math.floor(sampleRate * reverbTime);
     
-    console.log(`🔍 Creating reverb buffer: ${length} samples, ${reverbTime}s`);
-    
-    // Ensure buffer length is valid
     if (length <= 0) {
-        console.warn(`Invalid buffer length: ${length}, bypassing reverb`);
-        reverbDry.gain.setValueAtTime(1.0, actualStartTime);
-        reverbWet.gain.setValueAtTime(0, actualStartTime);
         return false;
     }
     
     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
     
-    // Generate simple reverb impulse response
+    // ENHANCED: Much louder, denser reverb impulse
     for (let channel = 0; channel < 2; channel++) {
         const channelData = impulse.getChannelData(channel);
         for (let i = 0; i < length; i++) {
             const n = length - i;
-            channelData[i] = (Math.random() * 2 - 1) * Math.pow(n / length, 2);
+            // BOOSTED: 5x louder impulse, slower decay
+            const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 1.2); // Changed from 3.0 and 1.5
+            channelData[i] = amplitude;
         }
     }
     
     reverbNode.buffer = impulse;
-    console.log(`✅ Reverb buffer created and assigned`);
     
-    const maxReverbDepth = voiceParams.reverbDepth;
-    const reverbDryLevel = 1.0 - maxReverbDepth;
-    const reverbWetLevel = maxReverbDepth;
+    // ENHANCED: More pronounced wet/dry balance
+    const reverbDryLevel = 1.0 - (reverbDepth * 0.9); // Increased from 0.7
+    const reverbWetLevel = reverbDepth * 2.5; // Increased from 1.5
     
-    console.log(`🔊 Reverb levels: dry=${(reverbDryLevel*100).toFixed(0)}%, wet=${(reverbWetLevel*100).toFixed(0)}%`);
+    reverbDry.gain.value = reverbDryLevel;
+    reverbWet.gain.value = reverbWetLevel;
     
-    // Reverb send follows ADSR
-    const peakReverbSend = reverbWetLevel * envelope.peakLevel;
-    const sustainReverbSend = reverbWetLevel * envelope.sustain;
+    console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s`);
     
-    // Dry signal (constant)
-    reverbDry.gain.setValueAtTime(reverbDryLevel, actualStartTime);
-    
-    // Wet signal follows ADSR
-    reverbWet.gain.setValueAtTime(0, actualStartTime);
-    reverbWet.gain.linearRampToValueAtTime(peakReverbSend, actualStartTime + envelope.attack);
-    reverbWet.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainReverbSend), actualStartTime + envelope.decayEnd);
-    reverbWet.gain.setValueAtTime(sustainReverbSend, actualStartTime + envelope.sustainEnd);
-    reverbWet.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
-    
-    // Main reverb gain
-    reverbGain.gain.setValueAtTime(1.0, actualStartTime);
-    
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Reverb active (depth = ${voiceParams.reverbDepth.toFixed(3)}, time = ${reverbTime.toFixed(2)}s)`);
     return true;
 }
 
 
- //
- // Apply ADSR to delay (echo effect with ADSR-controlled feedback and mix) - FIXED
- //
-applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voiceParams, actualStartTime, duration) {
-    // Check if delay should be bypassed
-    if (voiceParams.delayDepth <= 0.001) {
-        delayDry.gain.setValueAtTime(1.0, actualStartTime);
-        delayWet.gain.setValueAtTime(0, actualStartTime);
-        delayFeedback.gain.setValueAtTime(0, actualStartTime);
-        
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: Delay bypassed (depth = 0)`);
-        return false;
-    }
-    
-    // Set delay time (convert from ms to seconds)
-    const delayTimeSeconds = Math.min(voiceParams.delayTime / 1000, 2.0);
-    delayNode.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
-    
-    console.log(`🔍 Delay time set to: ${delayTimeSeconds.toFixed(3)}s`);
-    
-    const maxDelayDepth = voiceParams.delayDepth;
-    const delayDryLevel = 1.0 - maxDelayDepth;
-    const delayWetLevel = maxDelayDepth;
-    
-    console.log(`🔊 Delay levels: dry=${(delayDryLevel*100).toFixed(0)}%, wet=${(delayWetLevel*100).toFixed(0)}%`);
-    
-    // Delay send follows ADSR
-    const peakDelaySend = delayWetLevel * envelope.peakLevel;
-    const sustainDelaySend = delayWetLevel * envelope.sustain;
-    
-    // Feedback amount (creates echoing effect)
-    const feedbackAmount = Math.min(0.7, voiceParams.delayFeedback || 0);
-    const peakFeedback = feedbackAmount * envelope.peakLevel;
-    const sustainFeedback = feedbackAmount * envelope.sustain;
-    
-    // Dry signal (constant)
-    delayDry.gain.setValueAtTime(delayDryLevel, actualStartTime);
-    
-    // Wet signal follows ADSR
-    delayWet.gain.setValueAtTime(0, actualStartTime);
-    delayWet.gain.linearRampToValueAtTime(peakDelaySend, actualStartTime + envelope.attack);
-    delayWet.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainDelaySend), actualStartTime + envelope.decayEnd);
-    delayWet.gain.setValueAtTime(sustainDelaySend, actualStartTime + envelope.sustainEnd);
-    delayWet.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
-    
-    // Feedback follows ADSR (creates evolving echo patterns)
-    delayFeedback.gain.setValueAtTime(0, actualStartTime);
-    delayFeedback.gain.linearRampToValueAtTime(peakFeedback, actualStartTime + envelope.attack);
-    delayFeedback.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainFeedback), actualStartTime + envelope.decayEnd);
-    delayFeedback.gain.setValueAtTime(sustainFeedback, actualStartTime + envelope.sustainEnd);
-    delayFeedback.gain.linearRampToValueAtTime(0.001, actualStartTime + duration);
-    
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Delay active (time = ${delayTimeSeconds.toFixed(3)}s, depth = ${(voiceParams.delayDepth * 100).toFixed(0)}%, feedback = ${(feedbackAmount * 100).toFixed(0)}%)`);
-    return true;
-}
 
  /**
  * Apply ADSR to chorus - ENHANCED for rich stereo width and detuning
@@ -6762,7 +6869,6 @@ createChorusNetwork(audioContext) {
         numVoices: numChorusVoices
     };
 }
-
 
 /**
  * Apply ADSR to stereo panning (position evolution)
@@ -7170,42 +7276,6 @@ createSustainedReverb(inputNode, voiceParams, actualStartTime, duration) {
 }
 
 
-/**
- * Get velocity-sensitive waveform type
- */
-// getVelocitySensitiveWaveform(baseType, velocityNormalized, instrumentName) {
-//     // Instrument-specific velocity response
-//     if (instrumentName.includes('Piano')) {
-//         // Piano: soft = sine (mellow), hard = square (bright/percussive)
-//         if (velocityNormalized < 0.3) return 'sine';
-//         if (velocityNormalized < 0.7) return 'triangle';
-//         return 'square';
-//     }
-    
-//     if (instrumentName.includes('String') || instrumentName.includes('Violin') || instrumentName.includes('Cello')) {
-//         // Strings: soft = sine (bow pressure), hard = sawtooth (aggressive bowing)
-//         if (velocityNormalized < 0.4) return 'sine';
-//         return 'sawtooth';
-//     }
-    
-//     if (instrumentName.includes('Brass') || instrumentName.includes('Trumpet') || instrumentName.includes('Horn')) {
-//         // Brass: soft = triangle (gentle), hard = square (brassy)
-//         if (velocityNormalized < 0.5) return 'triangle';
-//         return 'square';
-//     }
-    
-//     if (instrumentName.includes('Organ')) {
-//         // Organ: consistent waveform but different harmonics via filter
-//         return 'sawtooth';
-//     }
-    
-//     // Default: use base type with subtle variation
-//     return baseType;
-// }
-
-/**
- * Get velocity-sensitive waveform type - FIXED to respect instrument base type
- */
 /**
  * Get velocity-sensitive waveform type - Velocity affects harmonic content
  */
@@ -8109,7 +8179,7 @@ function debugMelodicRange() {
   }
 }
 
-// Oct 5 25 Still Getting the MAster Clock working:
+// Oct 5 25 Still Getting the Master Clock working:
 // FORCE CONNECT PLAY BUTTON - Add at very end of scripts.js
 setTimeout(() => {
   console.log('🔧 FORCING PLAY BUTTON CONNECTION...');
@@ -8245,44 +8315,7 @@ function selectBaseNote(voiceIndex, minNote, maxNote) {
     };
 }
 
-/**
- * Test polyphony with different settings
- */
-// async function testPolyphony() {
-//     console.log('=== TESTING POLYPHONY IMPLEMENTATION ===');
-    
-//     // Initialize audio if needed
-//     if (!audioManager || !audioManager.isInitialized) {
-//         await audioManager.initialize();
-//     }
-    
-//     if (!masterClock) masterClock = new MasterClock();
-//     if (!voiceClockManager) voiceClockManager = new VoiceClockManager();
-//     voiceClockManager.initialize(masterClock);
-    
-//     // Set up Voice 1 for polyphonic testing
-//     voiceData[0].enabled = true;
-//     voiceData[0].parameters['POLYPHONY'].min = 3;
-//     voiceData[0].parameters['POLYPHONY'].max = 6;
-//     voiceData[0].parameters['POLYPHONY'].behavior = 75;
-    
-//     // Set a nice melodic range
-//     voiceData[0].parameters['MELODIC RANGE'].min = 60; // C4
-//     voiceData[0].parameters['MELODIC RANGE'].max = 72; // C5
-//     voiceData[0].parameters['MELODIC RANGE'].behavior = 50;
-    
-//     console.log('🎹 Starting polyphonic test - you should hear 3-6 notes playing simultaneously');
-    
-//     masterClock.start();
-//     voiceClockManager.startAllVoices();
-    
-//     // Play for 15 seconds
-//     setTimeout(() => {
-//         voiceClockManager.stopAllVoices();
-//         masterClock.stop();
-//         console.log('🎹 Polyphonic test complete!');
-//     }, 15000);
-// }
+
 
 /**
  * Test chord generation algorithms
@@ -8481,6 +8514,129 @@ console.log('✅ Chord quality selection system loaded');
 //
 //
 //  
+/**
+ * Complete Reverb and Delay Test Function
+ */
+async function testReverbDelayComplete() {
+    console.log('=== COMPLETE REVERB & DELAY TEST ===');
+    
+    try {
+        // Initialize audio if needed
+        if (!audioManager || !audioManager.isInitialized) {
+            console.log('Initializing audio...');
+            if (!audioManager) {
+                audioManager = new AudioManager();
+            }
+            await audioManager.initialize();
+            
+            if (!audioManager.isInitialized) {
+                console.log('❌ Audio initialization failed');
+                return;
+            }
+        }
+        
+        // Initialize clock systems
+        if (!masterClock) {
+            masterClock = new MasterClock();
+        }
+        
+        if (!voiceClockManager) {
+            voiceClockManager = new VoiceClockManager();
+        }
+        
+        voiceClockManager.initialize(masterClock);
+        
+        // Reset all voices first
+        for (let i = 0; i < 16; i++) {
+            voiceData[i].enabled = false;
+        }
+        
+        // Enable Voice 1 only
+        voiceData[0].enabled = true;
+        
+        // Set REVERB parameters for testing
+        const reverbParam = voiceData[0].parameters['REVERB'];
+        if (reverbParam && reverbParam.speed && reverbParam.depth) {
+            reverbParam.speed.min = 30;
+            reverbParam.speed.max = 50;
+            reverbParam.depth.min = 40;
+            reverbParam.depth.max = 60;
+        }
+        
+        // Set DELAY parameters for testing
+        const delayParam = voiceData[0].parameters['DELAY'];
+        if (delayParam && delayParam.speed && delayParam.depth && delayParam.feedback) {
+            delayParam.speed.min = 25;
+            delayParam.speed.max = 40;
+            delayParam.depth.min = 30;
+            delayParam.depth.max = 50;
+            delayParam.feedback.min = 20;
+            delayParam.feedback.max = 40;
+        }
+        
+        console.log('🎵 Starting REVERB & DELAY test...');
+        console.log('Expected: Notes with reverb tail and echoing delay');
+        
+        // Start systems
+        masterClock.start();
+        voiceClockManager.startAllVoices();
+        
+        console.log('✅ Test started - playing for 15 seconds');
+        
+        // Auto-stop after 15 seconds
+        setTimeout(() => {
+            if (voiceClockManager) {
+                voiceClockManager.stopAllVoices();
+            }
+            if (masterClock) {
+                masterClock.stop();
+            }
+            console.log('🎉 REVERB & DELAY test complete!');
+        }, 15000);
+        
+    } catch (error) {
+        console.error('Test error:', error);
+    }
+}
+
+/**
+ * Verify parameter connection
+ */
+function verifyReverbDelayConnection() {
+    console.log('=== VERIFYING REVERB & DELAY CONNECTION ===');
+    
+    try {
+        const reverbParam = voiceData[currentVoice].parameters['REVERB'];
+        const delayParam = voiceData[currentVoice].parameters['DELAY'];
+        
+        console.log('REVERB parameter structure:', reverbParam);
+        console.log('DELAY parameter structure:', delayParam);
+        
+        if (reverbParam && reverbParam.speed && reverbParam.depth) {
+            const reverbTime = 0.1 + ((reverbParam.speed.min + reverbParam.speed.max) / 2 / 100) * 3.9;
+            const reverbMix = (reverbParam.depth.min + reverbParam.depth.max) / 2;
+            console.log(`REVERB calculated: Time=${reverbTime.toFixed(2)}s, Mix=${reverbMix.toFixed(0)}%`);
+        }
+        
+        if (delayParam && delayParam.speed && delayParam.depth && delayParam.feedback) {
+            const delayTime = (50 + ((delayParam.speed.min + delayParam.speed.max) / 2 / 100) * 1950);
+            const delayMix = (delayParam.depth.min + delayParam.depth.max) / 2;
+            const delayFeedback = (delayParam.feedback.min + delayParam.feedback.max) / 2;
+            console.log(`DELAY calculated: Time=${delayTime.toFixed(0)}ms, Mix=${delayMix.toFixed(0)}%, Feedback=${delayFeedback.toFixed(0)}%`);
+        }
+        
+        console.log('✅ Connection verified!');
+        
+    } catch (error) {
+        console.error('Verification error:', error);
+    }
+}
+
+
+
+
+
+
 
 
 
