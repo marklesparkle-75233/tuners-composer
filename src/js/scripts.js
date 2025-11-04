@@ -311,7 +311,8 @@ update() {
     this.updateParameter(voice.parameters['PORTAMENTO GLIDE TIME'], deltaTime);
     this.updateParameter(voice.parameters['TEMPO (BPM)'], deltaTime); // Individual voice tempo
     this.updateParameter(voice.parameters['REVERB'], deltaTime);
-    
+    this.updateParameter(voice.parameters['DETUNING'], deltaTime);
+
     // Update multi-parameter effects
     this.updateEffectParameter(voice.parameters['TREMOLO'], deltaTime);
     this.updateEffectParameter(voice.parameters['CHORUS'], deltaTime);
@@ -488,6 +489,7 @@ function initializeVoices() {
         if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
           console.error(`Missing min/max for parameter: ${param.name}`);
         }
+
         
         // NEW: Set all ADSR effects to OFF by default
         if (param.name === 'TREMOLO' || param.name === 'CHORUS' || param.name === 'PHASER') {
@@ -516,20 +518,21 @@ function initializeVoices() {
           };
         } else if (param.name === 'DELAY') {
           voice.parameters[param.name] = {
-            speed: {      // Delay Time
-              min: 0,     // Starts at 0 (OFF)
-              max: 0    // Available up to 100% (maps to 0-2000ms via your formatter)
+            speed: {
+              min: 0,      // 0ms delay time (OFF)
+              max: 0       // 0ms delay time (OFF)
             },
-            depth: {      // Mix (wet/dry)
-              min: 0,     // Starts at 0 (OFF) 
-              max: 0    // Available up to 100% wet
+            depth: {
+              min: 0,      // 0% wet (OFF)
+              max: 0       // 0% wet (OFF)
             },
-            feedback: {   // Feedback amount
-              min: 0,     // Starts at 0 (OFF)
-              max: 0     // Available up to 90% (not 100% to prevent runaway feedback)
+            feedback: {   
+              min: 0,      // 0% feedback (OFF)
+              max: 0       // 0% feedback (OFF)
             },
-            behavior: 0   // No evolution behavior
+            behavior: 0    // No evolution behavior
           };
+
         } else {
           // Other multi-dual parameters (if any)
           voice.parameters[param.name] = {
@@ -550,7 +553,46 @@ function initializeVoices() {
           duration: 100,
           repeat: true,
         };
+      } else if (param.type === 'single-dual') {
+    if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
+        console.error(`Missing min/max for parameter: ${param.name}`);
+    }
+    
+   // Set sensible defaults for single-dual parameters
+if (param.name === 'MELODIC RANGE') {
+    voice.parameters[param.name] = {
+        min: 60,  // Middle C (C4)
+        max: 60,  // Middle C (will be updated by piano to show single note)
+        behavior: 50,
+        selectedNotes: [60] // Piano will load this as Middle C selected
+    };
+} else if (param.name === 'DETUNING') {
+    // DETUNING: Set to center (0 cents) - perfectly in tune
+    voice.parameters[param.name] = {
+        min: 0,      // 0 cents (perfectly in tune)
+        max: 0,      // 0 cents (no detuning)
+        behavior: 0  // No evolution behavior (stays at 0)
+    };
+} else if (param.name === 'PORTAMENTO GLIDE TIME') {
+    // PORTAMENTO: Set to OFF (0ms glide time)
+    voice.parameters[param.name] = {
+        min: 0,      // 0% = 0ms glide time (instant frequency changes)
+        max: 0,      // 0% = no portamento effect
+        behavior: 0  // No evolution behavior (stays off)
+    };
+} else {
+    // Use 25%-75% range for ALL OTHER parameters
+    voice.parameters[param.name] = {
+        min: param.min + (param.max - param.min) * 0.25,
+        max: param.min + (param.max - param.min) * 0.75,
+        behavior: 50
+    };
+}
+
+
+      
       }
+      
     });
     
     voiceData.push(voice);
@@ -988,6 +1030,8 @@ function createDualSlider(param, voiceIndex) {
 function createMultiDualSlider(param, voiceIndex) {
   console.log(`🔧 createMultiDualSlider called for ${param.name}, voiceIndex=${voiceIndex}`);
   
+
+  
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-slider';
   
@@ -1062,24 +1106,73 @@ function createMultiDualSlider(param, voiceIndex) {
   //   };
   // }
   
+// if (param.name === 'REVERB') {
+//   speedFormatter = {
+//     to: value => {
+//       if (value <= 0.001) return '0s'; // Handle OFF state
+//       const timeSeconds = (value / 100) * 5.5 + 0.5;
+//       return timeSeconds.toFixed(1) + 's';
+//     },
+//     from: value => {
+//       if (value === '0s' || value === '0') return 0; // Handle OFF state
+//       const numStr = value.replace('s', '');
+//       const seconds = parseFloat(numStr);
+//       if (seconds <= 0.5) return 0; // Clamp to OFF
+//       return ((seconds - 0.5) / 5.5) * 100;
+//     }
+//   };
 if (param.name === 'REVERB') {
-    speedFormatter = {
-      to: value => {
-        const timeSeconds = (value / 100) * 5.5 + 0.5; // 0.5-6.0 seconds
-        return timeSeconds.toFixed(1) + 's';
-      },
-      from: value => {
-        const numStr = value.replace('s', '');
-        const seconds = parseFloat(numStr);
-        return ((seconds - 0.3) / 3.7) * 100;
-      }
-    };
-  } else if (param.name === 'DELAY') {
-    // Use musical notation formatter
-    const musicalFormatter = createDelayTimeFormatter(voiceIndex);
-    speedFormatter = musicalFormatter;
-  }
+  speedFormatter = {
+    to: value => {
+      // Handle OFF state (0-1% = 0s)
+      if (value <= 1) return '0s';
+      
+      // Map 1-100% to 0.5-6.0 seconds  
+      const timeSeconds = 0.5 + ((value - 1) / 99) * 5.5;
+      return timeSeconds.toFixed(1) + 's';
+    },
+    from: value => {
+      // Handle OFF state
+      if (value === '0s' || value === '0') return 0;
+      
+      const numStr = value.replace('s', '');
+      const seconds = parseFloat(numStr);
+      
+      // Handle values at or below minimum
+      if (seconds <= 0.5) return 0;
+      
+      // Map 0.5-6.0s back to 1-100%
+      return 1 + ((seconds - 0.5) / 5.5) * 99;
+    }
+  };
+  // } else if (param.name === 'DELAY') {
+  //   // Use musical notation formatter
+  //   const musicalFormatter = createDelayTimeFormatter(voiceIndex);
+  //   speedFormatter = musicalFormatter;
+  // }
 
+} if (param.name === 'DELAY') {
+  // Use musical notation formatter, but ensure it handles zero
+  const musicalFormatter = createDelayTimeFormatter(voiceIndex);
+  
+  // Override the formatter to handle zero case
+  speedFormatter = {
+    to: function(value) {
+      // Handle OFF state
+      if (value <= 0.001) return '0ms';
+      
+      // Use your existing musical formatter for non-zero values
+      return musicalFormatter.to(value);
+    },
+    from: function(value) {
+      // Handle OFF state
+      if (value === '0ms' || value === '0') return 0;
+      
+      // Use your existing musical formatter for non-zero values
+      return musicalFormatter.from(value);
+    }
+  };
+}
 
   // FIXED: Read actual values from voiceParam
   const speedMin = Number(voiceParam.speed?.min) || 0;
@@ -1788,7 +1881,11 @@ document.addEventListener('DOMContentLoaded', () => {
   createVoiceTabs();
   renderParameters();
   
-  
+  // ENSURE ADVANCED PARAMETERS ARE PROPERLY DEFAULTED
+    setTimeout(() => {
+        resetAdvancedParameterDefaults();
+    }, 500); // Wait for all UI elements to be ready
+
 document.addEventListener('DOMContentLoaded', () => {
   // Existing initialization code...
   
@@ -3579,78 +3676,79 @@ multiDualContainers.forEach((container) => {
   const allSliders = container.querySelectorAll('.noUi-target');
   console.log(`  Found ${allSliders.length} sliders in ${paramName} container`);
   
-  allSliders.forEach((slider, sliderIndex) => {
-    if (slider.noUiSlider) {
-      const sliderWrapper = slider.closest('.slider-wrapper');
-      const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label') : null;
-      const labelText = label ? label.textContent.trim().toLowerCase() : '';
+allSliders.forEach((slider, sliderIndex) => {
+  if (slider.noUiSlider) {
+    const sliderWrapper = slider.closest('.slider-wrapper');
+    const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label') : null;
+    const labelText = label ? label.textContent.trim().toLowerCase() : '';
+    
+    console.log(`  🔗 Connecting ${paramName} slider ${sliderIndex}: "${labelText}"`);
+    
+    // Remove existing handlers
+    slider.noUiSlider.off('update');
+    
+    // Add new handler based on slider position
+    slider.noUiSlider.on('update', function(values) {
+      // FIXED: Parse values correctly (remove % and ms suffixes)
+      let min, max;
       
-      console.log(`  🔗 Connecting ${paramName} slider ${sliderIndex}: "${labelText}"`);
+      if (values[0].includes('ms') || values[0].includes('s')) {
+        // Time values - convert to numeric
+        min = parseFloat(values[0].replace(/[ms%s]/g, ''));
+        max = parseFloat(values[1].replace(/[ms%s]/g, ''));
+      } else if (values[0].includes('%')) {
+        // Percentage values
+        min = parseFloat(values[0].replace('%', ''));
+        max = parseFloat(values[1].replace('%', ''));
+      } else {
+        // Raw numeric values
+        min = Math.round(Number(values[0]));
+        max = Math.round(Number(values[1]));
+      }
       
-      // Remove existing handlers
-      slider.noUiSlider.off('update');
+      if (isNaN(min) || isNaN(max)) {
+        console.warn(`❌ Invalid values for ${paramName} slider ${sliderIndex}: [${values[0]}, ${values[1]}]`);
+        return;
+      }
       
-      // Add new handler based on slider type
-      slider.noUiSlider.on('update', function(values) {
-        // FIXED: Parse values correctly (remove % and ms suffixes)
-        let min, max;
+      const voiceParam = voiceData[currentVoice].parameters[paramName];
+      if (!voiceParam) {
+        console.warn(`❌ Parameter ${paramName} not found in voiceData`);
+        return;
+      }
+      
+      // FIXED: Position-based detection using sliderIndex
+      if (sliderIndex === 0) {
+        // First slider = Speed/Time (for all effects)
+        if (!voiceParam.speed) voiceParam.speed = { min: 0, max: 0 };
+        voiceParam.speed.min = min;
+        voiceParam.speed.max = max;
+        console.log(`✅ ${paramName} speed/time: ${min}-${max}`);
         
-        if (values[0].includes('ms') || values[0].includes('s')) {
-          // Time values - convert to numeric
-          min = parseFloat(values[0].replace(/[ms%s]/g, ''));
-          max = parseFloat(values[1].replace(/[ms%s]/g, ''));
-        } else if (values[0].includes('%')) {
-          // Percentage values
-          min = parseFloat(values[0].replace('%', ''));
-          max = parseFloat(values[1].replace('%', ''));
-        } else {
-          // Raw numeric values
-          min = Math.round(Number(values[0]));
-          max = Math.round(Number(values[1]));
-        }
+      } else if (sliderIndex === 1) {
+        // Second slider = Depth/Mix (for all effects)
+        if (!voiceParam.depth) voiceParam.depth = { min: 0, max: 0 };
+        voiceParam.depth.min = min;
+        voiceParam.depth.max = max;
+        console.log(`✅ ${paramName} depth/mix: ${min}-${max}%`);
         
-        if (isNaN(min) || isNaN(max)) {
-          console.warn(`❌ Invalid values for ${paramName} ${labelText}: [${values[0]}, ${values[1]}]`);
-          return;
-        }
+      } else if (sliderIndex === 2) {
+        // Third slider = Feedback (DELAY only)
+        if (!voiceParam.feedback) voiceParam.feedback = { min: 0, max: 0 };
+        voiceParam.feedback.min = min;
+        voiceParam.feedback.max = max;
+        console.log(`✅ ${paramName} feedback: ${min}-${max}%`);
         
-        const voiceParam = voiceData[currentVoice].parameters[paramName];
-        if (!voiceParam) {
-          console.warn(`❌ Parameter ${paramName} not found in voiceData`);
-          return;
-        }
-        
-        // CRITICAL FIX: Update the correct sub-parameter based on label
-        if (labelText.includes('time') || (labelText.includes('speed') && (paramName === 'REVERB' || paramName === 'DELAY'))) {
-          // This is the time/speed slider
-          if (!voiceParam.speed) voiceParam.speed = { min: 0, max: 0 };
-          voiceParam.speed.min = min;
-          voiceParam.speed.max = max;
-          console.log(`✅ ${paramName} time/speed: ${min}-${max}`);
-          
-        } else if (labelText.includes('mix') || labelText.includes('depth')) {
-          // This is the mix/depth slider
-          if (!voiceParam.depth) voiceParam.depth = { min: 0, max: 0 };
-          voiceParam.depth.min = min;
-          voiceParam.depth.max = max;
-          console.log(`✅ ${paramName} mix/depth: ${min}-${max}%`);
-          
-        } else if (labelText.includes('feedback')) {
-          // This is the feedback slider (DELAY only)
-          if (!voiceParam.feedback) voiceParam.feedback = { min: 0, max: 0 };
-          voiceParam.feedback.min = min;
-          voiceParam.feedback.max = max;
-          console.log(`✅ ${paramName} feedback: ${min}-${max}%`);
-          
-        } else {
-          console.warn(`❌ Unknown slider type for ${paramName}: "${labelText}"`);
-        }
-        
-        // VERIFICATION: Log the updated parameter
-        console.log(`🔍 Updated ${paramName} parameter:`, voiceParam);
-      });
-    }
-  });
+      } else {
+        console.warn(`❌ Unknown slider index ${sliderIndex} for ${paramName}`);
+      }
+      
+      // VERIFICATION: Log the updated parameter
+      console.log(`🔍 Updated ${paramName} parameter:`, voiceParam);
+    });
+  }
+});
+
 });
 
 
@@ -3734,6 +3832,38 @@ timingSliders.forEach((slider) => {
   console.log(`   ✅ Timing repeat checkbox`);
 }
 
+/**
+ * Force reset advanced parameters after all initialization is complete
+ */
+function forceAdvancedParameterDefaults() {
+    console.log('🔧 FORCING ADVANCED PARAMETER DEFAULTS...');
+    
+    for (let i = 0; i < 16; i++) {
+        if (voiceData[i] && voiceData[i].parameters) {
+            // Force DETUNING to exactly 0 cents
+            if (voiceData[i].parameters['DETUNING']) {
+                voiceData[i].parameters['DETUNING'] = {
+                    min: 0,
+                    max: 0,
+                    behavior: 0
+                };
+                console.log(`✅ Voice ${i + 1}: DETUNING forced to 0 cents`);
+            }
+            
+            // Force PORTAMENTO to exactly 0ms
+            if (voiceData[i].parameters['PORTAMENTO GLIDE TIME']) {
+                voiceData[i].parameters['PORTAMENTO GLIDE TIME'] = {
+                    min: 0,
+                    max: 0,
+                    behavior: 0
+                };
+                console.log(`✅ Voice ${i + 1}: PORTAMENTO forced to 0ms`);
+            }
+        }
+    }
+    
+    console.log('🎯 Advanced parameter defaults enforced');
+}
 
 
 // =============================================================================
@@ -5656,7 +5786,6 @@ class VoiceClock {
     console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
   }
   
-
   /**
  * Start this voice clock (called when playback begins) - FIXED LIFE SPAN
  */
@@ -6076,14 +6205,21 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
         delayNode.delayTime.value = clampedDelayTime; // Direct assignment
         
         console.log(`🔧 DELAY TIME SET DIRECTLY: ${delayNode.delayTime.value.toFixed(3)}s`);
-    }
+}
 
     // Set oscillator properties
-    const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
-    oscillator.type = velocitySensitiveWaveform;
-    oscillator.frequency.setValueAtTime(frequency, actualStartTime);
-    
+      const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
+      oscillator.type = velocitySensitiveWaveform;
+
+      // Apply portamento (handles frequency setting)
+      const portamentoTime = this.getCurrentPortamentoTime();
+      this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
+
+      // Apply detuning
+      this.applyDetuning(oscillator, actualStartTime, duration);
+
     // Apply ADSR to all effects
+
     this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
     this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
     
@@ -6113,139 +6249,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     );
     
     this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-
-    //  // BUILD AUDIO CHAIN
-    // let audioChain = oscillator;
-    // console.log(`🔗 Building audio chain...`);
-
-    // oscillator.connect(filterNode);
-    // console.log(`   ✓ oscillator → filter`);
-    // audioChain = filterNode;
-
-    // // LOG WHICH EFFECTS ARE ACTIVE
-    // console.log(`🎚️ Active Effects:`);
-    // console.log(`   Tremolo: ${tremoloIsActive}`);
-    // console.log(`   Chorus: ${chorusIsActive}`);
-    // console.log(`   Phaser: ${phaserIsActive}`);
-    // console.log(`   Reverb: ${reverbIsActive} ← CHECK THIS`);
-    // console.log(`   Delay: ${delayIsActive} ← CHECK THIS`);
-
-
-    // if (tremoloIsActive) {
-    //     audioChain.connect(tremoloGain);
-    //     console.log(`   ✓ filter → tremolo`);
-    //     audioChain = tremoloGain;
-    // }
-
-    // if (chorusIsActive) {
-    //     audioChain.connect(dryGain);
-    //     audioChain.connect(chorusDelay1);
-    //     audioChain.connect(chorusDelay2);
-    //     audioChain.connect(chorusDelay3);
-        
-    //     chorusDelay1.connect(chorusGain1);
-    //     chorusDelay2.connect(chorusGain2);
-    //     chorusDelay3.connect(chorusGain3);
-        
-    //     dryGain.connect(chorusMix);
-    //     chorusGain1.connect(chorusMix);
-    //     chorusGain2.connect(chorusMix);
-    //     chorusGain3.connect(chorusMix);
-        
-    //     console.log(`   ✓ chorus chain connected`);
-    //     audioChain = chorusMix;
-    // }
-
-    // if (phaserIsActive) {
-    //     audioChain.connect(phaserStage1);
-    //     phaserStage1.connect(phaserStage2);
-    //     phaserStage2.connect(phaserStage3);
-    //     phaserStage3.connect(phaserStage4);
-        
-    //     audioChain.connect(phaserDry);
-    //     phaserStage4.connect(phaserMix);
-    //     phaserDry.connect(phaserMix);
-        
-    //     console.log(`   ✓ phaser chain connected`);
-    //     audioChain = phaserMix;
-    // }
-
-    // if (reverbIsActive) {
-    // console.log(`   🏛️ Connecting REVERB...`);
-    
-    // // CREATE FRESH MIXER NODE
-    // const reverbMixer = audioManager.audioContext.createGain();
-    // reverbMixer.gain.value = 1.0;
-    
-    // audioChain.connect(reverbDry);
-    // console.log(`      ✓ dry path connected`);
-    
-    // audioChain.connect(reverbNode);
-    // console.log(`      ✓ signal → reverb node`);
-    
-    // reverbNode.connect(reverbWet);
-    // console.log(`      ✓ reverb node → wet gain`);
-    
-    // // Mix dry + wet into NEW mixer
-    // reverbDry.connect(reverbMixer);
-    // reverbWet.connect(reverbMixer);
-    // console.log(`      ✓ dry + wet → mixer`);
-    
-    // console.log(`      Dry gain: ${reverbDry.gain.value.toFixed(3)}`);
-    // console.log(`      Wet gain: ${reverbWet.gain.value.toFixed(3)}`);
-    // console.log(`      Buffer: ${reverbNode.buffer ? `${reverbNode.buffer.length} samples` : 'NULL'}`);
-    
-    // audioChain = reverbMixer; // Continue chain with mixer
-    // }
-  
-    // if (delayIsActive) {
-    // console.log(`   🔄 Connecting DELAY...`);
-    
-    // audioChain.connect(delayDry);
-    // console.log(`      ✓ dry path connected`);
-    
-    // audioChain.connect(delayNode);
-    // console.log(`      ✓ signal → delay node`);
-    
-    // delayNode.connect(delayWet);
-    // console.log(`      ✓ delay node → wet gain`);
-    
-    // delayNode.connect(delayFeedback);
-    // delayFeedback.connect(delayNode);
-    // console.log(`      ✓ feedback loop connected`);
-    
-    // const delayMixer = audioManager.audioContext.createGain();
-    // delayMixer.gain.setValueAtTime(1.0, audioManager.audioContext.currentTime);
-    
-    // delayDry.connect(delayMixer);
-    // delayWet.connect(delayMixer);
-    // console.log(`      ✓ dry + wet → mixer`);
-    
-    // // FIXED: Read scheduled values, not current values
-    // const scheduledDelayTime = delayNode.delayTime.value;
-    // // For AudioParam with automation, check if there's a scheduled value
-    // const actualDelayTime = scheduledDelayTime === 0 ? 
-    //     'CHECK SCHEDULED VALUES' : scheduledDelayTime.toFixed(3);
-    
-    // console.log(`      Delay time: ${actualDelayTime}s`);
-    // console.log(`      Dry gain: ${delayDry.gain.value.toFixed(3)}`);
-    // console.log(`      Wet gain (initial): ${delayWet.gain.value.toFixed(3)}`);
-    // console.log(`      Feedback (initial): ${delayFeedback.gain.value.toFixed(3)}`);
-    
-    // // DIAGNOSTIC: Force read the delay time we just set
-    // console.log(`      🔍 Checking delay node state...`);
-    // console.log(`         delayNode exists: ${!!delayNode}`);
-    // console.log(`         delayNode.delayTime exists: ${!!delayNode.delayTime}`);
-    
-    // audioChain = delayMixer;
-    // }
-
-    // // FINAL CONNECTION
-    // audioChain.connect(gainNode);
-    // gainNode.connect(panNode);
-    // panNode.connect(audioManager.masterGainNode);
-    // console.log(`   ✓ Final: chain → gain → pan → master`);
-    // console.log(`🔗 Audio chain complete!\n`);
 
 
 // BUILD AUDIO CHAIN
@@ -6784,103 +6787,12 @@ applyDelayADSR(delayNode, delayFeedback, delayWet, delayDry, envelope, voicePara
     return true;
 }
 
-
-
-
 /**
- * Apply reverb settings - SIMPLIFIED (no ADSR on wet/dry)
-//  */
-// applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
-//     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
-//     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
-//     const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
-    
-//     const reverbDepth = mixValue / 100;
-    
-//     if (reverbDepth <= 0.001) {
-//         return false;
-//     }
-    
-//     // ENHANCED: Much longer reverb times
-//     const reverbTime = 1.0 + (timeValue / 100) * 7.0; // 1.0-8.0 seconds (was 0.5-5.5)
-//     const sampleRate = audioManager.audioContext.sampleRate;
-//     const length = Math.floor(sampleRate * reverbTime);
-    
-//     if (length <= 0) {
-//         return false;
-//     }
-    
-//     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
-    
-//     // ENHANCED: Much louder, denser reverb impulse
-//     for (let channel = 0; channel < 2; channel++) {
-//         const channelData = impulse.getChannelData(channel);
-//         for (let i = 0; i < length; i++) {
-//             const n = length - i;
-//             // BOOSTED: 5x louder impulse, slower decay
-//             const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 1.2); // Changed from 3.0 and 1.5
-//             channelData[i] = amplitude;
-//         }
-//     }
-    
-//     reverbNode.buffer = impulse;
-    
-//     // ENHANCED: More pronounced wet/dry balance
-//     const reverbDryLevel = 1.0 - (reverbDepth * 0.9); // Increased from 0.7
-//     const reverbWetLevel = reverbDepth * 2.5; // Increased from 1.5
-    
-//     reverbDry.gain.value = reverbDryLevel;
-//     reverbWet.gain.value = reverbWetLevel;
-    
-//     console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s`);
-    
-//     return true;
-// }
-// applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
-//     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
-//     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
-//     const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
-    
-//     const reverbDepth = mixValue / 100;
-    
-//     if (reverbDepth <= 0.001) {
-//         return false;
-//     }
-    
-//     const reverbTime = 0.3 + (timeValue / 100) * 3.7; // 0.3-4.0 seconds
-//     const sampleRate = audioManager.audioContext.sampleRate;
-//     const length = Math.floor(sampleRate * reverbTime);
-    
-//     if (length <= 0) {
-//         return false;
-//     }
-    
-//     const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
-    
-//     // MUCH LONGER TAILS: Slower decay curve + louder amplitude
-//     for (let channel = 0; channel < 2; channel++) {
-//         const channelData = impulse.getChannelData(channel);
-//         for (let i = 0; i < length; i++) {
-//             const n = length - i;
-//             // CRITICAL: Changed from 1.0 to 0.7 - much slower decay!
-//             // 10x amplitude maintained for loudness
-//             const amplitude = 10.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 0.7);
-//             channelData[i] = amplitude;
-//         }
-//     }
-    
-//     reverbNode.buffer = impulse;
-    
-//     const reverbDryLevel = 1.0 - (reverbDepth * 0.95);
-//     const reverbWetLevel = reverbDepth * 4.0;
-    
-//     reverbDry.gain.value = reverbDryLevel;
-//     reverbWet.gain.value = reverbWetLevel;
-    
-//     console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s (long tail)`);
-    
-//     return true;
-// }
+ * Apply detuning to oscillator
+ * @param {OscillatorNode} oscillator - The oscillator to detune
+ * @param {number} startTime - When to apply detuning
+ * @param {number} duration - Duration of the note
+ */
 applyReverbADSR(reverbNode, reverbDry, reverbWet, envelope, voiceParams, actualStartTime, duration) {
     const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
     const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
@@ -6950,8 +6862,6 @@ for (let channel = 0; channel < 2; channel++) {
     
     return true;
 }
-
-
 
  /**
  * Apply ADSR to chorus - ENHANCED for rich stereo width and detuning
@@ -7339,9 +7249,6 @@ getAllCurrentVoiceParameters() {
         delayFeedback: delayFeedback
     };
 }
-
-
-
 /**
  * ENHANCED DELAY SYSTEM - Creates the perfect delay effect you discovered
  */
@@ -7428,9 +7335,6 @@ createEnhancedDelay(inputNode, delayParams, actualStartTime, duration) {
 
 /**
  * SUSTAINED DIFFUSE REVERB - Creates extra long ambient tails
- */
-/**
- * MAXIMUM SUSTAIN REVERB - Replace in your scripts.js file
  */
 createSustainedReverb(inputNode, voiceParams, actualStartTime, duration) {
     console.log('🔍 Creating MAXIMUM SUSTAIN REVERB (infinite-like tail)');
@@ -7764,6 +7668,154 @@ getEnvelopeForDuration(noteDurationSeconds) {
     return { attack: 0.015, release: 0.100, sustain: 0.8 };
   }
 }
+
+/**
+ * Apply portamento (frequency gliding) to oscillator
+ * @param {OscillatorNode} oscillator - The oscillator to apply portamento to
+ * @param {number} targetFrequency - Target frequency to glide to
+ * @param {number} startTime - When to start the glide
+ * @param {number} portamentoTime - Duration of glide in seconds
+ */
+applyPortamento(oscillator, targetFrequency, startTime, portamentoTime) {
+    const voiceParams = voiceData[this.voiceIndex].parameters;
+    const portamentoParam = voiceParams['PORTAMENTO GLIDE TIME'];
+    
+    if (!portamentoParam || portamentoTime <= 0.001) {
+        // No portamento - set frequency immediately
+        oscillator.frequency.setValueAtTime(targetFrequency, startTime);
+        return;
+    }
+    
+    // Get current frequency (or use last frequency if available)
+    const currentFrequency = this.lastPortamentoFrequency || targetFrequency;
+    
+    // Apply exponential frequency glide
+    oscillator.frequency.setValueAtTime(currentFrequency, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(
+        Math.max(20, targetFrequency), // Ensure minimum frequency for exponential ramp
+        startTime + portamentoTime
+    );
+    
+    // Store for next note
+    this.lastPortamentoFrequency = targetFrequency;
+    
+    console.log(`🎯 Portamento: ${currentFrequency.toFixed(1)}Hz → ${targetFrequency.toFixed(1)}Hz over ${(portamentoTime*1000).toFixed(0)}ms`);
+}
+
+/**
+ * Calculate current portamento time based on parameter settings
+ * @returns {number} Portamento time in seconds
+ */
+getCurrentPortamentoTime() {
+    const portamentoParam = voiceData[this.voiceIndex].parameters['PORTAMENTO GLIDE TIME'];
+    
+    if (!portamentoParam) return 0;
+    
+    // Get current portamento value (with behavior evolution)
+    let portamentoValue;
+    if (portamentoParam.behavior > 0 && portamentoParam.currentValue !== undefined) {
+        portamentoValue = portamentoParam.currentValue;
+    } else {
+        portamentoValue = (portamentoParam.min + portamentoParam.max) / 2;
+    }
+    
+    // Map 0-100 parameter to 0-1000ms, then convert to seconds
+    const portamentoMs = (portamentoValue / 100) * 1000; // 0-1000ms
+    return portamentoMs / 1000; // Convert to seconds
+}
+
+/**
+ * Apply detuning to oscillator
+ * @param {OscillatorNode} oscillator - The oscillator to detune
+ * @param {number} startTime - When to apply detuning
+ * @param {number} duration - Duration of the note
+ */
+/**
+ * Apply detuning to oscillator
+ * @param {OscillatorNode} oscillator - The oscillator to detune
+ * @param {number} startTime - When to apply detuning
+ * @param {number} duration - Duration of the note
+ */
+/**
+ * Apply detuning to oscillator - ENHANCED DEBUG VERSION
+ */
+applyDetuning(oscillator, startTime, duration) {
+    console.log(`🔍 DEBUG: applyDetuning called for Voice ${this.voiceIndex + 1}`);
+    
+    const detuningParam = voiceData[this.voiceIndex].parameters['DETUNING'];
+    
+    if (!detuningParam) {
+        console.log(`❌ No detuning parameter found for Voice ${this.voiceIndex + 1}`);
+        return;
+    }
+    
+    console.log(`🔍 Detuning parameter:`, detuningParam);
+    
+    // Get current detuning value (with behavior evolution)
+    let detuningValue;
+    if (detuningParam.behavior > 0) {
+        if (detuningParam.currentValue === undefined) {
+            detuningParam.currentValue = (detuningParam.min + detuningParam.max) / 2;
+        }
+        
+        // Evolve detuning during playback
+        detuningParam.currentValue = interpolateParameter(
+            detuningParam.currentValue,
+            detuningParam.min,
+            detuningParam.max,
+            detuningParam.behavior,
+            0.1
+        );
+        
+        detuningValue = detuningParam.currentValue;
+    } else {
+        detuningValue = (detuningParam.min + detuningParam.max) / 2;
+    }
+    
+    console.log(`🔍 Calculated detuning value: ${detuningValue}`);
+    
+    // Apply detuning in cents (-50 to +50 cents)
+    const detuneCents = Math.max(-50, Math.min(50, detuningValue));
+    
+    console.log(`🔍 Final detune cents: ${detuneCents}`);
+    console.log(`🔍 Oscillator exists: ${!!oscillator}`);
+    console.log(`🔍 Oscillator.detune exists: ${!!(oscillator && oscillator.detune)}`);
+    
+    if (!oscillator || !oscillator.detune) {
+        console.log(`❌ Oscillator or detune property not available`);
+        return;
+    }
+    
+    try {
+        // Set initial detune value
+        oscillator.detune.setValueAtTime(detuneCents, startTime);
+        console.log(`✅ Detune set to ${detuneCents} cents at time ${startTime}`);
+        
+        // Optional: Add subtle detuning evolution during the note
+        if (duration > 0.5 && Math.abs(detuneCents) > 5) {
+            const microDetune = detuneCents * 0.1; // 10% variation
+            oscillator.detune.linearRampToValueAtTime(
+                detuneCents + microDetune, 
+                startTime + duration * 0.3
+            );
+            oscillator.detune.linearRampToValueAtTime(
+                detuneCents - microDetune, 
+                startTime + duration * 0.7
+            );
+            oscillator.detune.linearRampToValueAtTime(
+                detuneCents, 
+                startTime + duration
+            );
+            console.log(`🎵 Added micro-detuning evolution: ±${microDetune.toFixed(1)} cents`);
+        }
+        
+    } catch (error) {
+        console.error(`❌ Error setting detune:`, error);
+    }
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Detuning applied ${detuneCents.toFixed(1)} cents`);
+}
+
 
 
   /**
@@ -9060,7 +9112,234 @@ function calculateDelayTailTime(delayTime, feedback) {
     return Math.min(tailTime * 1.5, MAX_TAIL_TIME); // 1.5x safety margin
 }
 
+/**
+ * Test portamento with different glide times
+ */
+async function testPortamento() {
+    console.log('=== TESTING PORTAMENTO GLIDE ===');
+    
+    // Set up test voice with portamento
+    voiceData[0].enabled = true;
+    const portamentoParam = voiceData[0].parameters['PORTAMENTO GLIDE TIME'];
+    
+    // Test different portamento times
+    const testTimes = [0, 25, 50, 75, 100]; // 0%, 25%, 50%, 75%, 100%
+    
+    for (const timePercent of testTimes) {
+        portamentoParam.min = timePercent;
+        portamentoParam.max = timePercent;
+        portamentoParam.behavior = 0; // No evolution for test
+        
+        const timeMs = (timePercent / 100) * 1000;
+        console.log(`Testing ${timePercent}% portamento (${timeMs}ms glide)`);
+        
+        // Start preview and listen for gliding effect
+        await previewVoice(0);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        await previewVoice(0); // Stop
+        
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Pause between tests
+    }
+    
+    console.log('✅ Portamento test complete');
+}
 
+/**
+ * Test detuning with different cent values
+ */
+async function testDetuning() {
+    console.log('=== TESTING DETUNING ===');
+    
+    // Set up test voice
+    voiceData[0].enabled = true;
+    const detuningParam = voiceData[0].parameters['DETUNING'];
+    
+    // Test different detuning amounts
+    const testDetunes = [-50, -25, 0, 25, 50]; // -50 to +50 cents
+    
+    for (const detuneCents of testDetunes) {
+        detuningParam.min = detuneCents;
+        detuningParam.max = detuneCents;
+        detuningParam.behavior = 0; // No evolution for test
+        
+        console.log(`Testing ${detuneCents} cents detuning`);
+        
+        await previewVoice(0);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await previewVoice(0); // Stop
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    console.log('✅ Detuning test complete');
+}
+
+/**
+ * Test both portamento and detuning together
+ */
+async function testPortamentoDetuning() {
+    console.log('=== TESTING PORTAMENTO + DETUNING COMBINATION ===');
+    
+    voiceData[0].enabled = true;
+    
+    // Set moderate portamento
+    const portamentoParam = voiceData[0].parameters['PORTAMENTO GLIDE TIME'];
+    portamentoParam.min = 30;
+    portamentoParam.max = 70;
+    portamentoParam.behavior = 75; // High evolution
+    
+    // Set moderate detuning with evolution
+    const detuningParam = voiceData[0].parameters['DETUNING'];
+    detuningParam.min = -20;
+    detuningParam.max = 20;
+    detuningParam.behavior = 60; // Medium evolution
+    
+    console.log('🎵 Playing with evolving portamento and detuning...');
+    console.log('Expected: Gliding notes with pitch wobble/warble effect');
+    
+    await previewVoice(0);
+    
+    // Let it play for 10 seconds to hear evolution
+    setTimeout(() => {
+        previewVoice(0); // Stop
+        console.log('✅ Combined test complete');
+    }, 10000);
+}
+
+/**
+ * Force reset DETUNING and PORTAMENTO to proper defaults - ENHANCED VERSION
+ */
+function resetAdvancedParameterDefaults() {
+    console.log('=== RESETTING ADVANCED PARAMETER DEFAULTS (ENHANCED) ===');
+    
+    for (let i = 0; i < 16; i++) {
+        // Reset DETUNING to center (0 cents, no effect)
+        if (voiceData[i].parameters['DETUNING']) {
+            voiceData[i].parameters['DETUNING'].min = 0;
+            voiceData[i].parameters['DETUNING'].max = 0;
+            voiceData[i].parameters['DETUNING'].behavior = 0;
+            delete voiceData[i].parameters['DETUNING'].currentValue;
+        }
+        
+        // Reset PORTAMENTO to OFF (0ms glide time)
+        if (voiceData[i].parameters['PORTAMENTO GLIDE TIME']) {
+            voiceData[i].parameters['PORTAMENTO GLIDE TIME'].min = 0;
+            voiceData[i].parameters['PORTAMENTO GLIDE TIME'].max = 0;
+            voiceData[i].parameters['PORTAMENTO GLIDE TIME'].behavior = 0;
+            delete voiceData[i].parameters['PORTAMENTO GLIDE TIME'].currentValue;
+        }
+    }
+    
+    // CRITICAL: Re-render the UI to reflect changes
+    console.log('🔄 Re-rendering UI...');
+    renderParameters();
+    
+    // CRITICAL: Reconnect sliders AND force slider values to update
+    setTimeout(() => {
+        console.log('🔗 Reconnecting sliders...');
+        connectAllSliders();
+        
+        // FORCE UPDATE SPECIFIC SLIDERS
+        setTimeout(() => {
+            forceUpdateAdvancedParameterSliders();
+        }, 100);
+    }, 200);
+    
+    console.log('✅ Advanced parameters reset to proper defaults');
+    console.log('- DETUNING: 0 to 0 cents (perfectly in tune)');
+    console.log('- PORTAMENTO: 0 to 0 (no gliding)');
+}
+
+/**
+ * Force update the UI sliders for DETUNING and PORTAMENTO
+ */
+function forceUpdateAdvancedParameterSliders() {
+    console.log('🎯 Force updating advanced parameter sliders...');
+    
+    const parameterSection = document.getElementById('parameter-section');
+    const allSliders = parameterSection.querySelectorAll('.noUi-target');
+    
+    allSliders.forEach(slider => {
+        if (slider.noUiSlider) {
+            try {
+                // Find which parameter this slider belongs to
+                const rollup = slider.closest('.parameter-rollup');
+                const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+                const paramName = rollupTitle ? rollupTitle.textContent.trim() : '';
+                
+                if (paramName === 'DETUNING' || paramName === 'PORTAMENTO GLIDE TIME') {
+                    // Force set to [0, 0]
+                    slider.noUiSlider.set([0, 0]);
+                    console.log(`✅ Forced ${paramName} slider to [0, 0]`);
+                }
+            } catch (e) {
+                // Slider might not be ready, skip it
+            }
+        }
+    });
+    
+    // Also update behavior sliders
+    const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+    behaviorSliders.forEach(slider => {
+        const rollup = slider.closest('.parameter-rollup');
+        const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+        const paramName = rollupTitle ? rollupTitle.textContent.trim() : '';
+        
+        if (paramName === 'DETUNING' || paramName === 'PORTAMENTO GLIDE TIME') {
+            slider.value = 0;
+            // Update tooltip
+            const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+            if (tooltip) {
+                tooltip.textContent = '0%';
+            }
+            console.log(`✅ Forced ${paramName} behavior to 0%`);
+        }
+    });
+}
+
+function forceUpdateAdvancedParameterSliders() {
+    console.log('🎯 Force updating advanced parameter sliders...');
+    
+    const parameterSection = document.getElementById('parameter-section');
+    const allSliders = parameterSection.querySelectorAll('.noUi-target');
+    
+    allSliders.forEach(slider => {
+        if (slider.noUiSlider) {
+            try {
+                // Find which parameter this slider belongs to
+                const rollup = slider.closest('.parameter-rollup');
+                const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+                const paramName = rollupTitle ? rollupTitle.textContent.trim() : '';
+                
+                if (paramName === 'DETUNING' || paramName === 'PORTAMENTO GLIDE TIME') {
+                    // Force set to [0, 0]
+                    slider.noUiSlider.set([0, 0]);
+                    console.log(`✅ Forced ${paramName} slider to [0, 0]`);
+                }
+            } catch (e) {
+                // Slider might not be ready, skip it
+            }
+        }
+    });
+    
+    // Also update behavior sliders
+    const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+    behaviorSliders.forEach(slider => {
+        const rollup = slider.closest('.parameter-rollup');
+        const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+        const paramName = rollupTitle ? rollupTitle.textContent.trim() : '';
+        
+        if (paramName === 'DETUNING' || paramName === 'PORTAMENTO GLIDE TIME') {
+            slider.value = 0;
+            // Update tooltip
+            const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+            if (tooltip) {
+                tooltip.textContent = '0%';
+            }
+            console.log(`✅ Forced ${paramName} behavior to 0%`);
+        }
+    });
+}
 
 
 

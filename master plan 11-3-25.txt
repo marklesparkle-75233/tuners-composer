@@ -1,0 +1,401 @@
+Three Phase Master Development Plan
+Phase 1: Core Audio Implementation
+•	Integrate Web Audio API for browser-based synthesis
+•	Implement parameter interpolation algorithms
+•	Add real-time audio processing for effects
+Phase 2: Enhanced User Experience
+•	Add preset management system
+•	Implement undo/redo functionality
+•	Create tutorial system for complex interface
+Phase 3: Community Platform
+•	Build user account system
+•	Implement file sharing and storage
+•	Add collaborative features and voting system
+The Tuners’ Composer Website
+•         The app will be hosted at TUNERS.COM
+ 
+ 
+Phase 1: Core Audio Implementation
+
+Phase 1 consists of three parallel tracks:
+Track 1: Audio Engine Foundation
+Step 1: Web Audio API Integration
+•         Replace the placeholder previewVoice() and play functions with Web Audio API implementations – [this is partially completed]
+•         Create an AudioManager class to handle audio context, scheduling, and voice management
+•         Implement basic oscillator-based synthesis for each GM sound category (sine waves for flutes, sawtooth for strings, etc.)
+Step 2: Voice Architecture
+javascript
+class Voice {  constructor(audioContext, voiceIndex) {
+    this.audioContext = audioContext;
+    this.gainNode = audioContext.createGain();
+    this.panNode = audioContext.createStereoPanner();
+    this.effects = new EffectsChain(audioContext);
+  }
+}
+Step 3: Note Scheduling System
+•         Implement precise timing using audioContext.currentTime
+•         Create a note scheduler that respects the rhythm/rest parameters
+•         Handle polyphony limits and voice stealing
+
+ 
+ 
+Track 2: Parameter Interpolation Engine
+Step 1: Behavior Algorithm Implementation The behavior slider needs to control how parameters change:
+javascript
+function interpolateParameter(currentValue, minRange, maxRange, behaviorSetting, deltaTime) {
+  const maxChange = (maxRange - minRange) * (behaviorSetting / 100) * deltaTime;
+  const randomFactor = (Math.random() - 0.5) * 2; // -1 to 1
+  const change = maxChange * randomFactor;
+  return Math.max(minRange, Math.min(maxRange, currentValue + change));
+}
+Step 2: Real-time Parameter Updates
+•         Create update loops that modify parameters during playback
+•         Implement smooth transitions to avoid audio glitches
+•         Handle tempo synchronization across all voices
+Step 3: Parameter Mapping
+•         Map UI parameter ranges to audio parameter ranges
+•         Handle logarithmic scaling for frequency-based parameters
+•         Implement proper MIDI note-to-frequency conversion
+Track 3: Effects Chain Implementation
+Step 1: Basic Effects Start with the simpler effects:
+•         Volume: Direct gain node manipulation
+•         Stereo Balance: StereoPannerNode implementation
+•         Reverb: ConvolverNode with impulse responses
+Step 2: Modulation Effects
+•         Tremolo: LFO modulating gain
+•         Chorus: Delay lines with LFO modulation
+•         Phaser: All-pass filters with LFO-controlled frequency
+Step 3: Advanced Parameters
+•         Portamento: Exponential frequency gliding between notes
+•         Detuning: Oscillator detune parameter manipulation
+•         Attack Velocity: ADSR envelope scaling
+ 
+Schedule Summary:
+Total Time: 45 sessions × 3.25 hours = 146.25 total hours
+Briefing Creation Tasks Include:
+For each session, you'll document:
+1.	Current implementation status - what was completed
+2.	Technical discoveries - what worked/didn't work
+3.	Performance measurements - CPU usage, timing accuracy, etc.
+4.	Integration challenges - how components interact
+5.	Specific preparation - what the next session needs to focus on
+6.	Code architecture - API changes, class structures
+7.	Outstanding issues - bugs or problems to address
+Key Benefits of This Approach:
+Continuity: Each session starts with clear context from the previous session's briefing
+Problem Resolution: Issues are documented immediately while fresh, not rediscovered later
+Progress Tracking: Concrete deliverables and technical progress are tracked session-by-session
+Knowledge Transfer: Each briefing builds a comprehensive development history
+Risk Mitigation: Problems are identified and documented before they become blockers
+Essential Session Briefing
+Expect an Essential Session Briefing to be uploaded with this document.  Understanding the briefing will tell you exactly where we are in this process, and where you might want to start.  
+ 
+ 
+ 
+Tuner's Composer Development Schedule
+TRACK 1: AUDIO ENGINE FOUNDATION
+Weeks 1-5 (15 Sessions)
+Week 1 - Basic Audio Setup
+Session 1: Web Audio API Foundation 
+•	Set up Web Audio API context in existing codebase
+•	Create basic AudioManager class structure
+•	Implement simple oscillator test (sine wave)
+•	Connect to existing UI volume slider
+•	Deliverable: Single oscillator playing through browser
+•	Briefing for Session 2: Document AudioManager API, note browser compatibility issues, prepare for GM sound implementation
+Session 2: Sound Generation Architecture 
+•	Review: Advise on whether to commit the files modified during Session 1
+•	Modify the Preview button into a toggle on/off Preview/Stop button, where button background color changes to light red when Preview is playing and Stop is displaying.
+•	Design Voice class with audio nodes
+•	Implement basic GM sound categories (5-6 sounds)
+•	Create oscillator mapping (sine→flute, sawtooth→strings, etc.)
+•	Test sound switching via dropdown
+•	Deliverable: Multiple basic sounds selectable
+•	Briefing for Session 3: List implemented sounds, document Voice class structure, identify UI integration challenges
+Session 3: Integration with Existing UI 
+•	Connect Web Audio to Volume and Stereo Balance parameter sliders
+•	Implement real-time parameter updates – (still buggy)
+•	Handle audio context user activation requirements
+•	Add error handling for browser compatibility
+•	Deliverable: UI controls affect audio in real-time
+•	Briefing for Session 4: Document parameter mapping system, note any UI responsiveness issues, prepare MIDI note system requirements
+ 
+ 
+Week 2 - Single Voice System
+Session 4: Note Scheduling Foundation
+•	Implement MIDI note-to-frequency conversion
+•	Create basic note scheduling system
+•	Connect to melodic range parameter
+•	Handle note on/off events
+•	Deliverable: Single voice plays different pitches
+Session 5: Rhythm Implementation
+•	Implement rhythm parameter interpretation
+•	Create timing system for note durations
+•	Add rest parameter handling
+•	Connect to tempo parameter
+•	Deliverable: Single voice plays rhythmic patterns
+Session 6: Basic Effects - Volume & Pan
+•	Implement gain node control (volume parameter)
+•	Add stereo panner (stereo balance parameter)
+•	Create effects chain architecture
+•	Test parameter ranges and scaling
+•	Deliverable: Single voice with volume and panning control
+Week 3 - Multi-Voice Foundation
+Session 7: Voice Management System
+•	Extend to multiple Voice instances (16 voices)
+•	Implement voice enable/disable functionality
+•	Create voice routing and mixing
+•	Handle voice isolation for preview
+•	Deliverable: Multiple voices can be enabled/disabled
+Session 8: Polyphony Implementation
+•	Implement polyphony limits per voice
+•	Create voice stealing algorithms
+•	Handle simultaneous note management
+•	Connect to polyphony parameter sliders
+•	Deliverable: Each voice respects polyphony limits
+Session 9: Voice Synchronization
+•	Implement master clock system
+•	Synchronize all voices to same timing base
+•	Handle tempo changes affecting all voices
+•	Add start/stop functionality for all voices
+•	Deliverable: All voices play in sync
+Week 4 - Advanced Audio Features
+Session 10: Attack Velocity & ADSR
+•	Implement attack velocity parameter
+•	Create basic ADSR envelope system
+•	Connect velocity to volume scaling
+•	Handle note articulation
+•	Deliverable: Notes have proper attack characteristics
+Session 11: Portamento Implementation
+•	Create frequency gliding between notes
+•	Implement portamento time parameter
+•	Handle smooth pitch transitions
+•	Connect to existing portamento slider
+•	Deliverable: Smooth pitch gliding between notes
+Session 12: Detuning System
+•	Implement oscillator detuning
+•	Create cents-based pitch offset
+•	Handle detuning parameter ranges
+•	Test musical accuracy of detuning
+•	Deliverable: Controllable pitch detuning per voice
+Week 5 - Audio Engine Completion
+Session 13: Performance Optimization
+•	Implement audio node pooling
+•	Optimize oscillator creation/destruction
+•	Add CPU usage monitoring
+•	Handle audio dropouts and glitches
+•	Deliverable: Stable 16-voice performance
+Session 14: Audio Latency Management
+•	Implement lookahead scheduling
+•	Handle browser audio buffer sizes
+•	Optimize timing precision
+•	Add latency compensation
+•	Deliverable: Precise timing across all voices
+Session 15: Track 1 Integration Testing
+•	Full system test with all parameters
+•	Debug audio issues and edge cases
+•	Performance testing with maximum load
+•	Documentation of Track 1 APIs
+•	Deliverable: Complete working audio engine
+ 
+TRACK 2: PARAMETER INTERPOLATION ENGINE
+Weeks 6-8 (10 Sessions)
+Week 6 - Behavior System Foundation
+Session 16: Behavior Algorithm Implementation
+•	Implement interpolateParameter() function
+•	Create parameter change rate calculations
+•	Connect behavior sliders to change algorithms
+•	Test with tempo and volume parameters
+•	Deliverable: Basic parameter interpolation working
+Session 17: Real-time Parameter Updates
+•	Create parameter update loops during playback
+•	Implement smooth transitions between values
+•	Handle parameter change timing
+•	Add parameter change scheduling
+•	Deliverable: Parameters change smoothly during playback
+Session 18: Parameter Range Mapping
+•	Map UI ranges to audio parameter ranges
+•	Implement logarithmic scaling for frequency parameters
+•	Handle parameter boundary conditions
+•	Create parameter validation system
+•	Deliverable: All parameter ranges properly mapped
+Week 7 - Advanced Parameter Behavior
+Session 19: Melodic Range Interpolation
+•	Implement note selection within ranges
+•	Create smooth melodic line algorithms
+•	Handle interval size based on behavior setting
+•	Connect to MIDI note display system
+•	Deliverable: Musical note selection with behavior control
+Session 20: Rhythm Parameter Interpolation
+•	Implement rhythm change algorithms
+•	Handle rhythm/rest parameter coordination
+•	Create musical timing transitions
+•	Ensure rhythmic coherence
+•	Deliverable: Smooth rhythm changes during playback
+Session 21: Multi-Parameter Coordination
+•	Coordinate changes across multiple parameters
+•	Implement parameter relationship rules
+•	Handle conflicting parameter changes
+•	Create parameter priority systems
+•	Deliverable: Coherent multi-parameter changes
+Week 8 - Parameter System Completion
+Session 22:Tempo Synchronization
+•	Implement master tempo coordination
+•	Handle tempo changes across all voices
+•	Synchronize parameter updates to tempo
+•	Create tempo-based parameter scaling
+•	Deliverable: All voices synchronized to tempo changes
+Session 23: Parameter Interpolation Optimization
+•	Optimize parameter calculation performance
+•	Reduce CPU overhead of parameter updates
+•	Implement parameter change caching
+•	Handle parameter update priorities
+•	Deliverable: Efficient parameter interpolation system
+Session 24: Track 2 Integration Testing
+•	Test parameter system with full audio engine
+•	Debug parameter interpolation issues
+•	Validate behavior slider functionality
+•	Performance test with all parameters active
+•	Deliverable: Complete parameter interpolation system
+Session 25: Buffer Session
+•	Address any Track 2 issues from testing
+•	Additional optimization if needed
+•	Preparation for Track 3
+•	Deliverable: Track 2 completion confirmation
+TRACK 3: EFFECTS CHAIN IMPLEMENTATION
+Weeks 9-13 (15 Sessions)
+Week 9 - Basic Effects
+Session 26: Reverb Implementation
+•	Create ConvolverNode-based reverb
+•	Implement impulse response loading
+•	Connect to reverb parameter sliders
+•	Handle wet/dry mix control
+•	Deliverable: Working reverb effect per voice
+Session 27: Effects Chain Architecture
+•	Create EffectsChain class structure
+•	Implement effect bypass functionality
+•	Create effect parameter mapping
+•	Handle effect enable/disable
+•	Deliverable: Modular effects chain system
+Session: Effect Parameter Integration
+•	Connect effects to behavior sliders
+•	Implement effect parameter interpolation
+•	Handle effect parameter ranges
+•	Test effect parameter changes during playback
+•	Deliverable: Effects controlled by parameter system
+Week 10 - Modulation Effects
+Session 29: LFO System Implementation
+•	Create Low Frequency Oscillator class
+•	Implement various LFO waveforms
+•	Create LFO parameter control
+•	Connect LFOs to modulation effects
+•	Deliverable: Functional LFO system
+Session: Tremolo Effect
+•	Implement LFO-based amplitude modulation
+•	Create tremolo speed/depth controls
+•	Connect to tremolo parameter sliders
+•	Handle tremolo behavior interpolation
+•	Deliverable: Working tremolo effect
+Session 31: Chorus Effect Implementation
+•	Create delay-based chorus effect
+•	Implement LFO modulation of delay time
+•	Add chorus speed/depth parameters
+•	Handle chorus wet/dry mix
+•	Deliverable: Working chorus effect
+Week 11 - Advanced Effects
+Session 32: Phaser Effect Implementation
+•	Create all-pass filter chains
+•	Implement LFO-controlled frequency sweeping
+•	Add phaser speed/depth controls
+•	Handle phaser feedback parameter
+•	Deliverable: Working phaser effect
+Session 33: Multi-Dual Parameter Effects
+•	Implement speed/depth dual controls for all modulation effects
+•	Connect to existing multi-dual slider UI
+•	Handle parameter interpolation for dual controls
+•	Test complex parameter interactions
+•	Deliverable: Full speed/depth control for all effects
+Session 34: Effects Performance Optimization
+•	Optimize effect processing efficiency
+•	Implement effect bypass when parameters at minimum
+•	Handle effect parameter smoothing
+•	Reduce CPU overhead of effects chain
+•	Deliverable: Optimized effects processing
+Week 12 - Effects Integration
+Session 35: Effects Chain Completion
+•	Complete all effect implementations
+•	Test full effects chain per voice
+•	Handle effect interaction and conflicts
+•	Validate effect parameter ranges
+•	Deliverable: Complete effects chain per voice
+Session 36: Effects Parameter Interpolation Integration
+•	Connect all effects to Track 2 parameter system
+•	Test effects parameter changes during playback
+•	Handle effects behavior slider integration
+•	Debug effects parameter interpolation
+•	Deliverable: Effects fully integrated with parameter system
+Session 37: Multi-Voice Effects Testing
+•	Test effects across all 16 voices
+•	Handle effects CPU load with multiple voices
+•	Optimize effects for multi-voice performance
+•	Test effects isolation per voice
+•	Deliverable: Stable multi-voice effects processing
+Week 13 - Effects System Completion
+Session 38: Effects UI Integration
+•	Ensure all effect parameters connect to UI
+•	Test effects control via existing interface
+•	Handle effects parameter display and feedback
+•	Validate effects parameter tooltips
+•	Deliverable: Complete UI-effects integration
+Session 39: Effects System Testing
+•	Full system test with all effects active
+•	Performance testing under maximum load
+•	Effects quality and musical validity testing
+•	Debug any remaining effects issues
+•	Deliverable: Fully tested effects system
+Session: Track 3 Completion
+•	Final effects system validation
+•	Performance optimization
+•	Code cleanup and documentation
+•	Preparation for final integration
+•	Deliverable: Complete effects chain implementation
+________________________________________
+FINAL INTEGRATION
+Weeks 14-15 (5 Sessions)
+Week 14 - System Integration
+Session: Full System Integration
+•	Integrate all three tracks
+•	Test complete system functionality
+•	Handle integration issues and conflicts
+•	Validate full parameter-to-audio pipeline
+•	Deliverable: Integrated system working
+Session 42: Performance Optimization
+•	Full system performance testing
+•	Optimize CPU usage across all components
+•	Handle memory management and cleanup
+•	Test system stability under load
+•	Deliverable: Optimized complete system
+Session 43: Bug Fixes and Polish
+•	Debug system integration issues
+•	Handle edge cases and error conditions
+•	Improve system reliability and stability
+•	Add system monitoring and diagnostics
+•	Deliverable: Stable, debugged system
+Week 15 - Final Testing & Documentation
+Session 44: Comprehensive System Testing
+•	Test all 16 voices with all parameters active
+•	Validate musical output quality
+•	Test system under various usage patterns
+•	Performance validation and optimization
+•	Deliverable: Fully validated system
+Session 45: Project Completion
+•	Final code cleanup and optimization
+•	System documentation completion
+•	Create development handoff documentation
+•	Validate project completion against requirements
+•	Deliverable: Completed Phase 1 implementation
+ 
+Session 46: Break Phase 2 into Detailed Sessions, as done for Sessions 1-45 above. 
+________________________________________
+ 
+ 
