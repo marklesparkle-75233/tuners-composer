@@ -1070,57 +1070,6 @@ function createMultiDualSlider(param, voiceIndex) {
     from: value => Number(value)
   };
   
-  // Custom time formatters for REVERB
-  // if (param.name === 'REVERB') {
-  //   speedFormatter = {
-  //     to: value => {
-  //       const timeSeconds = (value / 100) * 3.0;
-  //       return timeSeconds.toFixed(1) + 's';
-  //     },
-  //     from: value => {
-  //       const numStr = value.replace('s', '');
-  //       const seconds = parseFloat(numStr);
-  //       return (seconds / 3.0) * 100;
-  //     }
-  //   };
-  // } else if (param.name === 'DELAY') {
-  //   speedFormatter = {
-  //     to: value => {
-  //       const timeMs = (value / 100) * 2000;
-  //       if (timeMs >= 1000) {
-  //         return (timeMs / 1000).toFixed(1) + 's';
-  //       } else {
-  //         return Math.round(timeMs) + 'ms';
-  //       }
-  //     },
-  //     from: value => {
-  //       let timeMs;
-  //       if (value.includes('s')) {
-  //         const seconds = parseFloat(value.replace('s', ''));
-  //         timeMs = seconds * 1000;
-  //       } else {
-  //         timeMs = parseFloat(value.replace('ms', ''));
-  //       }
-  //       return (timeMs / 2000) * 100;
-  //     }
-  //   };
-  // }
-  
-// if (param.name === 'REVERB') {
-//   speedFormatter = {
-//     to: value => {
-//       if (value <= 0.001) return '0s'; // Handle OFF state
-//       const timeSeconds = (value / 100) * 5.5 + 0.5;
-//       return timeSeconds.toFixed(1) + 's';
-//     },
-//     from: value => {
-//       if (value === '0s' || value === '0') return 0; // Handle OFF state
-//       const numStr = value.replace('s', '');
-//       const seconds = parseFloat(numStr);
-//       if (seconds <= 0.5) return 0; // Clamp to OFF
-//       return ((seconds - 0.5) / 5.5) * 100;
-//     }
-//   };
 if (param.name === 'REVERB') {
   speedFormatter = {
     to: value => {
@@ -1869,7 +1818,16 @@ async function toggleMasterPlayback() {
     console.log(`🎉 Master playback started with ${enabledVoices.length} voices!`);
   }
 }
-
+// NEW: Connect OPEN button to preset system
+    setTimeout(() => {
+        const openButton = document.querySelector('#file-controls button:nth-child(1)');
+        if (openButton) {
+            openButton.onclick = openPresetManager;
+            console.log('✅ OPEN button connected to Preset Manager');
+        } else {
+            console.log('❌ OPEN button not found');
+        }
+    }, 300);
 
 
 // INITIALIZE SYSTEMS ON PAGE LOAD
@@ -1881,42 +1839,43 @@ document.addEventListener('DOMContentLoaded', () => {
   createVoiceTabs();
   renderParameters();
   
-  // ENSURE ADVANCED PARAMETERS ARE PROPERLY DEFAULTED
-    setTimeout(() => {
-        resetAdvancedParameterDefaults();
-    }, 500); // Wait for all UI elements to be ready
+  // NEW: Initialize PresetManager
+  presetManager = new PresetManager();
+  console.log('✅ PresetManager ready');
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Existing initialization code...
-  
-  // ADD THIS DEBUG CODE:
+// UPDATE: Connect OPEN and SAVE buttons to file functions
+    setTimeout(() => {
+        // OPEN button - native file dialog
+        const openButton = document.querySelector('#file-controls button:nth-child(2)');
+        if (openButton) {
+            openButton.onclick = openCompositionFromFile;
+            console.log('✅ OPEN button connected to native file dialog');
+        }
+        
+        // SAVE button - native save dialog  
+        const saveButton = document.querySelector('#file-controls button:nth-child(3)');
+        if (saveButton) {
+            saveButton.onclick = saveCompositionToFile;
+            console.log('✅ SAVE button connected to native save dialog');
+        }
+}, 300);
+
+// UPDATE: Connect NEW button to reset function
+setTimeout(() => {
+    const newButton = document.querySelector('#file-controls button:nth-child(1)');
+    if (newButton) {
+        newButton.onclick = createNewComposition; // <- NEW FUNCTION
+        console.log('✅ NEW button connected to composition reset');
+    } else {
+        console.log('❌ NEW button not found');
+    }
+}, 300);
+
+
+  // ENSURE ADVANCED PARAMETERS ARE PROPERLY DEFAULTED
   setTimeout(() => {
-    const playButton = document.querySelector('#file-controls button:nth-child(4)');
-    console.log('=== PLAY BUTTON DEBUG ===');
-    console.log('playButton found:', !!playButton);
-    console.log('playButton.onclick:', playButton?.onclick);
-    console.log('playButton text:', playButton?.textContent);
-    
-    // ENSURE CONNECTION TO NEW SYSTEM:
-    if (playButton) {
-      console.log('🔧 Connecting PLAY button to toggleMasterPlayback...');
-      playButton.onclick = toggleMasterPlayback;
-      console.log('✅ PLAY button connected to new system');
-    } else {
-      console.log('❌ PLAY button not found!');
-    }
+    resetAdvancedParameterDefaults();
   }, 500);
-  
-  
-    // Connect PLAY button to new system
-    const playButton = document.querySelector('#file-controls button:nth-child(4)');
-    if (playButton) {
-      playButton.onclick = toggleMasterPlayback;
-      console.log('✅ Master PLAY button connected to new clock system');
-    } else {
-      console.log('❌ PLAY button not found during connection');
-    }
-  }, 200);
 
   // Initialize audio on first click
   document.addEventListener('click', initializeAudioOnFirstClick, { once: true });
@@ -1937,10 +1896,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tempoDownBtn.onmouseup = stopTempoScroll; 
       tempoDownBtn.onmouseleave = stopTempoScroll;
     }
-    
-    
   }, 200);
-});
+});  // ← Single closing bracket for the main DOMContentLoaded
 
 
 
@@ -1978,13 +1935,6 @@ function getVoiceTempo(voiceIndex) {
   
   return Math.round(Math.max(40, Math.min(240, baseTempo)));
 }
-
-
-
-
-
-
-
 
 async function initializeAudioOnFirstClick() {
   console.log('🎵 Initializing audio on first click...');
@@ -2964,297 +2914,6 @@ function testFrequencyCalculations() {
   });
 }
 
-// Function to play specific octaves for comparison
-// function playOctaveComparison() {
-//   console.log('=== OCTAVE COMPARISON TEST ===');
-  
-//   if (!audioManager || !audioManager.isInitialized) {
-//     console.log('ERROR: Audio manager not initialized. Start preview first.');
-//     return;
-//   }
-  
-//   const octaveTests = [
-//     { midi: 21, name: 'A0', octave: 0 },   // 27.5 Hz
-//     { midi: 33, name: 'A1', octave: 1 },   // 55 Hz
-//     { midi: 45, name: 'A2', octave: 2 },   // 110 Hz
-//     { midi: 57, name: 'A3', octave: 3 },   // 220 Hz
-//     { midi: 69, name: 'A4', octave: 4 },   // 440 Hz (concert pitch)
-//     { midi: 81, name: 'A5', octave: 5 },   // 880 Hz
-//     { midi: 93, name: 'A6', octave: 6 },   // 1760 Hz
-//     { midi: 105, name: 'A7', octave: 7 }   // 3520 Hz
-//   ];
-  
-//   let currentIndex = 0;
-  
-//   function playNextOctave() {
-//     if (currentIndex >= octaveTests.length) {
-//       console.log('Octave comparison complete!');
-//       return;
-//     }
-    
-//     const test = octaveTests[currentIndex];
-//     const frequency = midiToFrequency(test.midi);
-    
-//     console.log(`Playing ${test.name} (octave ${test.octave}): ${frequency.toFixed(1)}Hz`);
-    
-//     // Play a 1-second note
-//     scheduleNote(frequency, 1.0, audioManager.audioContext.currentTime, currentVoice);
-    
-//     currentIndex++;
-    
-//     // Next octave after 1.5 seconds
-//     setTimeout(playNextOctave, 1500);
-//   }
-  
-//   playNextOctave();
-// }
-// Diagnostic function to trace the complete data flow from UI to note selection
-// function diagnoseMelodicRangeDataFlow() {
-//   console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
-  
-//   // Step 1: Check what's stored in voiceData
-//   console.log('1. Current voiceData parameter:');
-//   const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-//   console.log('   Stored values:', {
-//     min: storedParam.min,
-//     max: storedParam.max,
-//     behavior: storedParam.behavior,
-//     currentNote: storedParam.currentNote
-//   });
-  
-//   // Step 2: Find and read the actual UI slider
-//   console.log('\n2. Reading UI slider values:');
-//   const parameterSection = document.getElementById('parameter-section');
-//   const rows = parameterSection.querySelectorAll('.row-container');
-  
-//   let sliderFound = false;
-//   rows.forEach(row => {
-//     const label = row.querySelector('.label-container');
-//     if (label && label.textContent.trim() === 'MELODIC RANGE') {
-//       const slider = row.querySelector('[data-nouislider]');
-//       if (slider && slider.noUiSlider) {
-//         const values = slider.noUiSlider.get();
-//         console.log('   UI slider shows:', {
-//           rawValues: values,
-//           min: Math.round(Number(values[0])),
-//           max: Math.round(Number(values[1]))
-//         });
-        
-//         // Check if values match voiceData
-//         const uiMin = Math.round(Number(values[0]));
-//         const uiMax = Math.round(Number(values[1]));
-//         const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
-//         console.log('   UI matches stored data:', dataMatch);
-        
-//         sliderFound = true;
-//       }
-//     }
-//   });
-  
-//   if (!sliderFound) {
-//     console.log('   ERROR: Melodic range slider not found in UI!');
-//   }
-  
-//   // Step 3: Test the selectMidiNote function
-//   console.log('\n3. Testing note selection with current data:');
-//   for (let i = 0; i < 5; i++) {
-//     const note = selectMidiNote(currentVoice);
-//     console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-//   }
-  
-//   // Step 4: Check if the slider update events are working
-//   console.log('\n4. Checking slider update mechanism:');
-//   console.log('   The issue might be that slider changes aren\'t updating voiceData');
-//   console.log('   This would happen if the slider\'s onChange event is broken');
-  
-//   return {
-//     voiceDataValues: storedParam,
-//     sliderFound: sliderFound,
-//     recommendation: sliderFound ? 
-//       'Slider found - check if onChange events are firing' : 
-//       'Slider missing - UI rendering problem'
-//   };
-// }
-
-// Function to manually set melodic range for testing
-// function forceSetMelodicRange(minNote, maxNote) {
-//   console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
-  
-//   const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  
-//   // Store old values
-//   const oldMin = param.min;
-//   const oldMax = param.max;
-  
-//   // Force new values
-//   param.min = minNote;
-//   param.max = maxNote;
-//   param.currentNote = Math.floor((minNote + maxNote) / 2);
-  
-//   console.log('Forced parameter values:', {
-//     old: { min: oldMin, max: oldMax },
-//     new: { min: param.min, max: param.max },
-//     resetNote: param.currentNote
-//   });
-  
-//   // Test note selection with forced values
-//   console.log('\nTesting note selection with forced range:');
-//   for (let i = 0; i < 8; i++) {
-//     const note = selectMidiNote(currentVoice);
-//     console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-//   }
-  
-//   console.log('\nIf you hear different notes now, the issue is UI->data connection');
-//   console.log('If notes are still the same, the issue is in selectMidiNote function');
-// }
-
-// // Function to test extreme ranges manually
-// function testExtremeRanges() {
-//   console.log('=== TESTING EXTREME MELODIC RANGES ===');
-  
-//   console.log('\n1. Testing BASS range (A0-C2):');
-//   forceSetMelodicRange(21, 36);  // A0 to C2
-  
-//   setTimeout(() => {
-//     console.log('\n2. Testing TREBLE range (C6-C8):');
-//     forceSetMelodicRange(84, 108); // C6 to C8
-    
-//     setTimeout(() => {
-//       console.log('\n3. Testing MID range (C4-C5):');
-//       forceSetMelodicRange(60, 72); // C4 to C5
-      
-//       console.log('\nListen to the playback - you should hear:');
-//       console.log('- Very low bass notes, then');
-//       console.log('- Very high treble notes, then'); 
-//       console.log('- Mid-range notes');
-//     }, 3000);
-//   }, 3000);
-// }
-
-
-// // Diagnostic function to trace the complete data flow from UI to note selection
-
-// function diagnoseMelodicRangeDataFlow() {
-//   console.log('=== MELODIC RANGE DATA FLOW DIAGNOSTIC ===');
-  
-//   // Step 1: Check what's stored in voiceData
-//   console.log('1. Current voiceData parameter:');
-//   const storedParam = voiceData[currentVoice].parameters['MELODIC RANGE'];
-//   console.log('   Stored values:', {
-//     min: storedParam.min,
-//     max: storedParam.max,
-//     behavior: storedParam.behavior,
-//     currentNote: storedParam.currentNote
-//   });
-  
-//   // Step 2: Find and read the actual UI slider
-//   console.log('\n2. Reading UI slider values:');
-//   const parameterSection = document.getElementById('parameter-section');
-//   const rows = parameterSection.querySelectorAll('.row-container');
-  
-//   let sliderFound = false;
-//   rows.forEach(row => {
-//     const label = row.querySelector('.label-container');
-//     if (label && label.textContent.trim() === 'MELODIC RANGE') {
-//       const slider = row.querySelector('[data-nouislider]');
-//       if (slider && slider.noUiSlider) {
-//         const values = slider.noUiSlider.get();
-//         console.log('   UI slider shows:', {
-//           rawValues: values,
-//           min: Math.round(Number(values[0])),
-//           max: Math.round(Number(values[1]))
-//         });
-        
-//         // Check if values match voiceData
-//         const uiMin = Math.round(Number(values[0]));
-//         const uiMax = Math.round(Number(values[1]));
-//         const dataMatch = (uiMin === Math.round(storedParam.min) && uiMax === Math.round(storedParam.max));
-//         console.log('   UI matches stored data:', dataMatch);
-        
-//         sliderFound = true;
-//       }
-//     }
-//   });
-  
-//   if (!sliderFound) {
-//     console.log('   ERROR: Melodic range slider not found in UI!');
-//   }
-  
-//   // Step 3: Test the selectMidiNote function
-//   console.log('\n3. Testing note selection with current data:');
-//   for (let i = 0; i < 5; i++) {
-//     const note = selectMidiNote(currentVoice);
-//     console.log(`   Test ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-//   }
-  
-//   // Step 4: Check if the slider update events are working
-//   console.log('\n4. Checking slider update mechanism:');
-//   console.log('   The issue might be that slider changes aren\'t updating voiceData');
-//   console.log('   This would happen if the slider\'s onChange event is broken');
-  
-//   return {
-//     voiceDataValues: storedParam,
-//     sliderFound: sliderFound,
-//     recommendation: sliderFound ? 
-//       'Slider found - check if onChange events are firing' : 
-//       'Slider missing - UI rendering problem'
-//   };
-// }
-
-// // Function to manually set melodic range for testing
-// function forceSetMelodicRange(minNote, maxNote) {
-//   console.log(`=== FORCE SETTING MELODIC RANGE: ${minNote}-${maxNote} ===`);
-  
-//   const param = voiceData[currentVoice].parameters['MELODIC RANGE'];
-  
-//   // Store old values
-//   const oldMin = param.min;
-//   const oldMax = param.max;
-  
-//   // Force new values
-//   param.min = minNote;
-//   param.max = maxNote;
-//   param.currentNote = Math.floor((minNote + maxNote) / 2);
-  
-//   console.log('Forced parameter values:', {
-//     old: { min: oldMin, max: oldMax },
-//     new: { min: param.min, max: param.max },
-//     resetNote: param.currentNote
-//   });
-  
-//   // Test note selection with forced values
-//   console.log('\nTesting note selection with forced range:');
-//   for (let i = 0; i < 8; i++) {
-//     const note = selectMidiNote(currentVoice);
-//     console.log(`  Note ${i + 1}: ${note.noteName} (MIDI ${note.midiNote})`);
-//   }
-  
-//   console.log('\nIf you hear different notes now, the issue is UI->data connection');
-//   console.log('If notes are still the same, the issue is in selectMidiNote function');
-// }
-
-// // Function to test extreme ranges manually
-// function testExtremeRanges() {
-//   console.log('=== TESTING EXTREME MELODIC RANGES ===');
-  
-//   console.log('\n1. Testing BASS range (A0-C2):');
-//   forceSetMelodicRange(21, 36);  // A0 to C2
-  
-//   setTimeout(() => {
-//     console.log('\n2. Testing TREBLE range (C6-C8):');
-//     forceSetMelodicRange(84, 108); // C6 to C8
-    
-//     setTimeout(() => {
-//       console.log('\n3. Testing MID range (C4-C5):');
-//       forceSetMelodicRange(60, 72); // C4 to C5
-      
-//       console.log('\nListen to the playback - you should hear:');
-//       console.log('- Very low bass notes, then');
-//       console.log('- Very high treble notes, then'); 
-//       console.log('- Mid-range notes');
-//     }, 3000);
-//   }, 3000);
-// }
 
 
 // Enhanced diagnostic to find ALL sliders
@@ -4557,115 +4216,6 @@ const rollupConfig = {
 };
 
 // =============================================================================
-// ROLL UP CODE
-// =============================================================================
-// Global rollup state
-//let rollupState = {};
-
-// Initialize rollup state - START ALL COLLAPSED
-/* function initializeRollupState() {
-  Object.keys(rollupConfig).forEach(key => {
-    rollupState[key] = false; // CHANGED: All groups start collapsed
-  });
-}
-
-
-
-// Create a rollup section
-function createRollup(rollupKey, rollupInfo, parameters, voiceIndex) {
-  const rollupContainer = document.createElement('div');
-  rollupContainer.className = 'rollup-container';
-  rollupContainer.dataset.rollup = rollupKey;
-  
-  // Rollup header (clickable tab)
-  const rollupHeader = document.createElement('div');
-  rollupHeader.className = 'rollup-header';
-  rollupHeader.onclick = () => toggleRollup(rollupKey);
-  
-  // Expand/collapse arrow
-  const rollupArrow = document.createElement('span');
-  rollupArrow.className = 'rollup-arrow';
-  rollupArrow.textContent = rollupState[rollupKey] ? '▼' : '▶';
-  
-  // Tab title
-  const rollupTitle = document.createElement('span');
-  rollupTitle.className = 'rollup-title';
-  rollupTitle.textContent = rollupInfo.title;
-  
-  // Tab icon/emoji
-  const rollupIcon = document.createElement('span');
-  rollupIcon.className = 'rollup-icon';
-  rollupIcon.textContent = rollupInfo.icon;
-  
-  rollupHeader.appendChild(rollupArrow);
-  rollupHeader.appendChild(rollupTitle);
-  rollupHeader.appendChild(rollupIcon);
-  
-  // Rollup content (collapsible)
-  const rollupContent = document.createElement('div');
-  rollupContent.className = 'rollup-content';
-  rollupContent.style.display = rollupState[rollupKey] ? 'block' : 'none';
-  
-  // Add parameters to this rollup
-  parameters.forEach(param => {
-    const parameterRow = createRow(param, voiceIndex);
-    rollupContent.appendChild(parameterRow);
-  });
-  
-  rollupContainer.appendChild(rollupHeader);
-  rollupContainer.appendChild(rollupContent);
-  
-  return rollupContainer;
-}
-
-// Toggle rollup expand/collapse
-function toggleRollup(rollupKey) {
-  const rollupContainer = document.querySelector(`[data-rollup="${rollupKey}"]`);
-  const rollupArrow = rollupContainer.querySelector('.rollup-arrow');
-  const rollupContent = rollupContainer.querySelector('.rollup-content');
-  
-  // Toggle state
-  rollupState[rollupKey] = !rollupState[rollupKey];
-  
-  if (rollupState[rollupKey]) {
-    // Expand
-    rollupContent.style.display = 'block';
-    rollupArrow.textContent = '▼';
-    rollupContainer.classList.add('expanded');
-    rollupContainer.classList.remove('collapsed');
-  } else {
-    // Collapse
-    rollupContent.style.display = 'none';
-    rollupArrow.textContent = '▶';
-    rollupContainer.classList.add('collapsed');
-    rollupContainer.classList.remove('expanded');
-  }
-  
-  console.log(`${rollupConfig[rollupKey].title} ${rollupState[rollupKey] ? 'expanded' : 'collapsed'}`);
-}
-
-// Expand all rollups
-function expandAllRollups() {
-  Object.keys(rollupConfig).forEach(key => {
-    if (!rollupState[key]) {
-      toggleRollup(key);
-    }
-  });
-}
-
-// Collapse all rollups
-function collapseAllRollups() {
-  Object.keys(rollupConfig).forEach(key => {
-    if (rollupState[key]) {
-      toggleRollup(key);
-    }
-  });
-} */
-
-// END OF NESTED ROLL UP CODE
-// =============================================================================
-
-// =============================================================================
 // BEBUGGING TIMING SLIDERS AND TOOLTIPS
 // =============================================================================
 
@@ -5226,9 +4776,6 @@ function calculateActualTempo() {
     accuracy: (actualTempo / expectedTempo) * 100
   };
 }
-
-
-
 // =============================================================================
 // SHORTENING FAST NOTES SO THEY ARTICULATE
 // =============================================================================
@@ -5486,10 +5033,7 @@ class VoiceLifecycleManager {
 
 }
 
-// Global lifecycle manager instance
-// let voiceLifecycleManager = null;
-
-// testing function
+// testing functions
 function testVoiceLifecycleManager() {
   console.log('=== TESTING VOICE LIFECYCLE MANAGER ===');
   
@@ -5691,9 +5235,6 @@ async function testCompleteLifeSpanSystem() {
   console.log('⏳ Test running for 8 seconds...');
 }
 
-
-
-
 function debugLifecycleStates() {
   console.log('=== DEBUGGING LIFECYCLE STATES ===');
   
@@ -5722,9 +5263,6 @@ function debugLifecycleStates() {
   }
 }
 
-/**
- * Test enhanced master clock timing accuracy
- */
 function testEnhancedMasterClock() {
   console.log('=== TESTING ENHANCED MASTER CLOCK (1ms resolution) ===');
   
@@ -5761,7 +5299,7 @@ function testEnhancedMasterClock() {
   }, 1000);
   
   return testInterval;
-} // End of test function
+} 
 
 /**
  * Individual Voice Clock - Synced to Master Clock
@@ -9340,6 +8878,731 @@ function forceUpdateAdvancedParameterSliders() {
         }
     });
 }
+
+//********** */
+//
+//  START OF PRESET SYSTEM
+//
+/**
+ * PresetManager - Core Preset System for Tuners' Composer
+ * Handles saving, loading, and managing complete system snapshots
+ */
+
+class PresetManager {
+    constructor() {
+        this.currentPreset = null;
+        this.presetLibrary = new Map(); // Store all presets
+        this.isModified = false; // Track if current state differs from loaded preset
+        
+        console.log('🎼 PresetManager initialized');
+
+        // NEW: Load any previously saved presets
+        this.loadFromLocalStorage();
+    }
+    
+    /**
+     * Capture complete snapshot of current system state
+     * @param {string} presetName - Name for the preset
+     * @param {string} description - Optional description
+     * @returns {object} Complete preset object
+     */
+    captureCurrentState(presetName, description = "") {
+        console.log(`📸 Capturing current state as "${presetName}"`);
+        
+        const preset = {
+            name: presetName,
+            description: description,
+            timestamp: new Date().toISOString(),
+            version: "1.0",
+            type: "user", // Will be "factory" for built-in presets
+            voices: []
+        };
+        
+        // Capture all 16 voices with their complete parameter sets
+        for (let i = 0; i < 16; i++) {
+            const voiceSnapshot = {
+                enabled: voiceData[i].enabled,
+                locked: voiceData[i].locked,
+                parameters: this.deepClone(voiceData[i].parameters)
+            };
+            
+            preset.voices.push(voiceSnapshot);
+        }
+        
+        // Capture global system settings
+        preset.globalSettings = {
+            currentVoice: currentVoice,
+            masterTempo: masterTempo || 120
+        };
+        
+        console.log(`✅ Captured preset with ${preset.voices.filter(v => v.enabled).length} enabled voices`);
+        return preset;
+    }
+    
+    /**
+     * Apply a preset to the current system
+     * @param {object} preset - The preset to apply
+     */
+    async applyPreset(preset) {
+        console.log(`🎼 Loading preset: "${preset.name}"`);
+        
+        try {
+            // Stop any current playback first
+            if (masterClock && masterClock.isActive()) {
+                console.log('⏹️ Stopping current playback...');
+                toggleMasterPlayback(); // Stop playback
+            }
+            
+            // Apply voice data (all 16 voices)
+            for (let i = 0; i < 16; i++) {
+                if (preset.voices[i]) {
+                    voiceData[i].enabled = preset.voices[i].enabled;
+                    voiceData[i].locked = preset.voices[i].locked;
+                    voiceData[i].parameters = this.deepClone(preset.voices[i].parameters);
+                    
+                    console.log(`   Voice ${i + 1}: ${preset.voices[i].enabled ? 'enabled' : 'disabled'}`);
+                }
+            }
+            
+            // Apply global settings
+            if (preset.globalSettings) {
+                currentVoice = preset.globalSettings.currentVoice || 0;
+                masterTempo = preset.globalSettings.masterTempo || 120;
+                
+                console.log(`   Current voice set to: ${currentVoice + 1}`);
+                console.log(`   Master tempo set to: ${masterTempo} BPM`);
+            }
+            
+            // Update UI to reflect the loaded preset
+            console.log('🔄 Updating UI...');
+            createVoiceTabs();  // Update voice enable/disable states
+            renderParameters(); // Re-render all parameter controls
+            
+            // Reconnect sliders with new values
+            setTimeout(() => {
+                connectAllSliders();
+                console.log(`✅ Preset "${preset.name}" loaded successfully`);
+            }, 200);
+            
+            // Track the current loaded preset
+            this.currentPreset = preset;
+            this.isModified = false; // Just loaded, so not modified
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Error loading preset:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Save a preset to the preset library
+     * @param {object} preset - The preset to save
+     */savePreset(preset) {
+    // Add to library
+    this.presetLibrary.set(preset.name, preset);
+    
+    // NEW: Auto-save to localStorage
+    this.saveToLocalStorage();
+    
+    console.log(`💾 Preset "${preset.name}" saved to library and localStorage`);
+    console.log(`📚 Total presets in library: ${this.presetLibrary.size}`);
+    
+    return true;
+}
+
+    /**
+     * Get all presets from library
+     * @returns {Array} Array of all presets
+     */
+    getAllPresets() {
+        return Array.from(this.presetLibrary.values());
+    }
+
+    /**
+     * Get a specific preset by name
+     * @param {string} name - Preset name
+     * @returns {object|null} The preset or null if not found
+     */
+    getPreset(name) {
+        return this.presetLibrary.get(name) || null;
+    }
+    
+    /**
+     * Deep clone an object (for parameter copying)
+     */
+    deepClone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+/**
+ * Save presets to localStorage for persistence
+ */
+saveToLocalStorage() {
+    try {
+        const presetsArray = Array.from(this.presetLibrary.values());
+        const jsonData = JSON.stringify(presetsArray, null, 2);
+        localStorage.setItem('tunersComposerPresets', jsonData);
+        console.log(`💾 Saved ${presetsArray.length} presets to localStorage`);
+        return true;
+    } catch (error) {
+        console.error('❌ Error saving to localStorage:', error);
+        return false;
+    }
+}
+
+/**
+ * Load presets from localStorage
+ */
+loadFromLocalStorage() {
+    try {
+        const savedData = localStorage.getItem('tunersComposerPresets');
+        if (savedData) {
+            const presetsArray = JSON.parse(savedData);
+            
+            // Clear current library and reload from storage
+            this.presetLibrary.clear();
+            
+            presetsArray.forEach(preset => {
+                this.presetLibrary.set(preset.name, preset);
+            });
+            
+            console.log(`📚 Loaded ${presetsArray.length} presets from localStorage`);
+            return true;
+        } else {
+            console.log('📚 No saved presets found in localStorage');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error loading from localStorage:', error);
+        return false;
+    }
+}
+
+/**
+ * Export presets to downloadable JSON file
+ */
+exportPresetsToFile() {
+    try {
+        const presetsArray = Array.from(this.presetLibrary.values());
+        const jsonData = JSON.stringify(presetsArray, null, 2);
+        
+        // Create download link
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        link.href = url;
+        link.download = `tuners-composer-presets-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        console.log(`📤 Exported ${presetsArray.length} presets to file`);
+        alert(`📤 Exported ${presetsArray.length} presets to download folder!`);
+        return true;
+    } catch (error) {
+        console.error('❌ Error exporting presets:', error);
+        return false;
+    }
+}
+
+/**
+ * Clear all presets (with confirmation)
+ */
+clearAllPresets() {
+    const confirmClear = confirm(`⚠️ This will delete ALL saved presets permanently. 
+
+Are you sure you want to continue?`);
+    
+    if (confirmClear) {
+        this.presetLibrary.clear();
+        localStorage.removeItem('tunersComposerPresets');
+        console.log('🗑️ All presets cleared');
+        alert('🗑️ All presets have been deleted.');
+        return true;
+    }
+    return false;
+}
+
+  }
+
+// Global preset manager instance
+let presetManager = null;
+// END OF PRESET MANAGER CLASS DEFINITION
+//********** */ 
+
+
+/**
+ * Test complete save and load cycle
+ */
+async function testSaveLoadCycle() {
+    console.log('=== TESTING SAVE/LOAD CYCLE ===');
+    
+    if (!presetManager) {
+        presetManager = new PresetManager();
+    }
+    
+    // Step 1: Capture current state
+    console.log('Step 1: Capturing current state...');
+    const originalPreset = presetManager.captureCurrentState(
+        "Original State", 
+        "State before modifications"
+    );
+    presetManager.savePreset(originalPreset);
+    
+    // Step 2: Modify some settings
+    console.log('Step 2: Modifying settings...');
+    voiceData[0].enabled = true;
+    voiceData[1].enabled = true;  // Enable second voice
+    voiceData[0].parameters['INSTRUMENT'] = 5; // Change instrument
+    voiceData[0].parameters['VOLUME'].min = 10; // Change volume
+    voiceData[0].parameters['VOLUME'].max = 90;
+    
+    console.log('Modified settings:');
+    console.log('- Voice 1 enabled:', voiceData[0].enabled);
+    console.log('- Voice 2 enabled:', voiceData[1].enabled);
+    console.log('- Voice 1 instrument:', voiceData[0].parameters['INSTRUMENT']);
+    console.log('- Voice 1 volume:', voiceData[0].parameters['VOLUME']);
+    
+    // Step 3: Load the original preset back
+    console.log('Step 3: Loading original preset...');
+    await presetManager.applyPreset(originalPreset);
+    
+    // Step 4: Verify it restored correctly
+    console.log('Step 4: Verifying restoration...');
+    console.log('After loading:');
+    console.log('- Voice 1 enabled:', voiceData[0].enabled);
+    console.log('- Voice 2 enabled:', voiceData[1].enabled);
+    console.log('- Voice 1 instrument:', voiceData[0].parameters['INSTRUMENT']);
+    console.log('- Voice 1 volume:', voiceData[0].parameters['VOLUME']);
+    
+    console.log('✅ Save/Load cycle test complete!');
+}
+
+// ADD THE NEW FILE FUNCTIONS HERE:
+/**
+ * Save current composition to file using native Save dialog
+ */
+async function saveCompositionToFile() {
+    console.log('💾 Opening native Save dialog...');
+    
+    try {
+        // Check if File System Access API is available
+        if ('showSaveFilePicker' in window) {
+            // Modern browsers - TRUE save dialog
+            const fileHandle = await window.showSaveFilePicker({
+                suggestedName: `composition-${new Date().toISOString().split('T')[0]}.json`,
+                types: [{
+                    description: "Tuners' Composer files",
+                    accept: { 'application/json': ['.json'] }
+                }]
+            });
+            
+            // Capture current state
+            const preset = presetManager.captureCurrentState(
+                "Composition",
+                "Tuners' Composer file"
+            );
+            
+            // Write to selected file
+            const writable = await fileHandle.createWritable();
+            await writable.write(JSON.stringify(preset, null, 2));
+            await writable.close();
+            
+            console.log('✅ File saved successfully via File System Access API');
+            
+        } else {
+            // Fallback for older browsers
+            fallbackSaveMethod();
+        }
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('❌ Save cancelled by user');
+        } else {
+            console.error('❌ Error saving file:', error);
+            fallbackSaveMethod(); // Try fallback
+        }
+    }
+}
+
+function fallbackSaveMethod() {
+    console.log('📁 Using fallback save method...');
+    
+    // Show user-friendly message about the download
+    const proceed = confirm(`💾 Your browser will download the composition file.
+
+The file will be saved to your default Downloads folder.
+You can then move it to your preferred location.
+
+Continue with save?`);
+    
+    if (!proceed) return;
+    
+    // Existing download code
+    const preset = presetManager.captureCurrentState(
+        "Composition",
+        "Tuners' Composer file"
+    );
+    
+    const jsonData = JSON.stringify(preset, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `composition-${new Date().toISOString().split('T')[0]}.json`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    alert('💾 File downloaded to your Downloads folder!');
+}
+
+/**
+ * Open composition file using native Open dialog
+ */
+function openCompositionFromFile() {
+    console.log('📂 Opening native Open dialog...');
+    
+    // Create hidden file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json,application/json';
+    fileInput.style.display = 'none';
+    
+    // Handle file selection
+    fileInput.onchange = async function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            console.log('❌ No file selected');
+            return;
+        }
+        
+        console.log(`📖 Loading file: ${file.name}`);
+        
+        try {
+            // Read file content
+            const fileContent = await readFileAsText(file);
+            
+            // Parse JSON
+            const preset = JSON.parse(fileContent);
+            
+            // Validate preset structure
+            if (!preset.voices || !Array.isArray(preset.voices)) {
+                throw new Error('Invalid preset file format');
+            }
+            
+            // Apply the loaded preset
+            await presetManager.applyPreset(preset);
+            
+            console.log(`✅ Successfully loaded: ${preset.name || file.name}`);
+            alert(`✅ Successfully loaded: ${preset.name || file.name}`);
+            
+        } catch (error) {
+            console.error('❌ Error loading file:', error);
+            alert(`❌ Error loading file: ${error.message}`);
+        }
+        
+        // Clean up
+        document.body.removeChild(fileInput);
+    };
+    
+    // Trigger native open dialog
+    document.body.appendChild(fileInput);
+    fileInput.click();
+}
+
+/**
+ * Helper function to read file as text
+ */
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = e => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+    });
+}
+
+
+/**
+ * Open preset browser/manager (connects to OPEN button)
+//  */
+// function openPresetManager() {
+//     console.log('🎼 Opening Preset Manager...');
+    
+//     if (!presetManager) {
+//         presetManager = new PresetManager();
+//     }
+    
+//     // For now, let's create a simple prompt-based interface
+//     // Later we'll build a full UI
+//     showPresetMenu();
+// }
+
+/**
+ * Simple preset menu (temporary - will become full UI later)
+ */
+function showPresetMenu() {
+    const action = prompt(`🎼 Preset Manager
+
+Choose an action:
+1 - Save current state as new preset
+2 - Load existing preset
+3 - List all presets
+4 - Test save/load cycle
+
+Enter number (1-4):`);
+    
+    switch(action) {
+        case '1':
+            saveCurrentAsPreset();
+            break;
+        case '2':
+            loadPresetByName();
+            break;
+        case '3':
+            listAllPresets();
+            break;
+        case '4':
+            testSaveLoadCycle();
+            break;
+        default:
+            console.log('❌ Invalid choice or cancelled');
+    }
+}
+
+/**
+ * Save current state as new preset
+ */
+function saveCurrentAsPreset() {
+    const name = prompt('💾 Enter preset name:');
+    if (!name) return;
+    
+    const description = prompt('📝 Enter description (optional):') || '';
+    
+    const preset = presetManager.captureCurrentState(name, description);
+    presetManager.savePreset(preset);
+    
+    alert(`✅ Preset "${name}" saved successfully!`);
+}
+
+/**
+ * Load preset by name
+ */
+async function loadPresetByName() {
+    const presets = presetManager.getAllPresets();
+    
+    if (presets.length === 0) {
+        alert('📚 No presets available. Save some presets first!');
+        return;
+    }
+    
+    const presetList = presets.map((p, i) => `${i + 1}. ${p.name} - ${p.description}`).join('\n');
+    const choice = prompt(`📚 Available Presets:
+
+${presetList}
+
+Enter preset number to load:`);
+    
+    const presetIndex = parseInt(choice) - 1;
+    if (presetIndex >= 0 && presetIndex < presets.length) {
+        const selectedPreset = presets[presetIndex];
+        await presetManager.applyPreset(selectedPreset);
+        alert(`✅ Loaded preset: "${selectedPreset.name}"`);
+    } else {
+        alert('❌ Invalid preset number');
+    }
+}
+
+/**
+ * List all presets in console
+ */
+function listAllPresets() {
+    const presets = presetManager.getAllPresets();
+    
+    console.log(`📚 All Presets (${presets.length} total):`);
+    presets.forEach((preset, i) => {
+        const enabledVoices = preset.voices.filter(v => v.enabled).length;
+        console.log(`${i + 1}. "${preset.name}" - ${enabledVoices} voices - ${preset.description}`);
+    });
+    
+    if (presets.length === 0) {
+        console.log('   No presets saved yet.');
+    }
+
+
+
+
+
+
+}
+
+/**
+ * NEW Button - Reset to clean default composition state
+ * Equivalent to "New Document" in desktop applications
+ *//**
+ * NEW Button - Reset to clean default composition state (FIXED)
+ * Equivalent to "New Document" in desktop applications
+ */
+async function createNewComposition() {
+    console.log('📄 Creating new composition...');
+    
+    try {
+        // Stop any current playback first
+        if (masterClock && masterClock.isActive()) {
+            console.log('⏹️ Stopping current playback...');
+            toggleMasterPlayback();
+        }
+        
+        // Show confirmation if there are enabled voices (user has been working)
+        const hasEnabledVoices = voiceData.some(voice => voice.enabled);
+        if (hasEnabledVoices) {
+            const proceed = confirm(`📄 Create New Composition?
+
+This will reset all voices and parameters to default settings.
+Any unsaved work will be lost.
+
+Continue?`);
+            
+            if (!proceed) {
+                console.log('❌ New composition cancelled by user');
+                return;
+            }
+        }
+        
+        // Visual feedback on button - CORAL COLOR
+        const newButton = document.querySelector('#file-controls button:nth-child(1)');
+        let originalText = 'NEW';
+        let originalBgColor = '';
+        let originalTextColor = '';
+        
+        if (newButton) {
+            originalText = newButton.textContent;
+            originalBgColor = newButton.style.backgroundColor;
+            originalTextColor = newButton.style.color;
+            
+            newButton.textContent = 'RESETTING...';
+            newButton.disabled = true;
+            newButton.style.backgroundColor = 'coral';  // CORAL COLOR like User's Guide
+            newButton.style.color = 'white';
+        }
+        
+        console.log('🔄 Resetting all systems to defaults...');
+        
+        // Reset global state
+        currentVoice = 0;
+        masterTempo = 120;
+        
+        // Reinitialize all voices with clean defaults
+        initializeVoices();
+        
+        // Reset any clock system states
+        if (voiceClockManager && voiceClockManager.isInitialized) {
+            voiceClockManager.stopAllVoices();
+        }
+        
+        // Clear preset tracking
+        if (presetManager) {
+            presetManager.currentPreset = null;
+            presetManager.isModified = false;
+        }
+        
+        // Update UI to reflect clean state
+        console.log('🎨 Updating UI...');
+        createVoiceTabs();
+        renderParameters();
+        
+        // CRITICAL: Use Promise-based timing to ensure proper sequencing
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Ensure advanced parameters are properly defaulted
+        resetAdvancedParameterDefaults();
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Reconnect all controls
+        connectAllSliders();
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // FIXED: Always restore button state, even if button reference is lost
+        const buttonToRestore = document.querySelector('#file-controls button:nth-child(1)');
+        if (buttonToRestore) {
+            buttonToRestore.textContent = originalText;
+            buttonToRestore.disabled = false;
+            buttonToRestore.style.backgroundColor = '#28a745'; // Green for success
+            buttonToRestore.style.color = 'white';
+            
+            // Return to normal after 2 seconds - GUARANTEED
+            setTimeout(() => {
+                const finalButton = document.querySelector('#file-controls button:nth-child(1)');
+                if (finalButton) {
+                    finalButton.style.backgroundColor = originalBgColor;
+                    finalButton.style.color = originalTextColor;
+                }
+            }, 2000);
+        }
+        
+        console.log('✅ New composition created successfully!');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error creating new composition:', error);
+        
+        // EMERGENCY: Always restore button on error
+        const errorButton = document.querySelector('#file-controls button:nth-child(1)');
+        if (errorButton) {
+            errorButton.textContent = 'NEW';
+            errorButton.disabled = false;
+            errorButton.style.backgroundColor = '#dc3545'; // Red for error
+            errorButton.style.color = 'white';
+            
+            setTimeout(() => {
+                errorButton.style.backgroundColor = '';
+                errorButton.style.color = '';
+            }, 3000);
+        }
+        
+        alert('❌ Error creating new composition. Please refresh the page.');
+        return false;
+    }
+}
+
+/**
+ * Emergency function to reset NEW button if it gets stuck
+ */
+function resetNewButton() {
+    console.log('🚨 Emergency: Resetting NEW button...');
+    
+    const newButton = document.querySelector('#file-controls button:nth-child(1)');
+    if (newButton) {
+        newButton.textContent = 'NEW';
+        newButton.disabled = false;
+        newButton.style.backgroundColor = '';
+        newButton.style.color = '';
+        
+        console.log('✅ NEW button reset to normal state');
+    } else {
+        console.log('❌ NEW button not found');
+    }
+}
+
+
+
+
+
+
+
+
+
+
 
 
 
