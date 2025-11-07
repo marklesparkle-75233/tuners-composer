@@ -1648,66 +1648,6 @@ FOOTER
   box-sizing: border-box;
 }
 
-
-
-
-/* 
-/* Rollup Tab Label Styling */
-/* .rollup-title {
-  /* flex: 1;
-  /* font-size: 18px;          /* Larger font size */
-  /* font-weight: 600;         /* Font weight: normal, bold, 600, 700, etc. */
-  /* color:#6c757d;           /* Color: hex, rgb, or named colors */
-  /* text-transform: uppercase; /* uppercase, lowercase, capitalize, none */
-  /* letter-spacing: 1px;      /* Space between letters */
-  /* font-family: 'Arial', sans-serif; /* Font family */
-  /* text-shadow: 1px 1px 2px rgba(0,0,0,0.1); /* Optional text shadow */
-/* }
-
-/* Fix arrow direction for collapsed state */
-/* .rollup-arrow {
-  font-size: 30px;          
-  margin-right: 12px;       
-  color:#4a90e2;              
-  transition: transform 0.2s;
-  font-weight: bold;        
-  line-height: 1;           
-}
-
-/* Optional: Add hover effect */
-/* .rollup-header:hover .rollup-arrow {
-/*  color: #06448b;              /* Darker on hover */
-/*  transform: scale(1.1);    /* Slightly bigger on hover */
-/* }
-
-/* Optional: Smooth rotation animation */
-/* .rollup-container.expanded .rollup-arrow {
-  /* transform: rotate(90deg); /* Rotate when expanded */
-/* }
-
-.rollup-container.collapsed .rollup-arrow {
-  transform: rotate(0deg);  /* No rotation when collapsed */
-/* } */
-
-/*.rollup-icon {
-/*font-size: 25px;          /* ← CHANGE THIS for icon size */
-  /* margin-left: 10px;
-}
-
-
-/* ===============================================================
-
- END OF ROLLUPS
-
- =============================================================== 
-
-/* OCT 3 25  START INNER ROLLUPS
-/* =============================================================================
-   PER-PARAMETER ROLLUP SYSTEM
-   ============================================================================= */
-/* =============================================================================
-   INDIVIDUAL PARAMETER ROLLUP SYSTEM (Flat Structure)
-   ============================================================================= */
 /* =============================================================================
    INDIVIDUAL PARAMETER ROLLUP SYSTEM (Compact Height)
    ============================================================================= */
