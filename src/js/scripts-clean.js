@@ -8,11 +8,10 @@ const parameterDefinitions = [
   { name: "DETUNING", type: "single-dual", min: -50, max: 50, rollup: "instrument" },
   { name: "PORTAMENTO GLIDE TIME", type: "single-dual", min: 0, max: 100, rollup: "instrument" },
   
-  // RHYTHM & TIMING ROLLUP
+  // RHYTHM & TIMING ROLLUP (unchanged)
   { name: "TEMPO (BPM)", type: "single-dual", min: 40, max: 240, rollup: "rhythm" },
   { name: "RHYTHMS", type: "dual-dropdown", options: "rhythms", rollup: "rhythm" },
   { name: "RESTS", type: "dual-dropdown", options: "rests", rollup: "rhythm" },
-  { name: "LIFE SPAN", type: "life-span", rollup: "rhythm" },  // NEW PARAMETER
   
   // MIXING & LEVELS ROLLUP (unchanged)
   { name: "VOLUME", type: "single-dual", min: 0, max: 100, rollup: "mixing" },
@@ -27,62 +26,6 @@ const parameterDefinitions = [
   { name: "REVERB", type: "multi-dual", min: 0, max: 100, rollup: "spatial" },
   { name: "DELAY", type: "multi-dual", min: 0, max: 100, rollup: "spatial" }
 ];
-
-// Life Span Constants
-const MAX_LIFE_SPAN_MINUTES = 5;
-const MAX_LIFE_SPAN_MS = MAX_LIFE_SPAN_MINUTES * 60 * 1000; // 300,000ms
-
-// Life Span Helper Functions
-function formatMsToMMSS(ms) {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function parseMMSSToMs(timeString) {
-  const match = timeString.match(/^(\d+):([0-5]\d)$/);
-  if (!match) return null;
-  
-  const minutes = parseInt(match[1]);
-  const seconds = parseInt(match[2]);
-  const totalMs = (minutes * 60 + seconds) * 1000;
-  
-  if (totalMs > MAX_LIFE_SPAN_MS) return null;
-  return totalMs;
-}
-
-function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
-  const timeSeconds = timeMs / 1000;
-  const beatDuration = 60 / currentTempo;
-  const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7]; // Default to quarter notes
-  const unitDuration = rhythmInfo.beats * beatDuration;
-  return Math.round(timeSeconds / unitDuration);
-}
-
-function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
-  return {
-    to: function(timeMs) {
-      const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
-      const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
-      
-      if (timeMs >= 999999999) return '∞ (∞)'; // Handle infinity
-      if (timeMs <= 0) return '0 beats (0:00)';
-      
-      const beats = calculateBeatsFromTime(timeMs, beatUnit, currentTempo);
-      const timeStr = formatMsToMMSS(timeMs);
-      return `${beats} beats (${timeStr})`;
-    },
-    from: function(value) {
-      if (value === '∞ (∞)') return 999999999;
-      const match = value.match(/\((\d+:\d+)\)/);
-      if (match) {
-        return parseMMSSToMs(match[1]) || 0;
-      }
-      return parseFloat(value) || 0;
-    }
-  };
-}
 
 // GM Sounds list
 const gmSounds = [
@@ -373,26 +316,6 @@ function initializeVoices() {
           max: 4,
           behavior: 25
         };
-      } else if (param.name === 'LIFE SPAN') {
-        // Initialize Life Span parameter with defaults
-        voice.parameters[param.name] = {
-          maxTimeMinutes: 5,
-          beatUnit: 7, // Quarter Notes (index in rhythmOptions)
-          lifeSpan1: {
-            enter: 0,
-            exit: 999999999 // Represents infinity
-          },
-          lifeSpan2: {
-            enter: 0,
-            exit: 0 // Disabled
-          },
-          lifeSpan3: {
-            enter: 0,
-            exit: 0 // Disabled
-          },
-          repeat: false,
-          behavior: 0
-        };
       } else if (param.type === 'dropdown') {
         if (param.name === 'INSTRUMENT') {
           voice.parameters[param.name] = 0;
@@ -519,59 +442,8 @@ function initializeVoices() {
   console.log('- Melodic Range: Middle C (C4) selected in piano');
   console.log('- Rhythms: Quarter Notes');
   console.log('- Rests: No Rests (continuous playing)');
-  console.log('- Life Span: Span 1 active (0 to ∞), Spans 2&3 disabled, no repeat');
   console.log('- Effects: ALL OFF by default (Tremolo, Chorus, Phaser, Reverb, Delay)');
   console.log('- Other parameters: 25%-75% of their ranges');
-}
-
-// Life Span UI Creation Functions
-function createLifeSpanControl(param, voiceIndex) {
-  console.log(`🕐 Creating Life Span control for Voice ${voiceIndex + 1}`);
-  
-  const wrapper = document.createElement('div');
-  wrapper.className = 'life-span-control';
-  
-  // Max Time and Beat Unit Controls
-  const settingsRow = document.createElement('div');
-  settingsRow.className = 'life-span-settings';
-  settingsRow.innerHTML = `
-    <div class="max-time-container">
-      <label>Max Time:</label>
-      <input type="text" class="max-time-input" value="5:00" placeholder="5:00" maxlength="5" />
-    </div>
-    <div class="beat-unit-container">
-      <label>Beat Unit:</label>
-      <select class="beat-unit-select">
-        ${rhythmOptions.map((option, index) => 
-          `<option value="${index}" ${index === 7 ? 'selected' : ''}>${option}</option>`
-        ).join('')}
-      </select>
-    </div>
-  `;
-  wrapper.appendChild(settingsRow);
-  
-  // Create 3 Life Span sliders
-  for (let i = 1; i <= 3; i++) {
-    const spanContainer = document.createElement('div');
-    spanContainer.className = 'life-span-slider-container';
-    
-    const spanHeader = document.createElement('div');
-    spanHeader.className = 'life-span-header';
-    spanHeader.innerHTML = `
-      <span class="life-span-label">Life Span ${i}</span>
-      ${i === 1 ? '<div class="repeat-container"><label><input type="checkbox" class="repeat-checkbox" /> Repeat</label></div>' : ''}
-    `;
-    spanContainer.appendChild(spanHeader);
-    
-    const sliderWrapper = document.createElement('div');
-    sliderWrapper.className = 'life-span-dual-slider';
-    sliderWrapper.dataset.spanNumber = i;
-    spanContainer.appendChild(sliderWrapper);
-    
-    wrapper.appendChild(spanContainer);
-  }
-  
-  return wrapper;
 }
 
 // Create voice tabs
@@ -1108,13 +980,11 @@ function createRow(param, voiceIndex) {
     range.appendChild(createDualSlider(param, voiceIndex));
   } else if (param.type === 'multi-dual') {
     range.appendChild(createMultiDualSlider(param, voiceIndex));
-  } else if (param.type === 'life-span') {
-    range.appendChild(createLifeSpanControl(param, voiceIndex));
   }
 
   controlsContainer.appendChild(range);
 
-  if (param.type !== 'dropdown' && param.type !== 'life-span') {
+  if (param.type !== 'dropdown') {
     const behaviorContainer = createBehaviorSlider(param, voiceIndex);
     controlsContainer.appendChild(behaviorContainer);
   } else {
@@ -2582,7 +2452,7 @@ function generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behavi
 
 console.log('✅ Chord quality selection system loaded');
 
-// Individual Voice Clock - Synced to Master Clock WITH LIFE SPAN INTEGRATION
+// Individual Voice Clock - Synced to Master Clock
 class VoiceClock {
   constructor(voiceIndex, masterClock) {
     this.voiceIndex = voiceIndex;
@@ -2611,10 +2481,10 @@ class VoiceClock {
     
     this.updateTempo();
     
-    // Schedule first note 100ms from now
+    // Schedule first note 100ms from now - voices play continuously
     this.nextNoteTime = masterTime + 100;
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1} clock started with Life Span integration`);
+    console.log(`🎵 Voice ${this.voiceIndex + 1} clock started - ACTIVE immediately`);
     console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM`);
   }
   
@@ -2653,73 +2523,8 @@ class VoiceClock {
   }
   
   shouldPlayNote() {
-    if (!this.isActive) return false;
-    
-    // Get elapsed time since master clock started
-    const elapsedMs = this.masterClock.getElapsedTime();
-    
-    // Check Life Span timing
-    return this.isInLifeSpan(elapsedMs);
-  }
-  
-  isInLifeSpan(elapsedMs) {
-    const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    
-    if (!lifeSpanParam) {
-      // No Life Span parameter - play continuously
-      return true;
-    }
-    
-    // Check if we're in any active life span period
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpanParam[`lifeSpan${i}`];
-      
-      if (!span) continue;
-      
-      // Skip disabled spans (exit <= 0)
-      if (span.exit <= 0) continue;
-      
-      // Handle infinity
-      const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
-      const enterTime = span.enter || 0;
-      
-      // Check if current time is within this span
-      if (elapsedMs >= enterTime && (elapsedMs <= exitTime || exitTime === Infinity)) {
-        console.log(`🕐 Voice ${this.voiceIndex + 1}: In Life Span ${i} (${formatMsToMMSS(enterTime)} - ${exitTime === Infinity ? '∞' : formatMsToMMSS(exitTime)})`);
-        return true;
-      }
-    }
-    
-    // Handle repeat logic if no spans are currently active
-    if (lifeSpanParam.repeat) {
-      return this.handleRepeatLogic(elapsedMs, lifeSpanParam);
-    }
-    
-    console.log(`🔇 Voice ${this.voiceIndex + 1}: Outside all Life Spans at ${formatMsToMMSS(elapsedMs)}`);
-    return false;
-  }
-  
-  handleRepeatLogic(elapsedMs, lifeSpanParam) {
-    // Find the maximum exit time to determine cycle length
-    let maxExitTime = 0;
-    
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpanParam[`lifeSpan${i}`];
-      if (span && span.exit > 0 && span.exit < 999999999) {
-        maxExitTime = Math.max(maxExitTime, span.exit);
-      }
-    }
-    
-    if (maxExitTime <= 0) {
-      // No valid spans to repeat
-      return false;
-    }
-    
-    // Calculate position within the repeat cycle
-    const cyclePosition = elapsedMs % maxExitTime;
-    
-    // Check if we're in any span at this cycle position
-    return this.isInLifeSpan(cyclePosition);
+    // Simplified: voices play when active (no Life Span overlay)
+    return this.isActive;
   }
   
   isTimeForNextNote() {
@@ -2753,8 +2558,7 @@ class VoiceClock {
     this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
     
     const noteCount = noteInfoArray.length;
-    const elapsedMs = this.masterClock.getElapsedTime();
-    console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
   }
   
   selectValueInRange(param) {
@@ -3947,8 +3751,7 @@ class VoiceClock {
           isActive: this.isActive,
           currentTempo: this.currentTempo,
           shouldPlay: this.shouldPlayNote(),
-          timeToNextNote: Math.max(0, this.nextNoteTime - this.masterClock.getMasterTime()),
-          elapsedTime: formatMsToMMSS(this.masterClock.getElapsedTime())
+          timeToNextNote: Math.max(0, this.nextNoteTime - this.masterClock.getMasterTime())
       };
   }
 }
@@ -3961,7 +3764,7 @@ class VoiceClockManager {
     this.isInitialized = false;
     this.isManualStop = false;
 
-    console.log('VoiceClockManager initialized with Life Span integration');
+    console.log('VoiceClockManager initialized');
   }
   
   initialize(masterClock) {
@@ -3974,7 +3777,7 @@ class VoiceClockManager {
     }
     
     this.isInitialized = true;
-    console.log('🎵 VoiceClockManager: All 16 voice clocks initialized with Life Span support');
+    console.log('🎵 VoiceClockManager: All 16 voice clocks initialized');
   }
   
   startAllVoices() {
@@ -3997,7 +3800,7 @@ class VoiceClockManager {
       }
     }
     
-    console.log(`🎵 VoiceClockManager: Started ${startedCount} enabled voice clocks with Life Span timing`);
+    console.log(`🎵 VoiceClockManager: Started ${startedCount} enabled voice clocks`);
   }
   
   stopAllVoices() {
@@ -4028,14 +3831,14 @@ class VoiceClockManager {
       
       activeVoiceCount++;
       
-      // Schedule notes when needed AND when Life Span allows it
+      // Schedule notes when needed
       if (voiceClock.isTimeForNextNote()) {
         voiceClock.scheduleNextNote();
       }
     }
     
     if (activeVoiceCount > 10) {
-      console.log(`🔧 High performance: ${activeVoiceCount} voices active with Life Span timing`);
+      console.log(`🔧 High performance: ${activeVoiceCount} voices active`);
     }
   }
 
@@ -4102,8 +3905,7 @@ class VoiceClockManager {
         enabled: voiceData[i].enabled,
         active: voiceClock.isActive,
         tempo: voiceClock.currentTempo,
-        shouldPlay: voiceClock.shouldPlayNote(),
-        elapsedTime: formatMsToMMSS(masterClock?.getElapsedTime() || 0)
+        shouldPlay: voiceClock.shouldPlayNote()
       });
     }
     
@@ -4169,13 +3971,11 @@ function createParameterContent(param, voiceIndex) {
     range.appendChild(createDualSlider(param, voiceIndex));
   } else if (param.type === 'multi-dual') {
     range.appendChild(createMultiDualSlider(param, voiceIndex));
-  } else if (param.type === 'life-span') {
-    range.appendChild(createLifeSpanControl(param, voiceIndex));
   }
   
   controlsContainer.appendChild(range);
   
-  if (param.type !== 'dropdown' && param.type !== 'life-span') {
+  if (param.type !== 'dropdown') {
     const behaviorContainer = createBehaviorSlider(param, voiceIndex);
     controlsContainer.appendChild(behaviorContainer);
   } else {
@@ -4356,9 +4156,9 @@ function calculateActualTempo() {
   };
 }
 
-// Connect UI sliders to voice parameters - UPDATED FOR LIFE SPAN
+// Connect UI sliders to voice parameters
 function connectAllSliders() {
-  console.log('=== CONNECTING ALL PARAMETER CONTROLS (WITH LIFE SPAN) ===');
+  console.log('=== CONNECTING ALL PARAMETER CONTROLS (ENTRY POINT) ===');
   console.log('Current voice:', currentVoice);
   console.log('VoiceData exists:', !!voiceData);
   console.log('Parameter section exists:', !!document.getElementById('parameter-section'));
@@ -4632,151 +4432,13 @@ function connectAllSliders() {
       }
     }
   });
-
-  // 6. Connect Life Span Controls - NEW
-  const lifeSpanContainers = parameterSection.querySelectorAll('.life-span-control');
-  console.log(`Found ${lifeSpanContainers.length} Life Span controls to connect`);
-
-  lifeSpanContainers.forEach((container) => {
-    console.log('🕐 Connecting Life Span control...');
-    
-    // Connect Max Time input
-    const maxTimeInput = container.querySelector('.max-time-input');
-    if (maxTimeInput) {
-      maxTimeInput.oninput = function(e) {
-        const value = e.target.value;
-        const parsedMs = parseMMSSToMs(value);
-        
-        if (parsedMs !== null) {
-          const minutes = Math.floor(parsedMs / 60000);
-          voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMinutes = minutes;
-          e.target.style.borderColor = '';
-          console.log(`✅ Life Span max time: ${value} (${minutes} minutes)`);
-        } else {
-          e.target.style.borderColor = '#ff0000';
-          console.warn(`❌ Invalid time format: ${value}`);
-        }
-      };
-    }
-    
-    // Connect Beat Unit dropdown
-    const beatUnitSelect = container.querySelector('.beat-unit-select');
-    if (beatUnitSelect) {
-      beatUnitSelect.onchange = function(e) {
-        const value = parseInt(e.target.value);
-        voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = value;
-        console.log(`✅ Life Span beat unit: ${rhythmOptions[value]}`);
-        
-        // Update all Life Span slider tooltips
-        updateLifeSpanTooltips(container);
-      };
-    }
-    
-    // Connect Repeat checkbox
-    const repeatCheckbox = container.querySelector('.repeat-checkbox');
-    if (repeatCheckbox) {
-      repeatCheckbox.onchange = function(e) {
-        voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
-        console.log(`✅ Life Span repeat: ${e.target.checked}`);
-      };
-    }
-    
-    // Connect Life Span sliders
-    const spanSliders = container.querySelectorAll('.life-span-dual-slider');
-    spanSliders.forEach((sliderContainer) => {
-      const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
-      console.log(`🔧 Connecting Life Span ${spanNumber} slider`);
-      
-      // Create slider if it doesn't exist
-      if (!sliderContainer.querySelector('.noUi-target')) {
-        createLifeSpanSlider(sliderContainer, spanNumber);
-      }
-      
-      const slider = sliderContainer.querySelector('.noUi-target');
-      if (slider && slider.noUiSlider) {
-        slider.noUiSlider.off('update');
-        slider.noUiSlider.on('update', function(values) {
-          const enterValue = values[0];
-          const exitValue = values[1];
-          
-          // Parse values (could be in format "120 beats (2:00)" or "∞ (∞)")
-          const enterMs = parseLifeSpanValue(enterValue);
-          const exitMs = parseLifeSpanValue(exitValue);
-          
-          voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
-          voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
-          
-          console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
-        });
-      }
-    });
-  });
   
   console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
   console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
   console.log(`   ✅ ${behaviorSliders.length} behavior sliders`);
   console.log(`   ✅ ${dropdowns.length} dropdown controls`);
   console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
-  console.log(`   ✅ ${lifeSpanContainers.length} Life Span controls`);
-}
-
-function createLifeSpanSlider(container, spanNumber) {
-  console.log(`🕐 Creating Life Span ${spanNumber} slider`);
-  
-  const lifeSpanData = voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`];
-  const maxTimeMs = voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMinutes * 60 * 1000;
-  const beatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
-  
-  const sliderDiv = document.createElement('div');
-  container.appendChild(sliderDiv);
-  
-  // Create formatter for beat-based tooltips
-  const formatter = createLifeSpanBeatFormatter(currentVoice, beatUnit);
-  
-  const startEnter = lifeSpanData.enter || 0;
-  const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : lifeSpanData.exit;
-  
-  noUiSlider.create(sliderDiv, {
-    start: [startEnter, startExit],
-    connect: true,
-    range: { min: 0, max: maxTimeMs },
-    step: 1000, // 1 second steps
-    tooltips: [true, true],
-    format: formatter
-  });
-  
-  console.log(`✅ Life Span ${spanNumber} slider created with range 0-${formatMsToMMSS(maxTimeMs)}`);
-}
-
-function updateLifeSpanTooltips(container) {
-  console.log('🕐 Updating Life Span tooltips for new beat unit');
-  
-  const spanSliders = container.querySelectorAll('.life-span-dual-slider .noUi-target');
-  const beatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
-  
-  spanSliders.forEach((slider) => {
-    if (slider.noUiSlider) {
-      const newFormatter = createLifeSpanBeatFormatter(currentVoice, beatUnit);
-      
-      // Update the formatter
-      slider.noUiSlider.updateOptions({
-        format: newFormatter
-      });
-      
-      console.log('✅ Updated tooltip formatter for beat unit change');
-    }
-  });
-}
-
-function parseLifeSpanValue(value) {
-  if (value === '∞ (∞)' || value === 'Infinity') return 999999999;
-  
-  const match = value.match(/\((\d+:\d+)\)/);
-  if (match) {
-    return parseMMSSToMs(match[1]) || 0;
-  }
-  
-  return parseFloat(value) || 0;
+  console.log(`   ✅ Timing repeat checkbox`);
 }
 
 function showInvalidRangeMessage(dropdown, paramName) {
@@ -5426,7 +5088,7 @@ Continue?`);
             }, 2000);
         }
         
-        console.log('✅ New composition created successfully with Life Span defaults!');
+        console.log('✅ New composition created successfully!');
         return true;
         
     } catch (error) {
@@ -5543,10 +5205,4 @@ setTimeout(() => {
   }
 }, 2000);
 
-console.log('✅ Enhanced scripts.js loaded - Life Span system fully integrated');
-console.log('🕐 Life Span features:');
-console.log('   - 3 dual sliders with Enter/Exit times');
-console.log('   - Repeat checkbox for cycling');
-console.log('   - Max time input (MM:SS format)');
-console.log('   - Beat unit dropdown for musical tooltips');
-console.log('   - Integration with voice clock timing system');
+console.log('✅ Clean scripts.js loaded - Life Span system completely removed');

@@ -8317,9 +8317,6 @@ function testChordGeneration() {
     }
 }
 
-
-
-
 /**
  * Master Chord Compendium - Semitone intervals from root
  * Each array represents the intervals above the root note
