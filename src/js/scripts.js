@@ -628,7 +628,7 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   
   const label = document.createElement('label');
   label.textContent = 'Repeat';
-  label.style.cssText = 'display: block; text-align: center; margin-bottom: 8px;';
+  label.style.cssText = 'display: block; text-align: center; margin-bottom: 8px; font-size: 18px; font-weight: bold;';
   wrapper.appendChild(label);
   
   const controlsWrapper = document.createElement('div');
