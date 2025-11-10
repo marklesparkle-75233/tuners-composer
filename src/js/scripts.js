@@ -529,50 +529,238 @@ function createLifeSpanControl(param, voiceIndex) {
   console.log(`🕐 Creating Life Span control for Voice ${voiceIndex + 1}`);
   
   const wrapper = document.createElement('div');
-  wrapper.className = 'life-span-control';
+  wrapper.className = 'dual-slider'; // Use standard class
+  
+  // GET THE STORED MAX TIME VALUE
+  const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  const storedMaxTimeMs = lifeSpanParam.maxTimeMs || 300000; // Default to 5 minutes if not set
+  const storedMaxTimeFormatted = formatMsToMMSS(storedMaxTimeMs);
+  
+  console.log(`📖 Loading stored Max Time for Voice ${voiceIndex + 1}: ${storedMaxTimeFormatted} (${storedMaxTimeMs}ms)`);
   
   // Max Time and Beat Unit Controls
   const settingsRow = document.createElement('div');
   settingsRow.className = 'life-span-settings';
+  settingsRow.style.cssText = `
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    width: 100%;
+  `;
   settingsRow.innerHTML = `
-    <div class="max-time-container">
+    <div class="max-time-container" style="flex: 1;">
       <label>Max Time:</label>
-      <input type="text" class="max-time-input" value="5:00" placeholder="5:00" maxlength="5" />
+      <input type="text" class="max-time-input" value="${storedMaxTimeFormatted}" placeholder="0:05" maxlength="5" 
+             title="Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)"
+             style="width: 100%; padding: 4px; margin-left: 5px;" />
     </div>
-    <div class="beat-unit-container">
+    <div class="beat-unit-container" style="flex: 1;">
       <label>Beat Unit:</label>
-      <select class="beat-unit-select">
+      <select class="beat-unit-select" style="width: 100%; padding: 4px; margin-left: 5px;">
         ${rhythmOptions.map((option, index) => 
-          `<option value="${index}" ${index === 7 ? 'selected' : ''}>${option}</option>`
+          `<option value="${index}" ${index === lifeSpanParam.beatUnit ? 'selected' : ''}>${option}</option>`
         ).join('')}
       </select>
     </div>
   `;
   wrapper.appendChild(settingsRow);
   
-  // Create 3 Life Span sliders
+  // Create 3 Life Span sliders with immediate slider creation
   for (let i = 1; i <= 3; i++) {
     const spanContainer = document.createElement('div');
-    spanContainer.className = 'life-span-slider-container';
+    spanContainer.className = 'slider-wrapper';
+    spanContainer.style.cssText = 'width: 100%; margin-bottom: 15px;';
     
     const spanHeader = document.createElement('div');
-    spanHeader.className = 'life-span-header';
-    spanHeader.innerHTML = `
-      <span class="life-span-label">Life Span ${i}</span>
-      ${i === 1 ? '<div class="repeat-container"><label><input type="checkbox" class="repeat-checkbox" /> Repeat</label></div>' : ''}
-    `;
+    spanHeader.className = 'slider-label';
+    spanHeader.textContent = `Life Span ${i}`;
     spanContainer.appendChild(spanHeader);
     
     const sliderWrapper = document.createElement('div');
     sliderWrapper.className = 'life-span-dual-slider';
     sliderWrapper.dataset.spanNumber = i;
-    spanContainer.appendChild(sliderWrapper);
+    sliderWrapper.style.cssText = 'width: 100%; height: 40px; margin-top: 8px;';
     
+    // CREATE THE SLIDER IMMEDIATELY
+    const sliderDiv = document.createElement('div');
+    sliderWrapper.appendChild(sliderDiv);
+    
+    // Get Life Span data for this span - use stored maxTimeMs
+    const lifeSpanData = voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${i}`];
+    const maxTimeMs = storedMaxTimeMs; // Use stored value
+    const beatUnit = lifeSpanParam.beatUnit;
+    
+    // Create formatter for beat-based tooltips
+    const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
+    
+    const startEnter = lifeSpanData.enter || 0;
+    const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : (lifeSpanData.exit || 0);
+    
+    console.log(`🕐 Creating Life Span ${i} slider with range 0-${formatMsToMMSS(maxTimeMs)}`);
+    console.log(`   Start values: enter=${formatMsToMMSS(startEnter)}, exit=${startExit >= 999999999 ? '∞' : formatMsToMMSS(startExit)}`);
+    
+    try {
+      noUiSlider.create(sliderDiv, {
+        start: [startEnter, Math.min(startExit, maxTimeMs)],
+        connect: true,
+        range: { min: 0, max: maxTimeMs },
+        step: 1000, // 1 second steps
+        tooltips: [true, true],
+        format: formatter
+      });
+      
+      console.log(`✅ Life Span ${i} slider created successfully`);
+    } catch (error) {
+      console.error(`❌ Error creating Life Span ${i} slider:`, error);
+    }
+    
+    spanContainer.appendChild(sliderWrapper);
     wrapper.appendChild(spanContainer);
   }
   
   return wrapper;
 }
+
+
+function createLifeSpanBehaviorContainer(param, voiceIndex) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'behavior-container life-span-behavior';
+  
+  const label = document.createElement('label');
+  label.textContent = 'Repeat';
+  label.style.cssText = 'display: block; text-align: center; margin-bottom: 8px;';
+  wrapper.appendChild(label);
+  
+  const controlsWrapper = document.createElement('div');
+  controlsWrapper.className = 'life-span-behavior-controls';
+  controlsWrapper.style.cssText = 'display: flex; justify-content: center; align-items: center;';
+  
+  const repeatContainer = document.createElement('div');
+  repeatContainer.className = 'repeat-container';
+  repeatContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center;';
+  
+  const repeatCheckbox = document.createElement('input');
+  repeatCheckbox.type = 'checkbox';
+  repeatCheckbox.className = 'repeat-checkbox';
+  repeatCheckbox.style.cssText = `
+    width: 20px; 
+    height: 20px; 
+    cursor: pointer;
+    transform: scale(1.2);
+  `;
+  
+  // READ THE STORED VALUE from voiceData
+  const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  const storedRepeatValue = lifeSpanParam ? lifeSpanParam.repeat : false;
+  repeatCheckbox.checked = storedRepeatValue;
+  
+  console.log(`📖 Loading stored Repeat value for Voice ${voiceIndex + 1}: ${storedRepeatValue}`);
+  
+  repeatContainer.appendChild(repeatCheckbox);
+  controlsWrapper.appendChild(repeatContainer);
+  wrapper.appendChild(controlsWrapper);
+  
+  return wrapper;
+}
+
+
+function rebuildLifeSpanSliders(container, voiceIndex) {
+  console.log('🔄 Rebuilding Life Span sliders with new max time...');
+  
+  const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  const maxTimeMs = lifeSpanParam.maxTimeMs; // Now directly in milliseconds
+  const beatUnit = lifeSpanParam.beatUnit;
+  
+  console.log(`New max time: ${formatMsToMMSS(maxTimeMs)} (${maxTimeMs}ms)`);
+  
+  
+  // Find all Life Span sliders in this container
+  const spanSliders = container.querySelectorAll('.life-span-dual-slider');
+  
+  spanSliders.forEach((sliderContainer) => {
+    const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
+    const existingSlider = sliderContainer.querySelector('.noUi-target');
+    
+    // Get current values before destroying
+    let currentEnter = 0;
+    let currentExit = 0;
+    
+    if (existingSlider && existingSlider.noUiSlider) {
+      try {
+        const values = existingSlider.noUiSlider.get();
+        currentEnter = parseLifeSpanValue(values[0]);
+        currentExit = parseLifeSpanValue(values[1]);
+        
+        // Destroy existing slider
+        existingSlider.noUiSlider.destroy();
+        existingSlider.remove();
+        
+        console.log(`🗑️ Destroyed Life Span ${spanNumber} slider, preserving values: enter=${formatMsToMMSS(currentEnter)}, exit=${currentExit >= 999999999 ? '∞' : formatMsToMMSS(currentExit)}`);
+      } catch (e) {
+        console.warn(`Warning destroying Life Span ${spanNumber} slider:`, e);
+      }
+    } else {
+      // Get values from data if no existing slider
+      const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
+      currentEnter = spanData.enter || 0;
+      currentExit = spanData.exit || 0;
+    }
+    
+    // Clamp existing values to new range
+    currentEnter = Math.min(currentEnter, maxTimeMs);
+    currentExit = Math.min(currentExit, maxTimeMs);
+    
+    // Handle infinity case
+    if (currentExit >= 999999999) {
+      currentExit = maxTimeMs; // Set to new max time
+    }
+    
+    // Update data with clamped values
+    lifeSpanParam[`lifeSpan${spanNumber}`].enter = currentEnter;
+    lifeSpanParam[`lifeSpan${spanNumber}`].exit = currentExit;
+    
+    // Create new slider div
+    const newSliderDiv = document.createElement('div');
+    sliderContainer.appendChild(newSliderDiv);
+    
+    // Create new formatter with updated beat unit
+    const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
+    
+    try {
+      noUiSlider.create(newSliderDiv, {
+        start: [currentEnter, currentExit],
+        connect: true,
+        range: { min: 0, max: maxTimeMs },
+        step: 1000,
+        tooltips: [true, true],
+        format: formatter
+      });
+      
+      // Reconnect the update handler
+      newSliderDiv.noUiSlider.on('update', function(values) {
+        const enterValue = values[0];
+        const exitValue = values[1];
+        
+        const enterMs = parseLifeSpanValue(enterValue);
+        const exitMs = parseLifeSpanValue(exitValue);
+        
+        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
+        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
+        
+        console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
+      });
+      
+      console.log(`✅ Rebuilt Life Span ${spanNumber} slider with new range 0-${formatMsToMMSS(maxTimeMs)}`);
+      
+    } catch (error) {
+      console.error(`❌ Error rebuilding Life Span ${spanNumber} slider:`, error);
+    }
+  });
+  
+  console.log(`🎯 All Life Span sliders rebuilt - max time tooltips now show: ${formatMsToMMSS(maxTimeMs)}`);
+}
+
+
 
 // Create voice tabs
 function createVoiceTabs() {
@@ -1492,6 +1680,9 @@ async function previewVoice(voiceIndex) {
     
     console.log(`✅ Voice ${voiceIndex + 1} preview started with new clock system`);
   }
+
+
+
 }
 
 // GM Sound mapping function
@@ -2662,66 +2853,85 @@ class VoiceClock {
     return this.isInLifeSpan(elapsedMs);
   }
   
-  isInLifeSpan(elapsedMs) {
-    const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    
-    if (!lifeSpanParam) {
-      // No Life Span parameter - play continuously
-      return true;
-    }
-    
-    // Check if we're in any active life span period
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpanParam[`lifeSpan${i}`];
-      
-      if (!span) continue;
-      
-      // Skip disabled spans (exit <= 0)
-      if (span.exit <= 0) continue;
-      
-      // Handle infinity
-      const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
-      const enterTime = span.enter || 0;
-      
-      // Check if current time is within this span
-      if (elapsedMs >= enterTime && (elapsedMs <= exitTime || exitTime === Infinity)) {
-        console.log(`🕐 Voice ${this.voiceIndex + 1}: In Life Span ${i} (${formatMsToMMSS(enterTime)} - ${exitTime === Infinity ? '∞' : formatMsToMMSS(exitTime)})`);
-        return true;
-      }
-    }
-    
-    // Handle repeat logic if no spans are currently active
-    if (lifeSpanParam.repeat) {
-      return this.handleRepeatLogic(elapsedMs, lifeSpanParam);
-    }
-    
-    console.log(`🔇 Voice ${this.voiceIndex + 1}: Outside all Life Spans at ${formatMsToMMSS(elapsedMs)}`);
-    return false;
+isInLifeSpan(elapsedMs) {
+  const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpanParam) {
+    return true; // No Life Span parameter - play continuously
   }
   
-  handleRepeatLogic(elapsedMs, lifeSpanParam) {
-    // Find the maximum exit time to determine cycle length
+  // Collect all active spans
+  let activeSpans = [];
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpanParam[`lifeSpan${i}`];
+    if (span && span.exit > 0) {
+      activeSpans.push({
+        enter: span.enter || 0,
+        exit: span.exit >= 999999999 ? Infinity : span.exit,
+        number: i
+      });
+    }
+  }
+  
+  if (activeSpans.length === 0) {
+    return false; // No active spans
+  }
+  
+  // SIMPLE REPEAT LOGIC: If repeat is enabled, just keep cycling
+  if (lifeSpanParam.repeat) {
+    // Find the maximum exit time for cycle length
     let maxExitTime = 0;
+    let hasInfiniteSpan = false;
     
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpanParam[`lifeSpan${i}`];
-      if (span && span.exit > 0 && span.exit < 999999999) {
+    for (const span of activeSpans) {
+      if (span.exit === Infinity) {
+        hasInfiniteSpan = true;
+      } else {
         maxExitTime = Math.max(maxExitTime, span.exit);
       }
     }
     
+    // If any span is infinite, always play
+    if (hasInfiniteSpan) {
+      console.log(`🔄 Voice ${this.voiceIndex + 1}: Infinite repeat - always playing`);
+      return true;
+    }
+    
+    // If no valid cycle time, don't play
     if (maxExitTime <= 0) {
-      // No valid spans to repeat
       return false;
     }
     
-    // Calculate position within the repeat cycle
+    // Calculate position within current cycle
     const cyclePosition = elapsedMs % maxExitTime;
+    const cycleNumber = Math.floor(elapsedMs / maxExitTime) + 1;
     
-    // Check if we're in any span at this cycle position
-    return this.isInLifeSpan(cyclePosition);
+    // Check if we're in any active span at this cycle position
+    for (const span of activeSpans) {
+      if (cyclePosition >= span.enter && cyclePosition < span.exit) {
+        console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - in span ${span.number} at ${formatMsToMMSS(cyclePosition)}`);
+        return true;
+      }
+    }
+    
+    console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - outside spans at ${formatMsToMMSS(cyclePosition)}`);
+    return false;
   }
   
+  // NON-REPEAT: Check spans once
+  for (const span of activeSpans) {
+    if (elapsedMs >= span.enter && (elapsedMs < span.exit || span.exit === Infinity)) {
+      console.log(`🕐 Voice ${this.voiceIndex + 1}: In Life Span ${span.number} at ${formatMsToMMSS(elapsedMs)}`);
+      return true;
+    }
+  }
+  
+  console.log(`🔇 Voice ${this.voiceIndex + 1}: Outside all Life Spans at ${formatMsToMMSS(elapsedMs)}`);
+  return false;
+}
+
+
+   
   isTimeForNextNote() {
     if (!this.shouldPlayNote()) return false;
     
@@ -2729,33 +2939,54 @@ class VoiceClock {
     return masterTime >= this.nextNoteTime;
   }
   
-  scheduleNextNote() {
-    if (!this.shouldPlayNote()) return;
+scheduleNextNote() {
+  const elapsedMs = this.masterClock.getElapsedTime();
+  const shouldPlay = this.shouldPlayNote();
+  
+  // CRITICAL DEBUG: Log the repeat status
+  const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const repeatEnabled = lifeSpanParam ? lifeSpanParam.repeat : false;
+  
+  if (!shouldPlay) {
+    console.log(`🔇 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: shouldPlay=false, repeat=${repeatEnabled}`);
     
-    this.updateTempo();
+    // If repeat is enabled, this should NEVER happen after the first cycle starts
+    if (repeatEnabled && elapsedMs > 1000) {
+      console.error(`🚨 BUG: Voice ${this.voiceIndex + 1} with Repeat=true stopped playing at ${formatMsToMMSS(elapsedMs)}!`);
+    }
     
-    const voiceParams = voiceData[this.voiceIndex].parameters;
-    
-    const rhythmParam = voiceParams['RHYTHMS'];
-    const restParam = voiceParams['RESTS'];
-    
-    const rhythmIndex = this.selectValueInRange(rhythmParam);
-    const restIndex = this.selectValueInRange(restParam);
-    
-    const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
-    const restDurationMs = this.getRestDurationMs(restIndex);
-    
-    const noteInfoArray = selectMidiNote(this.voiceIndex);
-    
-    this.triggerNote(noteInfoArray, noteDurationMs);
-    
-    this.lastNoteTime = this.nextNoteTime;
-    this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
-    
-    const noteCount = noteInfoArray.length;
-    const elapsedMs = this.masterClock.getElapsedTime();
-    console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
+    // Still schedule the next check in 100ms
+    this.nextNoteTime = this.masterClock.getMasterTime() + 100;
+    return;
   }
+
+  // Rest of the function continues...
+  console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Playing (repeat=${repeatEnabled})`);
+  
+  this.updateTempo();
+  
+  const voiceParams = voiceData[this.voiceIndex].parameters;
+  
+  const rhythmParam = voiceParams['RHYTHMS'];
+  const restParam = voiceParams['RESTS'];
+  
+  const rhythmIndex = this.selectValueInRange(rhythmParam);
+  const restIndex = this.selectValueInRange(restParam);
+  
+  const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
+  const restDurationMs = this.getRestDurationMs(restIndex);
+  
+  const noteInfoArray = selectMidiNote(this.voiceIndex);
+  
+  this.triggerNote(noteInfoArray, noteDurationMs);
+  
+  this.lastNoteTime = this.nextNoteTime;
+  this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
+  
+  const noteCount = noteInfoArray.length;
+  console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
+}
+
   
   selectValueInRange(param) {
     if (!param) return 7;
@@ -4014,30 +4245,150 @@ class VoiceClockManager {
     }, 200);
   }
 
-  updateAllVoices() {
-    if (!this.isInitialized) return;
+updateAllVoices() {
+  if (!this.isInitialized) return;
+  
+  const currentTime = this.masterClock.getMasterTime();
+  let activeVoiceCount = 0;
+  let voicesCompletedNaturally = 0;
+  let previewVoicesCompleted = [];
+  
+  for (let i = 0; i < 16; i++) {
+    const voiceClock = this.voiceClocks[i];
     
-    const currentTime = this.masterClock.getMasterTime();
-    let activeVoiceCount = 0;
-    let completedThisCycle = 0;
+    if (!voiceData[i].enabled || !voiceClock.isActive) continue;
     
-    for (let i = 0; i < 16; i++) {
-      const voiceClock = this.voiceClocks[i];
+    // Check if this voice should play AND if it has actually completed
+    const shouldPlay = voiceClock.shouldPlayNote();
+    const hasCompleted = this.hasVoiceCompletedLifeSpan(i);
+    
+    if (hasCompleted && !shouldPlay) {
+      // Voice has ACTUALLY completed its Life Span - auto-stop it
+      console.log(`🏁 Voice ${i + 1} completed its Life Span - auto-stopping`);
       
-      if (!voiceData[i].enabled || !voiceClock.isActive) continue;
+      // Check if this was a preview voice
+      const voiceControls = document.querySelector('.voice-controls');
+      const previewButton = voiceControls ? voiceControls.querySelector('button[onclick*="previewVoice"]') : null;
+      const isCurrentVoicePreview = (currentVoice === i && previewButton && previewButton.textContent === 'STOP');
       
-      activeVoiceCount++;
-      
-      // Schedule notes when needed AND when Life Span allows it
-      if (voiceClock.isTimeForNextNote()) {
-        voiceClock.scheduleNextNote();
+      if (isCurrentVoicePreview) {
+        previewVoicesCompleted.push(i);
       }
+      
+      voiceClock.stop();
+      voicesCompletedNaturally++;
+      continue;
+    } else if (!shouldPlay) {
+      // Voice is waiting to start (Enter time > current time) - keep it active but don't count as playing
+      console.log(`⏳ Voice ${i + 1} waiting to enter Life Span`);
     }
     
-    if (activeVoiceCount > 10) {
-      console.log(`🔧 High performance: ${activeVoiceCount} voices active with Life Span timing`);
+    activeVoiceCount++;
+    
+    // Schedule notes when needed AND when Life Span allows it
+    if (voiceClock.isTimeForNextNote()) {
+      voiceClock.scheduleNextNote();
     }
   }
+  
+  // Handle preview button resets
+  previewVoicesCompleted.forEach(voiceIndex => {
+    console.log(`🎯 Processing completion for Voice ${voiceIndex + 1}`);
+    this.resetPreviewButton(voiceIndex);
+  });
+  
+// Auto-reset check for main PLAY button - only if ALL enabled voices have completed
+const totalEnabledVoices = voiceData.filter(voice => voice.enabled).length;
+
+if (voicesCompletedNaturally > 0 && activeVoiceCount === 0 && voicesCompletedNaturally === totalEnabledVoices) {
+  console.log(`🔄 ALL ${totalEnabledVoices} enabled voices completed naturally - triggering auto-reset in 1 second`);
+  setTimeout(() => {
+    this.performAutoReset();
+  }, 1000);
+} else if (voicesCompletedNaturally > 0 && activeVoiceCount > 0) {
+  console.log(`📊 ${voicesCompletedNaturally} voice(s) completed, but ${activeVoiceCount} still active (some have Repeat enabled) - continuing playback`);
+}
+
+  
+  if (activeVoiceCount > 10) {
+    console.log(`🔧 High performance: ${activeVoiceCount} voices active with Life Span timing`);
+  }
+}
+
+resetPreviewButton(voiceIndex) {
+  console.log(`🔄 Auto-resetting PREVIEW button for Voice ${voiceIndex + 1}`);
+  
+  const voiceControls = document.querySelector('.voice-controls');
+  if (!voiceControls) return;
+  
+  const previewButton = voiceControls.querySelector('button[onclick*="previewVoice"]');
+  if (!previewButton) return;
+  
+  if (currentVoice === voiceIndex && previewButton.textContent === 'STOP') {
+    previewButton.textContent = 'PREVIEW';
+    previewButton.style.backgroundColor = '';
+    previewButton.style.color = '';
+    
+    // Green flash for completion
+    previewButton.style.backgroundColor = '#28a745';
+    previewButton.style.color = 'white';
+    
+    setTimeout(() => {
+      previewButton.style.backgroundColor = '';
+      previewButton.style.color = '';
+    }, 1500);
+    
+    // Stop master clock if no other voices active
+    const activeVoiceCount = this.getActiveVoiceCount();
+    if (activeVoiceCount === 0 && this.masterClock && this.masterClock.isActive()) {
+      this.masterClock.stop();
+    }
+    
+    console.log(`✅ Voice ${voiceIndex + 1} preview completed (non-repeating)`);
+  }
+}
+
+
+hasVoiceCompletedLifeSpan(voiceIndex) {
+  const elapsedMs = this.masterClock.getElapsedTime();
+  const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpanParam) return false;
+  
+  // CRITICAL CHECK: If repeat is enabled, NEVER complete
+  if (lifeSpanParam.repeat) {
+    console.log(`🔄 Voice ${voiceIndex + 1}: Repeat enabled - NEVER completing (elapsed: ${formatMsToMMSS(elapsedMs)})`);
+    return false;
+  }
+  
+  let hasAnyActiveSpan = false;
+  let hasPassedAllSpans = true;
+  
+  // Check all 3 Life Spans
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpanParam[`lifeSpan${i}`];
+    
+    if (!span || span.exit <= 0) continue; // Skip disabled spans
+    
+    hasAnyActiveSpan = true;
+    
+    const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
+    
+    // If we haven't passed this span's exit time, we haven't completed everything
+    if (elapsedMs < exitTime) {
+      hasPassedAllSpans = false;
+    }
+  }
+  
+  const completed = hasAnyActiveSpan && hasPassedAllSpans;
+  
+  console.log(`🏁 Voice ${voiceIndex + 1} completion check: hasSpans=${hasAnyActiveSpan}, passedAll=${hasPassedAllSpans}, completed=${completed}`);
+  
+  return completed;
+}
+
+
+
 
   checkForAutoReset() {
     if (this.isManualStop) {
@@ -4175,7 +4526,11 @@ function createParameterContent(param, voiceIndex) {
   
   controlsContainer.appendChild(range);
   
-  if (param.type !== 'dropdown' && param.type !== 'life-span') {
+  // Handle behavior container - LIFE SPAN gets special treatment
+  if (param.type === 'life-span') {
+    const lifeSpanBehavior = createLifeSpanBehaviorContainer(param, voiceIndex);
+    controlsContainer.appendChild(lifeSpanBehavior);
+  } else if (param.type !== 'dropdown') {
     const behaviorContainer = createBehaviorSlider(param, voiceIndex);
     controlsContainer.appendChild(behaviorContainer);
   } else {
@@ -4633,84 +4988,184 @@ function connectAllSliders() {
     }
   });
 
-  // 6. Connect Life Span Controls - NEW
-  const lifeSpanContainers = parameterSection.querySelectorAll('.life-span-control');
-  console.log(`Found ${lifeSpanContainers.length} Life Span controls to connect`);
+// 6. Connect Life Span Controls - UPDATED for new layout
+const lifeSpanContainers = parameterSection.querySelectorAll('.life-span-settings');
+const actualContainers = [];
+lifeSpanContainers.forEach(settings => {
+  const container = settings.closest('.dual-slider');
+  if (container) actualContainers.push(container);
+});
+console.log(`Found ${actualContainers.length} Life Span controls to connect`);
 
-  lifeSpanContainers.forEach((container) => {
-    console.log('🕐 Connecting Life Span control...');
-    
-    // Connect Max Time input
-    const maxTimeInput = container.querySelector('.max-time-input');
-    if (maxTimeInput) {
-      maxTimeInput.oninput = function(e) {
-        const value = e.target.value;
-        const parsedMs = parseMMSSToMs(value);
+actualContainers.forEach((container) => {
+  console.log('🕐 Connecting Life Span control...');
+  
+  // Find the behavior container for this Life Span parameter
+  const parameterRollup = container.closest('.parameter-rollup');
+  const behaviorContainer = parameterRollup ? parameterRollup.querySelector('.life-span-behavior') : null;
+  
+  // Connect Max Time input
+  // Connect Max Time input
+  const maxTimeInput = container.querySelector('.max-time-input');
+  if (maxTimeInput) {
+    maxTimeInput.oninput = function(e) {
+      const value = e.target.value;
+      
+      // Check for missing leading zero (e.g., ":30", ":15")
+      if (value.match(/^:\d{2}$/)) {
+        // Visual feedback - format error
+        e.target.style.borderColor = '#ffc107';
+        e.target.style.backgroundColor = '#fffbf0';
+        console.warn(`❌ Missing leading zero: ${value} → should be "0${value}"`);
         
-        if (parsedMs !== null) {
-          const minutes = Math.floor(parsedMs / 60000);
-          voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMinutes = minutes;
-          e.target.style.borderColor = '';
-          console.log(`✅ Life Span max time: ${value} (${minutes} minutes)`);
-        } else {
-          e.target.style.borderColor = '#ff0000';
-          console.warn(`❌ Invalid time format: ${value}`);
+        // Show helpful message
+        let messageDiv = container.querySelector('.format-hint');
+        if (!messageDiv) {
+          messageDiv = document.createElement('div');
+          messageDiv.className = 'format-hint';
+          messageDiv.style.cssText = `
+            font-size: 12px; 
+            color: #856404; 
+            background: #fff3cd; 
+            border: 1px solid #ffeaa7; 
+            padding: 4px 8px; 
+            border-radius: 3px; 
+            margin-top: 4px; 
+            text-align: center;
+          `;
+          e.target.parentElement.appendChild(messageDiv);
         }
-      };
-    }
-    
-    // Connect Beat Unit dropdown
-    const beatUnitSelect = container.querySelector('.beat-unit-select');
-    if (beatUnitSelect) {
-      beatUnitSelect.onchange = function(e) {
-        const value = parseInt(e.target.value);
-        voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = value;
-        console.log(`✅ Life Span beat unit: ${rhythmOptions[value]}`);
+        messageDiv.textContent = `Please use MM:SS format - try "0${value}" instead`;
         
-        // Update all Life Span slider tooltips
-        updateLifeSpanTooltips(container);
-      };
-    }
-    
-    // Connect Repeat checkbox
-    const repeatCheckbox = container.querySelector('.repeat-checkbox');
-    if (repeatCheckbox) {
-      repeatCheckbox.onchange = function(e) {
-        voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
-        console.log(`✅ Life Span repeat: ${e.target.checked}`);
-      };
-    }
-    
-    // Connect Life Span sliders
-    const spanSliders = container.querySelectorAll('.life-span-dual-slider');
-    spanSliders.forEach((sliderContainer) => {
-      const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
-      console.log(`🔧 Connecting Life Span ${spanNumber} slider`);
-      
-      // Create slider if it doesn't exist
-      if (!sliderContainer.querySelector('.noUi-target')) {
-        createLifeSpanSlider(sliderContainer, spanNumber);
+        // Clear message after 4 seconds
+        setTimeout(() => {
+          if (messageDiv && messageDiv.parentElement) {
+            messageDiv.parentElement.removeChild(messageDiv);
+          }
+          e.target.style.borderColor = '';
+          e.target.style.backgroundColor = '';
+        }, 4000);
+        
+        return; // Exit early, don't process further
       }
       
-      const slider = sliderContainer.querySelector('.noUi-target');
-      if (slider && slider.noUiSlider) {
-        slider.noUiSlider.off('update');
-        slider.noUiSlider.on('update', function(values) {
-          const enterValue = values[0];
-          const exitValue = values[1];
-          
-          // Parse values (could be in format "120 beats (2:00)" or "∞ (∞)")
-          const enterMs = parseLifeSpanValue(enterValue);
-          const exitMs = parseLifeSpanValue(exitValue);
-          
-          voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
-          voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
-          
-          console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
-        });
+      // Remove any existing format hint when user types correctly
+      const existingHint = container.querySelector('.format-hint');
+      if (existingHint) {
+        existingHint.parentElement.removeChild(existingHint);
       }
-    });
+      
+      const parsedMs = parseMMSSToMs(value);
+      const MINIMUM_TIME_MS = 5000; // 5 seconds minimum
+      const MAXIMUM_TIME_MS = 3600000; // 60 minutes maximum
+      
+      if (parsedMs !== null && parsedMs >= MINIMUM_TIME_MS && parsedMs <= MAXIMUM_TIME_MS) {
+        // Update the data with milliseconds
+        voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = parsedMs;
+        
+        // Visual feedback - valid input
+        e.target.style.borderColor = '#28a745';
+        e.target.style.backgroundColor = '#f8fff8';
+        
+        console.log(`✅ Life Span max time: ${value} (${parsedMs}ms = ${(parsedMs/1000).toFixed(1)} seconds)`);
+        
+        // IMMEDIATELY rebuild all sliders with new range
+        rebuildLifeSpanSliders(container, currentVoice);
+        
+        // Clear visual feedback after 2 seconds
+        setTimeout(() => {
+          e.target.style.borderColor = '';
+          e.target.style.backgroundColor = '';
+        }, 2000);
+        
+      } else {
+        // Visual feedback - invalid input
+        e.target.style.borderColor = '#dc3545';
+        e.target.style.backgroundColor = '#fff8f8';
+        
+        if (parsedMs !== null && parsedMs < MINIMUM_TIME_MS) {
+          console.warn(`❌ Time too short: ${value} (minimum: 0:05)`);
+        } else if (parsedMs !== null && parsedMs > MAXIMUM_TIME_MS) {
+          console.warn(`❌ Time too long: ${value} (maximum: 60:00)`);
+        } else {
+          console.warn(`❌ Invalid time format: ${value} - use MM:SS format`);
+        }
+        
+        // Clear invalid feedback after 3 seconds
+        setTimeout(() => {
+          e.target.style.borderColor = '';
+          e.target.style.backgroundColor = '';
+        }, 3000);
+      }
+    };
+    
+    // Also trigger on Enter key for immediate feedback
+    maxTimeInput.onkeypress = function(e) {
+      if (e.key === 'Enter') {
+        e.target.blur(); // Trigger the oninput handler
+      }
+    };
+    
+    // Set placeholder to show minimum time
+    maxTimeInput.placeholder = "0:05";
+    maxTimeInput.title = "Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)";
+  }
+
+  
+  // Connect Beat Unit dropdown
+
+const beatUnitSelect = container.querySelector('.beat-unit-select');
+if (beatUnitSelect) {
+  beatUnitSelect.onchange = function(e) {
+    const value = parseInt(e.target.value);
+    voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = value;
+    console.log(`✅ Life Span beat unit: ${rhythmOptions[value]}`);
+    
+    // Rebuild sliders to update tooltips with new beat unit
+    rebuildLifeSpanSliders(container, currentVoice);
+  };
+}
+
+  
+  // Connect Repeat checkbox (now in behavior area)
+  const repeatCheckbox = behaviorContainer ? behaviorContainer.querySelector('.repeat-checkbox') : null;
+  if (repeatCheckbox) {
+    repeatCheckbox.onchange = function(e) {
+      voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
+      console.log(`✅ Life Span repeat: ${e.target.checked}`);
+    };
+  }
+  
+  // Connect existing Life Span sliders (they should already exist now)
+  const spanSliders = container.querySelectorAll('.life-span-dual-slider');
+  console.log(`Found ${spanSliders.length} Life Span sliders to connect`);
+  
+  spanSliders.forEach((sliderContainer) => {
+    const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
+    const slider = sliderContainer.querySelector('.noUi-target');
+    
+    if (slider && slider.noUiSlider) {
+      console.log(`🔧 Connecting Life Span ${spanNumber} slider events`);
+      
+      slider.noUiSlider.off('update');
+      slider.noUiSlider.on('update', function(values) {
+        const enterValue = values[0];
+        const exitValue = values[1];
+        
+        // Parse values (could be in format "120 beats (2:00)" or "∞ (∞)")
+        const enterMs = parseLifeSpanValue(enterValue);
+        const exitMs = parseLifeSpanValue(exitValue);
+        
+        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
+        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
+        
+        console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
+      });
+    } else {
+      console.warn(`❌ Life Span ${spanNumber} slider not found or not initialized`);
+    }
   });
+}); //This was the missing closing bracket for the lifeSpanContainers.forEach
   
   console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
   console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
@@ -4718,7 +5173,8 @@ function connectAllSliders() {
   console.log(`   ✅ ${dropdowns.length} dropdown controls`);
   console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
   console.log(`   ✅ ${lifeSpanContainers.length} Life Span controls`);
-}
+} // <- This closes the connectAllSliders function
+
 
 function createLifeSpanSlider(container, spanNumber) {
   console.log(`🕐 Creating Life Span ${spanNumber} slider`);
