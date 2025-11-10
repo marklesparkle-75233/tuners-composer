@@ -28,9 +28,11 @@ const parameterDefinitions = [
   { name: "DELAY", type: "multi-dual", min: 0, max: 100, rollup: "spatial" }
 ];
 
-// Life Span Constants
-const MAX_LIFE_SPAN_MINUTES = 5;
-const MAX_LIFE_SPAN_MS = MAX_LIFE_SPAN_MINUTES * 60 * 1000; // 300,000ms
+// Life Span Validation Constants  
+const MIN_LIFE_SPAN_MS = 5000;        // 5 seconds minimum
+const MAX_LIFE_SPAN_MS = 3600000;     // 60 minutes maximum (1 hour)
+const DEFAULT_LIFE_SPAN_MS = 300000;  // 5 minutes default
+
 
 // Life Span Helper Functions
 function formatMsToMMSS(ms) {
@@ -48,9 +50,10 @@ function parseMMSSToMs(timeString) {
   const seconds = parseInt(match[2]);
   const totalMs = (minutes * 60 + seconds) * 1000;
   
-  if (totalMs > MAX_LIFE_SPAN_MS) return null;
+  if (totalMs > MAX_LIFE_SPAN_MS) return null;  // Now correctly 60 minutes
   return totalMs;
 }
+
 
 function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
   const timeSeconds = timeMs / 1000;
@@ -5680,7 +5683,7 @@ async function saveCompositionToFile() {
     try {
         if ('showSaveFilePicker' in window) {
             const fileHandle = await window.showSaveFilePicker({
-                suggestedName: `composition-${new Date().toISOString().split('T')[0]}.json`,
+                suggestedName: `tune-${new Date().toISOString().split('T')[0]}.json`,
                 types: [{
                     description: "Tuners' Composer files",
                     accept: { 'application/json': ['.json'] }

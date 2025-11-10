@@ -83,6 +83,7 @@ THREE-STAGE RESPONSIVE HEADER SYSTEM
   
   .nav-buttons-container {
     display: flex;
+    align-items: flex-start; /* Aligns content to the top */
   }
   
   #nav-buttons {
