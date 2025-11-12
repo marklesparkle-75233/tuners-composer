@@ -10,8 +10,8 @@ const parameterDefinitions = [
   
   // RHYTHM & TIMING ROLLUP
   { name: "TEMPO (BPM)", type: "single-dual", min: 40, max: 240, rollup: "rhythm" },
-  { name: "RHYTHMS", type: "dual-dropdown", options: "rhythms", rollup: "rhythm" },
-  { name: "RESTS", type: "dual-dropdown", options: "rests", rollup: "rhythm" },
+  { name: "RHYTHMS", type: "checkbox-group", options: "rhythms", rollup: "rhythm" },
+  { name: "RESTS", type: "checkbox-group", options: "rests", rollup: "rhythm" },
   { name: "LIFE SPAN", type: "life-span", rollup: "rhythm" },  // NEW PARAMETER
   
   // MIXING & LEVELS ROLLUP (unchanged)
@@ -403,25 +403,31 @@ function initializeVoices() {
           voice.parameters[param.name] = 0;
         }
       } else if (param.type === 'dual-dropdown') {
-        if (param.name === 'RHYTHMS') {
-          voice.parameters[param.name] = {
-            min: 7,
-            max: 7,
-            behavior: 50
-          };
-        } else if (param.name === 'RESTS') {
-          voice.parameters[param.name] = {
-            min: 0,
-            max: 0,
-            behavior: 50
-          };
-        } else {
-          voice.parameters[param.name] = {
-            min: 0,
-            max: 0,
-            behavior: 50
-          };
-        }
+  voice.parameters[param.name] = {
+    min: 0,
+    max: 0,
+    behavior: 50
+  };
+} else if (param.type === 'checkbox-group') {
+  if (param.name === 'RHYTHMS') {
+    voice.parameters[param.name] = {
+      selectedValues: [7],  // Default: Quarter notes only
+      behavior: 50
+    };
+    console.log(`🎵 Voice ${i + 1} RHYTHMS initialized: Quarter Notes`);
+  } else if (param.name === 'RESTS') {
+    voice.parameters[param.name] = {
+      selectedValues: [0],  // Default: No rests
+      behavior: 50
+    };
+    console.log(`🎵 Voice ${i + 1} RESTS initialized: No Rests`);
+  } else {
+    voice.parameters[param.name] = {
+      selectedValues: [],
+      behavior: 50
+    };
+  }
+
       } else if (param.type === 'single-dual') {
         if (typeof param.min === 'undefined' || typeof param.max === 'undefined') {
           console.error(`Missing min/max for parameter: ${param.name}`);
@@ -900,6 +906,121 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
   return wrapper;
 }
 
+function createCheckboxGroup(optionsType, paramName, voiceIndex) {
+  console.log(`🎵 Creating checkbox group for ${paramName}, voice ${voiceIndex + 1}`);
+  
+  const wrapper = document.createElement('div');
+  wrapper.className = 'checkbox-group-container';
+  
+  let options = [];
+  if (optionsType === 'rhythms') options = rhythmOptions;
+  else if (optionsType === 'rests') options = restOptions;
+  
+  const checkboxesWrapper = document.createElement('div');
+  checkboxesWrapper.className = 'checkboxes-wrapper';
+  
+  options.forEach((option, index) => {
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'checkbox-item';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `${paramName}-${voiceIndex}-${index}`;
+    checkbox.value = index;
+    checkbox.className = 'rhythm-checkbox';
+    
+    // Check if this value is selected
+    const param = voiceData[voiceIndex].parameters[paramName];
+    const selectedValues = param.selectedValues || [];
+    checkbox.checked = selectedValues.includes(index);
+    
+    checkbox.onchange = (e) => {
+      updateCheckboxSelection(voiceIndex, paramName, index, e.target.checked);
+    };
+    
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+    label.textContent = option;
+    label.className = 'checkbox-label';
+    
+    checkboxContainer.appendChild(checkbox);
+    checkboxContainer.appendChild(label);
+    checkboxesWrapper.appendChild(checkboxContainer);
+  });
+  
+  wrapper.appendChild(checkboxesWrapper);
+  
+  console.log(`✅ Created ${options.length} checkboxes for ${paramName}`);
+  return wrapper;
+}
+
+function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
+  const param = voiceData[voiceIndex].parameters[paramName];
+  
+  if (!param.selectedValues) {
+    param.selectedValues = [];
+  }
+  
+  // SPECIAL CASE: "No Rests" checkbox (index 0 in RESTS parameter)
+  if (paramName === 'RESTS') {
+    if (index === 0 && isChecked) {
+      // "No Rests" was just checked - clear all other rests
+      console.log('🎵 "No Rests" checked - clearing all other rest selections');
+      param.selectedValues = [0];
+      
+      // Uncheck all other checkboxes in the UI
+      const allCheckboxes = document.querySelectorAll(`input[id^="RESTS-${voiceIndex}-"]`);
+      allCheckboxes.forEach(cb => {
+        if (parseInt(cb.value) !== 0) {
+          cb.checked = false;
+        }
+      });
+      
+    } else if (index !== 0 && isChecked) {
+      // Another rest was checked - uncheck "No Rests"
+      console.log('🎵 Rest value checked - unchecking "No Rests"');
+      param.selectedValues = param.selectedValues.filter(v => v !== 0);
+      
+      // Uncheck "No Rests" in the UI
+      const noRestsCheckbox = document.querySelector(`input[id="RESTS-${voiceIndex}-0"]`);
+      if (noRestsCheckbox) {
+        noRestsCheckbox.checked = false;
+      }
+      
+      // Add the newly checked rest
+      if (!param.selectedValues.includes(index)) {
+        param.selectedValues.push(index);
+        param.selectedValues.sort((a, b) => a - b);
+      }
+      
+    } else if (index === 0 && !isChecked) {
+      // "No Rests" was unchecked - just remove it
+      param.selectedValues = param.selectedValues.filter(v => v !== 0);
+      
+    } else {
+      // Regular rest unchecked
+      param.selectedValues = param.selectedValues.filter(v => v !== index);
+    }
+    
+  } else {
+    // RHYTHMS - normal behavior
+    if (isChecked) {
+      if (!param.selectedValues.includes(index)) {
+        param.selectedValues.push(index);
+        param.selectedValues.sort((a, b) => a - b);
+      }
+    } else {
+      param.selectedValues = param.selectedValues.filter(v => v !== index);
+    }
+  }
+  
+  const optionsList = paramName === 'RHYTHMS' ? rhythmOptions : restOptions;
+  const selectedNames = param.selectedValues.map(i => optionsList[i]);
+  
+  console.log(`✅ ${paramName} Voice ${voiceIndex + 1} selection (${param.selectedValues.length}):`, selectedNames);
+}
+
+
 function createDualSlider(param, voiceIndex) {
     const wrapper = document.createElement('div');
     wrapper.className = 'dual-slider';
@@ -1291,17 +1412,20 @@ function createRow(param, voiceIndex) {
   const range = document.createElement('div');
   range.className = 'range-container';
 
-  if (param.type === 'dropdown') {
-    range.appendChild(createDropdown(param.options, param.name, voiceIndex));
-  } else if (param.type === 'dual-dropdown') {
-    range.appendChild(createDualDropdown(param.options, param.name, voiceIndex));
-  } else if (param.type === 'single-dual') {
-    range.appendChild(createDualSlider(param, voiceIndex));
-  } else if (param.type === 'multi-dual') {
-    range.appendChild(createMultiDualSlider(param, voiceIndex));
-  } else if (param.type === 'life-span') {
-    range.appendChild(createLifeSpanControl(param, voiceIndex));
-  }
+if (param.type === 'dropdown') {
+  range.appendChild(createDropdown(param.options, param.name, voiceIndex));
+} else if (param.type === 'dual-dropdown') {
+  range.appendChild(createDualDropdown(param.options, param.name, voiceIndex));
+} else if (param.type === 'checkbox-group') {
+  range.appendChild(createCheckboxGroup(param.options, param.name, voiceIndex));
+} else if (param.type === 'single-dual') {
+  range.appendChild(createDualSlider(param, voiceIndex));
+} else if (param.type === 'multi-dual') {
+  range.appendChild(createMultiDualSlider(param, voiceIndex));
+} else if (param.type === 'life-span') {
+  range.appendChild(createLifeSpanControl(param, voiceIndex));
+}
+
 
   controlsContainer.appendChild(range);
 
@@ -2260,6 +2384,35 @@ class Voice {
   }
   
   selectValueInRange(param) {
+    console.log('🔍 selectValueInRange called, param:', param);
+
+    // NEW: Handle checkbox-based selection
+    if (param.selectedValues && Array.isArray(param.selectedValues)) {
+      console.log('🎵 Using selectedValues:', param.selectedValues);
+      console.log('🎵 selectValueInRange called with:', param.selectedValues);  // DEBUG LINE
+    
+    if (param.selectedValues.length === 0) {
+      console.warn('No rhythmic values selected, defaulting to Quarter Notes');
+      return 7;
+    }
+      if (param.selectedValues.length === 0) {
+        console.warn('No rhythmic values selected, defaulting to Quarter Notes');
+        return 7; // Fallback to quarter notes if nothing selected
+      }
+      
+      if (param.behavior > 0) {
+        // Behavior > 0: Random selection from checked values
+        const randomIndex = Math.floor(Math.random() * param.selectedValues.length);
+        const selectedValue = param.selectedValues[randomIndex];
+        return selectedValue;
+      } else {
+        // Behavior = 0: Always use first selected value
+        return param.selectedValues[0];
+      }
+    }
+    
+    // OLD: Fallback for range-based (backwards compatibility)
+    console.warn('Using legacy min/max range selection');
     if (param.behavior > 0) {
       return Math.floor(interpolateParameter(
         (param.min + param.max) / 2,
@@ -2272,6 +2425,7 @@ class Voice {
       return Math.floor((param.min + param.max) / 2);
     }
   }
+
   
   startParameterEvolution() {
     if (this.isPreviewPlaying) {
@@ -2975,9 +3129,15 @@ scheduleNextNote() {
   
   const rhythmIndex = this.selectValueInRange(rhythmParam);
   const restIndex = this.selectValueInRange(restParam);
+
+  console.log('🔍 DEBUG rhythmParam:', rhythmParam);  // ADD THIS
+  console.log('🔍 DEBUG restParam:', restParam);      // ADD THIS
   
   const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
   const restDurationMs = this.getRestDurationMs(restIndex);
+
+  console.log('🔍 DEBUG rhythmIndex:', rhythmIndex);  // ADD THIS
+  console.log('🔍 DEBUG restIndex:', restIndex);      // ADD THIS
   
   const noteInfoArray = selectMidiNote(this.voiceIndex);
   
@@ -2992,14 +3152,38 @@ scheduleNextNote() {
 
   
   selectValueInRange(param) {
-    if (!param) return 7;
+    console.log('🔍 selectValueInRange called with param:', param);
     
-    if (param.min > param.max) {
-      console.warn(`Invalid range detected: min(${param.min}) > max(${param.max}), defaulting to quarter notes`);
-      this.updateDropdownsToQuarterNotes(param);
-      return 7;
+    // NEW: Handle checkbox-based selection
+    if (param.selectedValues && Array.isArray(param.selectedValues)) {
+      console.log('🎵 selectedValues array:', param.selectedValues);
+      
+      if (param.selectedValues.length === 0) {
+        console.warn('⚠️ No rhythmic values selected, defaulting to Quarter Notes (7)');
+        return 7;
+      }
+      
+      let selectedValue;
+      
+      if (param.behavior > 0) {
+        // Random selection from checked values
+        const randomIndex = Math.floor(Math.random() * param.selectedValues.length);
+        selectedValue = param.selectedValues[randomIndex];
+        console.log(`🎲 Behavior ${param.behavior}%: randomly selected index ${randomIndex} = value ${selectedValue}`);
+      } else {
+        // Always use first selected value
+        selectedValue = param.selectedValues[0];
+        console.log(`📌 Behavior 0%: using first value ${selectedValue}`);
+      }
+      
+      // Make sure we return a number
+      const result = parseInt(selectedValue);
+      console.log(`✅ Returning: ${result} (type: ${typeof result})`);
+      return result;
     }
     
+    // OLD: Fallback for range-based
+    console.warn('⚠️ Using legacy min/max range selection');
     if (param.behavior > 0) {
       return Math.floor(interpolateParameter(
         (param.min + param.max) / 2,
@@ -3012,6 +3196,7 @@ scheduleNextNote() {
       return Math.floor((param.min + param.max) / 2);
     }
   }
+
 
   updateDropdownsToQuarterNotes(param) {
     const parameterSection = document.getElementById('parameter-section');
@@ -4519,6 +4704,8 @@ function createParameterContent(param, voiceIndex) {
     range.appendChild(createDropdown(param.options, param.name, voiceIndex));
   } else if (param.type === 'dual-dropdown') {
     range.appendChild(createDualDropdown(param.options, param.name, voiceIndex));
+  } else if (param.type === 'checkbox-group') {
+    range.appendChild(createCheckboxGroup(param.options, param.name, voiceIndex));
   } else if (param.type === 'single-dual') {
     range.appendChild(createDualSlider(param, voiceIndex));
   } else if (param.type === 'multi-dual') {
@@ -4526,6 +4713,7 @@ function createParameterContent(param, voiceIndex) {
   } else if (param.type === 'life-span') {
     range.appendChild(createLifeSpanControl(param, voiceIndex));
   }
+
   
   controlsContainer.appendChild(range);
   
