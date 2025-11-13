@@ -558,7 +558,7 @@ function createLifeSpanControl(param, voiceIndex) {
   `;
   settingsRow.innerHTML = `
     <div class="max-time-container" style="flex: 1;">
-      <label>Max Time:</label>
+      <label>Total Time Length:</label>
       <input type="text" class="max-time-input" value="${storedMaxTimeFormatted}" placeholder="0:05" maxlength="5" 
              title="Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)"
              style="width: 100%; padding: 4px; margin-left: 5px;" />
@@ -582,7 +582,7 @@ function createLifeSpanControl(param, voiceIndex) {
     
     const spanHeader = document.createElement('div');
     spanHeader.className = 'slider-label';
-    spanHeader.textContent = `Life Span ${i}`;
+    spanHeader.textContent = `Entrance & Exit ${i}`;
     spanContainer.appendChild(spanHeader);
     
     const sliderWrapper = document.createElement('div');
@@ -1001,19 +1001,32 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
       // Regular rest unchecked
       param.selectedValues = param.selectedValues.filter(v => v !== index);
     }
-    
   } else {
-    // RHYTHMS - normal behavior
-    if (isChecked) {
-      if (!param.selectedValues.includes(index)) {
-        param.selectedValues.push(index);
-        param.selectedValues.sort((a, b) => a - b);
+  // RHYTHMS - normal behavior
+  if (isChecked) {
+    if (!param.selectedValues.includes(index)) {
+      param.selectedValues.push(index);
+      param.selectedValues.sort((a, b) => a - b);
+    }
+  } else {
+    param.selectedValues = param.selectedValues.filter(v => v !== index);
+    
+    // FALLBACK: If all rhythms are now unchecked, auto-check Quarter Notes (index 7)
+    if (param.selectedValues.length === 0) {
+      console.log('⚠️ All rhythms unchecked - auto-selecting Quarter Notes (index 7)');
+      param.selectedValues = [7];
+      
+      // Check the Quarter Notes checkbox in the UI
+      const quarterNotesCheckbox = document.querySelector(`input[id="RHYTHMS-${voiceIndex}-7"]`);
+      if (quarterNotesCheckbox) {
+        quarterNotesCheckbox.checked = true;
+        console.log('✅ Quarter Notes checkbox auto-checked in UI');
       }
-    } else {
-      param.selectedValues = param.selectedValues.filter(v => v !== index);
     }
   }
-  
+}
+
+
   const optionsList = paramName === 'RHYTHMS' ? rhythmOptions : restOptions;
   const selectedNames = param.selectedValues.map(i => optionsList[i]);
   
@@ -5465,7 +5478,7 @@ function convertNoteNameToMidi(noteName) {
 
 function openUserGuide() {
   const userGuideWindow = window.open(
-    'user-guide.html',
+    'user-guide.htm',
     'userGuide',
     'width=900,height=700,scrollbars=yes,resizable=yes,menubar=yes,toolbar=yes'
   );
