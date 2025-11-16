@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nest Builder User's Guide</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2c5aa0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #2c5aa0;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #2c5aa0;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        
+        h3 {
+            color: #333;
+            margin-top: 25px;
+            font-size: 18px;
+        }
+        
+        h4 {
+            color: #2c5aa0;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+        
+        .copyright {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        ul, ol {
+            margin: 10px 0;
+            padding-left: 30px;
+        }
+        
+        ul ul, ol ol {
+            margin: 5px 0;
+            padding-left: 25px;
+        }
+        
+        .highlight {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-left: 4px solid #2c5aa0;
+            margin: 15px 0;
+        }
+        
+        .parameter-list {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .rollup-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #FF7F50;
+            margin: 15px 0;
+        }
+        
+        .example {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        strong {
+            color: #2c5aa0;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ddd;
+            color: #666;
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .section {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Nest Builder User's Guide</h1>
+        <div class="copyright">Version 8.  Copyright 2025 Mark Loren Wilson</div>
+    </div>
+
+    <div class="section">
+        <h2>What is Nest Builder?</h2>
+        <p>Nest  Builder is a musical instrument that creates and develops evolving musical landscapes. Nest Builder comprises a 'nest' of settings using the 20 adjustable parameters and behaviors for each of the 16 possible voices, and to listen to them, save them or share with others.</p>
+        
+        <p>You will use sliders and dropdown boxes to set up a unique nest of parameters and behaviors for each Voice, and then press the Play button to play all voices play together.</p>
+        
+        <div class="highlight">
+            <strong>Create a free account</strong> to unlock the Professional Sample Library - a one-time download that transforms your compositions with authentic real instrument sounds and ambient backgrounds.
+        </div>
+        
+        <p>When your nest is sounding just right, create an account to save your nest for later, or share with others.</p>
+
+        <h3>1. Generative Music Philosophy</h3>
+        <p>Nest Builder is more of a musical instrument than compositional tool - it's a <strong>controlled engine</strong> for creating evolving musical landscapes. The "behavior" slider is the key innovation, controlling how dramatically parameters shift during playback.</p>
+
+        <h3>2. Professional Music Production Standards</h3>
+        <ul>
+            <li><strong>Full 88-key piano range</strong> (A0-C8) with proper MIDI note display</li>
+            <li><strong>Standard rhythm notation</strong> (triplets through whole notes)</li>
+            <li><strong>Professional effects chain</strong> (reverb, chorus, phaser, tremolo with speed/depth control)</li>
+            <li><strong>MIDI-compliant</strong> velocity and channel management</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>What is tuners.com?</h2>
+        <p>Tuners.com is a community of musical people who use the Nest Builder musical instrument to create and share musical compositions.</p>
+        <h3>1. Community Platform</h3>
+        <p>The system is designed as a social platform where users:</p>
+        <ul>
+            <li>Create and share nests files (compositions)</li>
+            <li>Browse and listen to other people's compositions</li>
+            <li>Vote and comment on others' work</li>
+            <li>Search by username, filename, or date</li>
+        </ul>
+    </p>
+    </div>
+
+    <div class="section">
+        <h2>Quick Start</h2>
+        <ol>
+            <li><strong>Select and enable Voice 1:</strong> Click the Voice 1 tab, located on the left of the page, and check the checkmark to enable the Voice.  By default, Voice tab is active and visible, but Voices 2-16 are disabled.</li>
+            <li><strong>On the Instrument & Sound rollup:</strong>
+                <ol type="a">
+                    <li>Select an Instrument from the dropdown box</li>
+                    <li>Select notes in the lower two octaves of the piano, and set the behavior to 100%</li>
+                </ol>
+            </li>
+            <li><strong>On the Mixing & Levels rollup:</strong>
+                <ol type="a">
+                    <li>Select a Volume low range to zero, the high range to 50%, and behavior to 100%. Set the Stereo Balance range from -100 to +100, and set behavior to 100%</li>
+                </ol>
+            </li>
+            <li><strong>On the Rhythm & Timing rollup:</strong>
+                <ol type="a">
+                    <li>Select a low range of two whole notes and behavior to 100%</li>
+                </ol>
+            </li>
+            <li><strong>Press the Preview button:</strong> to hear the results of Voice 1's nest of settings.</li>
+            <li><strong>Select the Voice 2 tab:</strong>  Check the Enable checkbox. Set up Voice2 with a melodic range in the top two octaves of the piano, and with a range of thirtysecond notes to sixteenth notes</li>
+            <li><strong>Press the Preview button:</strong> to audition the Voice 2 nest of settings.</li>
+            <li><strong>Press the Play button:</strong> to play all enabled, at this time just the two you have set up: Voice 1 is playing long, low bass notes, and Voice 2 is playing fast, high notes.  Make changes to any control and hear the results in real time.</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h2>What is a Voice?</h2>
+        <p>Each voice is a nest of 17 control parameters, each parameter on its own row and displayed each on its own voice tab. The parameters are grouped into five rollups. The rollups and the parameters are:</p>
+        
+        <div class="rollup-section">
+            <h4>🎹 INSTRUMENT & SOUND</h4>
+            <ul>
+                <li>SOUND</li>
+                <li>MELODIC RANGE</li>
+                <li>POLYPHONY</li>
+                <li>ATTACK VELOCITY</li>
+                <li>DETUNING</li>
+                <li>PORTAMENTO</li>
+            </ul>
+        </div>
+
+        <div class="rollup-section">
+            <h4>🎚️ MIXING & LEVELS</h4>
+            <ul>
+                <li>VOLUME</li>
+                <li>STEREO BALANCE</li>
+            </ul>
+        </div>
+
+        <div class="rollup-section">
+            <h4>🥁 RHYTHM & TIMING</h4>
+            <ul>
+                <li>TEMPO (BPM)</li>
+                <li>RHYTHMS</li>
+                <li>RESTS</li>
+                <li>LIFE SPAN</li>
+            </ul>
+        </div>
+
+        <div class="rollup-section">
+            <h4>🌊 MODULATION EFFECTS</h4>
+            <ul>
+                <li>TREMOLO</li>
+                <li>CHORUS</li>
+                <li>PHASER</li>
+            </ul>
+        </div>
+
+        <div class="rollup-section">
+            <h4>🏛️ SPATIAL EFFECTS</h4>
+            <ul>
+                <li>REVERB</li>
+                <li>DELAY</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>How do the Controls Work?</h2>
+        <p><strong>First: </strong>Click a Voice tab to select it.</p>
+        <p><strong>Second:</strong> Tick the checkbox to enable it, and make that Voice ready to play.</p>
+        <p><strong>Third:</strong> Adjust the Voice Parameters and set their operating range and behavior.</p>
+
+        <h3>Range Select Methods</h3>
+        <p>set the low and high operating range of each parameter with the single or dual handle slider, a dropdown box, or the piano keyboard.</p>
+        
+        <ul>
+            <li><strong>DUAL HANDLE SLIDERS:</strong> Use the left slider handle to set the lowest limit of your chosen melodic range, and the right slider handle to set the upper limits of the range. Setting both handles to the zero position essentially disables the parameter. A tooltip centered over the slider displays the current slider value.</li>
+            
+            <li><strong>DROP DOWN BOX:</strong> The Rhythms and Rests parameters each feature two dropdown boxes for setting the shortest and longest notes values possible. Look for the tooltips!</li>
+            
+            <li><strong>MELODIC RANGE:</strong> Add to or subtract from the melodic range with either of two ways:
+                <ul>
+                    <li>Click individual keyboard notes to add or remove them from the selected range.</li>
+                    <li>Swipe across a chromatic range of notes to create an inclusive melodic range.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>What is a Behavior Setting?</h3>
+        <p>The <strong>Behavior slider control</strong> can be thought of as a <strong>Rate of Change control</strong>, and shapes the randomization within the selected range.</p>
+        <ul>
+            <li> A high setting allows more drastic leaps between successive notes within the permitted range.</li>
+            <li> A low setting enforces smaller leaps within the set range.</li>.
+        </ul>
+        <p> This creates the <strong>"controlled randomization engine"</strong> that's central the Nest Builder's generative music philosophy - where low behavior settings create smooth parameter changes and high settings create dramatic variations, all within the user-defined ranges.</p>
+    </div>
+
+    <div class="section">
+        <h2>How to Set Up a Voice: The Parameters in Detail</h2>
+        <p>Use the parameter rollups as described below.</p>
+        <h3>ROLLUP #1: INSTRUMENT & SOUND 🎹 </h3>
+        
+        <h4>SOUND</h4>
+        <p>Use this dropdown box to select the sound. The dropdown box is populated with the sounds built into the user's computer's soundcard. The user selects a sound and all the notes in the voice will use this sound.</p>
+
+        <h4>MELODIC RANGE</h4>
+        <p>The melodic range of each voice can be the entire <strong>88 key piano keyboard</strong> In the melodic range row</p>
+        <ul>
+            <li>Click on an individual note to select or deselect it</li>
+            <li>Click and swipe to select an inclusive range of notes</li>
+        </ul>
+        <p>Use the Behavior slider control to adjust whether changes during playback are smooth and connected (low setting) or wider and more drastic (high setting).</p>
+
+        <h4>POLYPHONY</h4>
+        <p>Use the range slider controls to set the minimum and maximum number of simultaneous notes that can be played at any moment. Is this voice a bass part that needs only one note at a time, or is it a chordal voice that could benefit time to time from a simultaneous splash of notes?</p>
+        <p>Use the Behavior slider control to adjust whether changes to the polyphony setting during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>ATTACK VELOCITY</h4>
+        <p>Use the Attack Velocity slider control to set the low and high limits to the attack velocity range. Some sound patches have touch sensitivity, and by adjusting the attack velocity you will control how much of which sound you want to hear. When playing, the voice's attack velocity will be constrained between the two set limits. Set it for screaming all the time, or have it play with a nice and gentle touch.</p>
+        <p>Use the Behavior control to adjust whether consecutive changes to the attack velocity during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>DETUNING</h4>
+        <p>Use the dual slider controls to set the minimum and maximum amount of note detuning possible during playback. This range is measured in musical cents, and the range is 4 cents to 90 cents. Detuning can introduce pitch bends.</p>
+        <p>Turn off the parameter by moving both handles to the zero position, effectively disabling it from having any effect on the voice.</p>
+
+        <h4>PORTAMENTO GLIDE TIME</h4>
+        <p>Portamento is a gliding effect that connects successive notes together.</p>
+        <p>Use the dual slider control to set the minimum and maximum glide time when the effect is used. The Behavior slider control to adjust whether changes to the portamento/glide time setting during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+        <p>You can effectively turn the parameter off by moving both handles to the zero position.</p>
+    </div>
+
+    <div class="section">
+        <h3>ROLLUP #2: MIXING & LEVELS 🎚️ </h3>
+        
+        <h4>VOLUME</h4>
+        <p>Use the Volume dual control sliders to set the low and high limits to the volume range. When playing, the voice's note range is constrained within the two set limits.</p>
+        <p>Use the Behavior slider control to adjust whether consecutive changes to the volume during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>STEREO BALANCE</h4>
+        <p>Use the Stereo Balance slider control to set the range of the voice in the stereo field. When playing, the voice's placement within the stereo field will be constrained between the two set limits. Set both stereo balance handles to the same value to fix it in the stereo field.</p>
+        <p>Use the Behavior slider control to adjust whether consecutive changes to the stereo balance during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    </div>
+
+    <div class="section">
+        <h3>ROLLUP #3: RHYTHM & TIMING 🥁 </h3>
+        
+        <h4>TEMPO (BPM)</h4>
+        <p>Each voice has its own TEMPO parameter. This creates <strong>polyrhythmic generative music</strong> where voices evolve at different rates, creating complex evolving textures rather than synchronized changes.</p>
+        <p>Use the Tempo Range slider control to set the low and high limits to the possible tempo range. The lowest tempo in the range is 40 BPM and the highest is 240 BPM. When playing, the voice's tempo is constrained between the two set limits. Set both handles to the same number to fix the performance tempo.</p>
+        <p>Use the Behavior slider control to adjust whether changes to notes within the Tempo range during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>RHYTHMS</h4>
+        <p>The Rhythm limits are set with two dropdown boxes, one for the setting the low limit and one for setting the high limit. The performance will include all rhythmic values between the two limits. Set low and high to the same value to fix an unchanging rhythmic value.</p>
+        <p><strong>Possible rhythms include:</strong> thirtysecond notes, sixteenth note triplets, sixteenth notes, eighth note triplets, eighth notes, quarter note triplets, quarter notes, half note triplets, half notes, one whole note, two whole notes, three whole notes, four whole notes.</p>
+        <p>Use the Behavior slider control to adjust whether consecutive changes to the rhythms during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>RESTS</h4>
+        <p>The Rests limits are set with two dropdown boxes, one for the setting the low limit and one for setting the high limit. The performance will include all rest values between the two limits. To fix a single rest value, set both handles to the same value.</p>
+        <p><strong>Possible rests include:</strong> thirtysecond notes, sixteenth note triplets, sixteenth notes, eighth note triplets, eighth notes, quarter note triplets, quarter notes, half note triplets, half notes, one whole note, two whole notes, three whole notes, four whole notes.</p>
+        <p>Use the Behavior slider control to adjust whether consecutive changes to the rhythms during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>LIFE SPAN</h4>
+        <p>Life Span parameter has three single slider controls and a checkbox control:</p>
+        <ul>
+            <li><strong>Duration:</strong> How long does the voice play before it stops or repeats?</li>
+            <li><strong>Entrance:</strong> How long after Run button pressed before the voice begins playing?</li>
+            <li><strong>Exit:</strong> How long after the Entrance before the voice drops out?</li>
+            <li><strong>Repeat Y/N:</strong> Whether the voice repeats its program or terminates after 1 time?</li>
+        </ul>
+        
+        <div class="example">
+            <strong>Example 1:</strong> set the duration for three minutes, to start 1 minute after the run button is pressed, to drop out at the 2 minute mark, then repeat
+        </div>
+        
+        <div class="example">
+            <strong>Example 2:</strong> set the Duration for two minutes, set Entrance to zero-far-left position meaning start when the Run button is pressed, set Exit for 1 minute meaning stop playing 1 minute after starting and stay silent for the remainder of the Duration, with no repeat so stay silent for the remainder of the Run.
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>ROLLUP #4: MODULATION EFFECTS 🌊 </h3>
+        
+        <h4>TREMOLO</h4>
+        <p>Setting the Tremolo range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
+        <p>Use the Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+        <p>If you want to effectively turn off the effect, set both sliders to zero.</p>
+
+        <h4>CHORUS</h4>
+        <p>Setting the Chorus range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
+        <p>Use Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+
+        <h4>PHASER</h4>
+        <p>Setting the Phaser range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
+        <p>Use the Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    </div>
+
+    <div class="section">
+        <h3>ROLLUP #5: SPATIAL EFFECTS 🏛️ </h3>
+        
+        <h4>REVERB</h4>
+        <p><em>Note: Layout to be updated similar to timing parameter row</em></p>
+        <ul>
+            <li>A single slider to set the delay time</li>
+            <li>A single slider to set the wet/dry mix</li>
+            <li>A radio box for type of reverb?</li>
+            <li>Set the behavior slider</li>
+        </ul>
+
+        <h4>DELAY</h4>
+        <ul>
+            <li>Set high and low ranges for both speed and depth of the Tremolo</li>
+            <li>Set the behavior slider</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>Preview the Voice and Adjust Parameters</h2>
+        <p>Each voice has its own Preview button. A Preview button will play only its voice with its current settings, but not any other voices which may be already designed and enabled. Use the Preview button to test the setup while you are setting up the voice. The Preview button is a toggle on/off button labeled Preview and Stop. Press the button once to begin playback of the Voice. While playing, the Preview button label becomes "Stop" and the button bg color becomes a light red color. Press it again to stop the voice preview playing.</p>
+
+        <h3>Press the Lock Button:</h3>
+        <p>Press any Voice's Lock button to prevent any accidental changes to the Voice's settings while you may be working on other Voices. The button is a red color when locked. Press again to unlock the Voice, and color change back to default. Lock button is only functional when the user is logged in.</p>
+
+        <h3>Set Up Other Voices:</h3>
+        <p>Now that you have one voice sounding like you want it, set up all the others you may want, up to a total of 16.</p>
+    </div>
+
+    <div class="section">
+        <h2>Press Play Button:</h2>
+        <p>The Play button begins playing all the Voices simultaneously so you can listen to your creation evolve. The Play button's color turns blue during playing, and the nest will play until it is pressed again.</p>
+
+        <h2>Save Your Nest file:</h2>
+        <p>Press the Save button to save your Nest's setting's file so you can open and play it again any time you want it, and not worry about losing it. Best Practice is to save often so latest changes are never lost. You must create an account and be logged in to save your nest files.</p>
+
+        <h2>Open a Nest File:</h2>
+        <p>Press the Open button to view your saved Nests. Select your nest's name to open the file for playing or editing. Also displayed are creation date, modification date, and a description field for user's comments.</p>
+
+        <h2>Post Your Nest For Others to Enjoy:</h2>
+        <p>Press the Post button to display your nest on the Website's public page. You must be logged in to post. The public page lists all the published nests from everybody. Clicking on a nest displayed on the public page will start it to play for a listener. If the listener has an account and is logged in, they will be able to see the settings but not be able to change anything. Those who are not logged in can hear a posted nest played but will not be able to see any of the nest settings or to cast an upvote for a posted nest.</p>
+
+        <h2>Search for Another User's Nest file:</h2>
+        <p>Press the Search button and enter a username, a nest filename, or a date range to see a listing of the nests that meet the search criteria. These are displayed in the same format as the Public Nest Page.</p>
+
+        <h2>Make an Account:</h2>
+        <p>Make an account to be able to save nests, lock voices, to view the parameter settings of public nest, to comment, and to cast an upvote for any published nest.</p>
+
+        <h2>Sign In:</h2>
+        <p>Sign in to be able to save your nest, to access your saved nests, to see others' publicly posted nests' settings, or to comment, and to cast an upvote for any published nest.</p>
+    </div>
+
+    <div class="footer">
+        <p>Copyright 2025 Mark Loren Wilson</p>
+    </div>
+</body>
+</html>
+

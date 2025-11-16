@@ -424,25 +424,11 @@ SOCIAL SHARING BAR
   gap: 10px
 }
 
-/* Button is now left-justified (no margin-left needed) */
-#user-guide-btn {
-  background-color: #FF7F50; /* Coral color */
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
 #share-text {
   font-size: 0.85rem;
   font-weight: 500;
   color: #333;
   margin-right: 0.75rem;
-  margin-left: auto; /* Now pushes share section to the right */
 }
 
 #social-icons {
@@ -460,6 +446,19 @@ SOCIAL SHARING BAR
 
 .social-icon:hover {
   color: #357abd;
+}
+
+#user-guide-btn {
+  background-color: #FF7F50; /* Coral color */
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: auto; /* Right-justify */
+  transition: background-color 0.3s;
 }
 
 
