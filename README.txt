@@ -1,6 +1,5 @@
-﻿---
+---
 description: Repository Information Overview
-alwaysApply: true
 ---
 
 # Tuner's Composer - Phase 1
