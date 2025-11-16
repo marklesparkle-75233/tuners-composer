@@ -1,442 +1,1370 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nest Builder User's Guide</title>
+    <title>The Tuner User's Guide</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
+            background-color: #E6F2FF;
+            margin: 0;
             padding: 20px;
-            background-color: #f9f9f9;
-            color: #333;
+            font-family: Arial, sans-serif;
         }
         
-        .header {
+        .content-box {
+            background-color: white;
+            border: solid #E5E7EB 1pt;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .section-divider {
             text-align: center;
-            border-bottom: 3px solid #2c5aa0;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
+            margin: 35px 0;
+        }
+        
+        hr {
+            width: 100%;
+            height: 1px;
+            background-color: #333;
+            border: none;
         }
         
         h1 {
-            color: #2c5aa0;
-            font-size: 28px;
+            font-size: 25.5pt;
+            color: #1F497D;
             margin-bottom: 10px;
         }
         
         h2 {
-            color: #2c5aa0;
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 5px;
-            margin-top: 30px;
+            font-size: 17pt;
+            color: #1F497D;
+            margin-bottom: 10px;
         }
         
         h3 {
-            color: #333;
-            margin-top: 25px;
-            font-size: 18px;
+            font-size: 15.5pt;
+            color: #1F497D;
+            margin-top: 18px;
+            margin-bottom: 5px;
         }
         
         h4 {
-            color: #2c5aa0;
-            margin-top: 20px;
-            font-size: 16px;
+            font-size: 12pt;
+            color: #1F497D;
+            margin-bottom: 5px;
         }
         
-        .copyright {
-            text-align: center;
-            color: #666;
-            font-style: italic;
-            margin-bottom: 30px;
-        }
-        
-        .section {
-            background-color: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        p {
+            font-size: 10pt;
+            color: #374151;
+            line-height: 1.4;
+            margin-bottom: 14px;
         }
         
         ul, ol {
-            margin: 10px 0;
-            padding-left: 30px;
+            font-size: 10pt;
+            color: #374151;
+            line-height: 1.4;
+            margin-bottom: 14px;
         }
         
-        ul ul, ol ol {
-            margin: 5px 0;
-            padding-left: 25px;
+        blockquote {
+            background-color: #F5F2F0;
+            border-left: 4px solid #E5E7EB;
+            margin: 16px 0;
+            padding: 12px;
+            font-family: Consolas, monospace;
+            font-size: 10pt;
         }
         
-        .highlight {
-            background-color: #e8f4f8;
-            padding: 15px;
-            border-left: 4px solid #2c5aa0;
-            margin: 15px 0;
+        .copyright {
+            font-size: 8pt;
+            color: #111827;
+            font-weight: bold;
+            margin-top: 14px;
         }
         
-        .parameter-list {
-            background-color: #f5f5f5;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-        
-        .rollup-section {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-left: 4px solid #FF7F50;
-            margin: 15px 0;
-        }
-        
-        .example {
-            background-color: #fff3cd;
-            border: 1px solid #ffeaa7;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-        
-        strong {
-            color: #2c5aa0;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #ddd;
-            color: #666;
-        }
-        
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            
-            h1 {
-                font-size: 24px;
-            }
-            
-            .section {
-                padding: 15px;
-            }
+        .bold {
+            font-weight: bold;
+            color: #111827;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Nest Builder User's Guide</h1>
-        <div class="copyright">Version 8.  Copyright 2025 Mark Loren Wilson</div>
-    </div>
 
-    <div class="section">
-        <h2>What is Nest Builder?</h2>
-        <p>Nest  Builder is a musical instrument that creates and develops evolving musical landscapes. Nest Builder comprises a 'nest' of settings using the 20 adjustable parameters and behaviors for each of the 16 possible voices, and to listen to them, save them or share with others.</p>
-        
-        <p>You will use sliders and dropdown boxes to set up a unique nest of parameters and behaviors for each Voice, and then press the Play button to play all voices play together.</p>
-        
-        <div class="highlight">
-            <strong>Create a free account</strong> to unlock the Professional Sample Library - a one-time download that transforms your compositions with authentic real instrument sounds and ambient backgrounds.
-        </div>
-        
-        <p>When your nest is sounding just right, create an account to save your nest for later, or share with others.</p>
+<div class="content-box">
+    <h1>The Tuner User's Guide</h1>
+    <p class="copyright">Copyright 2025 Mark Loren Wilson</p>
+</div>
 
-        <h3>1. Generative Music Philosophy</h3>
-        <p>Nest Builder is more of a musical instrument than compositional tool - it's a <strong>controlled engine</strong> for creating evolving musical landscapes. The "behavior" slider is the key innovation, controlling how dramatically parameters shift during playback.</p>
+<div class="section-divider">
+    <hr>
+</div>
 
-        <h3>2. Professional Music Production Standards</h3>
-        <ul>
-            <li><strong>Full 88-key piano range</strong> (A0-C8) with proper MIDI note display</li>
-            <li><strong>Standard rhythm notation</strong> (triplets through whole notes)</li>
-            <li><strong>Professional effects chain</strong> (reverb, chorus, phaser, tremolo with speed/depth control)</li>
-            <li><strong>MIDI-compliant</strong> velocity and channel management</li>
-        </ul>
-    </div>
+<div class="content-box">
+    <h2>What is the Tuner?</h2>
+    <p>The Tuner is a compositional environment for creating evolving musical landscapes. It's a controlled musical engine that lets you define musical <strong>boundaries and behaviors</strong> - then the system composes in real-time within those boundaries, creating music that never repeats exactly the same way twice.</p>
+    <p>Think of it as conducting an intelligent orchestra: you set the rules for how each musician plays, and they improvise together, creating organic landscapes that breathe and evolve.</p>
+</div>
 
-    <div class="section">
-        <h2>What is tuners.com?</h2>
-        <p>Tuners.com is a community of musical people who use the Nest Builder musical instrument to create and share musical compositions.</p>
-        <h3>1. Community Platform</h3>
-        <p>The system is designed as a social platform where users:</p>
-        <ul>
-            <li>Create and share nests files (compositions)</li>
-            <li>Browse and listen to other people's compositions</li>
-            <li>Vote and comment on others' work</li>
-            <li>Search by username, filename, or date</li>
-        </ul>
-    </p>
-    </div>
+<div class="section-divider">
+    <hr>
+</div>
 
-    <div class="section">
-        <h2>Quick Start</h2>
-        <ol>
-            <li><strong>Select and enable Voice 1:</strong> Click the Voice 1 tab, located on the left of the page, and check the checkmark to enable the Voice.  By default, Voice tab is active and visible, but Voices 2-16 are disabled.</li>
-            <li><strong>On the Instrument & Sound rollup:</strong>
-                <ol type="a">
-                    <li>Select an Instrument from the dropdown box</li>
-                    <li>Select notes in the lower two octaves of the piano, and set the behavior to 100%</li>
-                </ol>
-            </li>
-            <li><strong>On the Mixing & Levels rollup:</strong>
-                <ol type="a">
-                    <li>Select a Volume low range to zero, the high range to 50%, and behavior to 100%. Set the Stereo Balance range from -100 to +100, and set behavior to 100%</li>
-                </ol>
-            </li>
-            <li><strong>On the Rhythm & Timing rollup:</strong>
-                <ol type="a">
-                    <li>Select a low range of two whole notes and behavior to 100%</li>
-                </ol>
-            </li>
-            <li><strong>Press the Preview button:</strong> to hear the results of Voice 1's nest of settings.</li>
-            <li><strong>Select the Voice 2 tab:</strong>  Check the Enable checkbox. Set up Voice2 with a melodic range in the top two octaves of the piano, and with a range of thirtysecond notes to sixteenth notes</li>
-            <li><strong>Press the Preview button:</strong> to audition the Voice 2 nest of settings.</li>
-            <li><strong>Press the Play button:</strong> to play all enabled, at this time just the two you have set up: Voice 1 is playing long, low bass notes, and Voice 2 is playing fast, high notes.  Make changes to any control and hear the results in real time.</li>
-        </ol>
-    </div>
+<div class="content-box">
+    <h2>Core Philosophy: Controlled Randomness</h2>
+    <p>The Tuner's innovation is the <span class="bold">behavior slider</span> - found on every parameter. This single control transforms static settings into living, breathing music:</p>
+    <ul>
+        <li><span class="bold">Low behavior (0-25%)</span>: Parameters change slowly and smoothly, creating calm, meditative soundscapes</li>
+        <li><span class="bold">Medium behavior (26-75%)</span>: Balanced evolution with both gentle and surprising moments</li>
+        <li><span class="bold">High behavior (76-100%)</span>: Dramatic, unpredictable changes that explore the full range you've defined</li>
+    </ul>
+    <p>You define the <em>boundaries</em> (minimum and maximum values). The behavior slider controls <em>how</em> the system moves within those boundaries.</p>
+</div>
 
-    <div class="section">
-        <h2>What is a Voice?</h2>
-        <p>Each voice is a nest of 17 control parameters, each parameter on its own row and displayed each on its own voice tab. The parameters are grouped into five rollups. The rollups and the parameters are:</p>
-        
-        <div class="rollup-section">
-            <h4>🎹 INSTRUMENT & SOUND</h4>
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>What is a Voice?</h2>
+    <p>The Tuner offers up to <span class="bold">16 independent voices</span>, each with its own complete set of parameters. Each voice is like a musician in an ensemble:</p>
+    <ul>
+        <li>One voice might play slow, deep bass notes that drone for minutes</li>
+        <li>Another might play rapid, high-pitched patterns that flutter and dance</li>
+        <li>A third might enter only at specific times, adding occasional punctuation</li>
+        <li>Together, they weave a complex, evolving musical tapestry</li>
+    </ul>
+    <p>Each voice has <span class="bold">20 adjustable parameters</span> organized into five loose categories:</p>
+
+    <h3>🎵 Instrument & Sound</h3>
+    <ul>
+        <li>Which sound/instrument to use</li>
+        <li>Which notes are available (full 88-key piano range)</li>
+        <li>How many notes play at once (1-16 simultaneous notes)</li>
+        <li>Attack intensity (soft to aggressive)</li>
+        <li>Pitch detuning effects</li>
+        <li>Portamento (note-to-note gliding)</li>
+    </ul>
+
+    <h3>🎚️ Mixing & Levels</h3>
+    <ul>
+        <li>Volume range</li>
+        <li>Stereo positioning (left-center-right)</li>
+    </ul>
+
+    <h3>🎯 Rhythm & Timing</h3>
+    <ul>
+        <li>Tempo (each voice can have its own speed!)</li>
+        <li>Which note durations are available (thirty-second notes through four whole notes)</li>
+        <li>Rest patterns (silence between notes)</li>
+        <li>Life Span (when the voice enters, exits, and whether it repeats)</li>
+    </ul>
+
+    <h3>🌀 Modulation Effects</h3>
+    <ul>
+        <li>Tremolo (volume pulsing)</li>
+        <li>Chorus (thickening and shimmer)</li>
+        <li>Phaser (sweeping frequency effect)</li>
+    </ul>
+
+    <h3>🏛️ Spatial Effects</h3>
+    <ul>
+        <li>Reverb (room ambience, from intimate to cathedral)</li>
+        <li>Delay (rhythmic echoes synced to tempo)</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Professional Audio Standards</h2>
+    <p>The Tuner adheres to professional music production standards:</p>
+    <ul>
+        <li><span class="bold">Full MIDI range</span>: Complete 88-key piano keyboard (A0 to C8) with proper note naming</li>
+        <li><span class="bold">Standard musical notation</span>: All rhythm values follow traditional music theory (triplets, dotted notes, etc.)</li>
+        <li><span class="bold">Velocity-sensitive playback</span>: Notes respond dynamically to attack settings, with realistic envelopes</li>
+        <li><span class="bold">Professional effects</span>: Studio-quality reverb, delay, chorus, phaser, and tremolo with precise control</li>
+        <li><span class="bold">Polyphonic chord generation</span>: Intelligent algorithm creates musically pleasing harmonies based on music theory</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>The Tuners Community</h2>
+    <p><span class="bold">Tuners</span> are the people who use this engine to create and share music. When you create a free account, you join a creative community where you can:</p>
+    <ul>
+        <li><span class="bold">Save your compositions</span> as "nest files" - complete snapshots of all 16 voices and their settings</li>
+        <li><span class="bold">Share your work</span> publicly for others to hear and study</li>
+        <li><span class="bold">Browse the community library</span> - listen to what others have created</li>
+        <li><span class="bold">Learn from others</span> - see exactly how other composers configured their voices</li>
+        <li><span class="bold">Vote and comment</span> - support your favorite pieces and engage with creators</li>
+        <li><span class="bold">Search and discover</span> - find compositions by creator, title, or date</li>
+        <li><span class="bold">Download the Professional Sample Library</span> - replace basic computer sounds with authentic instrument recordings (free with account creation)</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Quick Start: Your First Composition in 5 Minutes</h2>
+    <p>Let's create a simple two-voice composition to understand the basics:</p>
+
+    <h4>Step 1: Set Up Voice 1 (Deep Bass Drone)</h4>
+    <ol>
+        <li><span class="bold">Click the Voice 1 tab</span> (left sidebar) - it's enabled by default</li>
+        <li><span class="bold">Expand the Instrument rollup</span>
             <ul>
-                <li>SOUND</li>
-                <li>MELODIC RANGE</li>
-                <li>POLYPHONY</li>
-                <li>ATTACK VELOCITY</li>
-                <li>DETUNING</li>
-                <li>PORTAMENTO</li>
+                <li>Select an instrument - choose "Acoustic Bass" or any bass sound from the dropdown</li>
             </ul>
-        </div>
-
-        <div class="rollup-section">
-            <h4>🎚️ MIXING & LEVELS</h4>
+        </li>
+        <li><span class="bold">Expand the Melodic Range rollup</span>:
             <ul>
-                <li>VOLUME</li>
-                <li>STEREO BALANCE</li>
+                <li>Click notes in the <span class="bold">lowest two octaves</span> of the piano keyboard (left side)</li>
+                <li>Or click-and-drag across a range of low notes</li>
+                <li>Set behavior to <span class="bold">25%</span> (smooth, connected movement)</li>
             </ul>
-        </div>
-
-        <div class="rollup-section">
-            <h4>🥁 RHYTHM & TIMING</h4>
+        </li>
+        <li><span class="bold">Expand "Rhythm" rollup</span>:
             <ul>
-                <li>TEMPO (BPM)</li>
-                <li>RHYTHMS</li>
-                <li>RESTS</li>
-                <li>LIFE SPAN</li>
+                <li>Check only <span class="bold">"Whole Note"</span> and <span class="bold">"Two Whole Notes"</span> (very slow)</li>
+                <li>Set Rhythms behavior to <span class="bold">50%</span></li>
+                <li>Check only <span class="bold">"No Rests"</span> (plays continuously)</li>
             </ul>
-        </div>
-
-        <div class="rollup-section">
-            <h4>🌊 MODULATION EFFECTS</h4>
+        </li>
+        <li><span class="bold">Expand "Volume" rollup</span>:
             <ul>
-                <li>TREMOLO</li>
-                <li>CHORUS</li>
-                <li>PHASER</li>
+                <li>Set Volume from <span class="bold">30% to 60%</span> with behavior at <span class="bold">75%</span> (gentle breathing)</li>
             </ul>
-        </div>
-
-        <div class="rollup-section">
-            <h4>🏛️ SPATIAL EFFECTS</h4>
+        </li>
+        <li><span class="bold">Expand "Stereo Balance" rollup</span>:
             <ul>
-                <li>REVERB</li>
-                <li>DELAY</li>
+                <li>Set Stereo Balance from <span class="bold">-50 to +50</span> with behavior at <span class="bold">80%</span> (wanders in stereo field)</li>
             </ul>
-        </div>
-    </div>
+        </li>
+    </ol>
 
-    <div class="section">
-        <h2>How do the Controls Work?</h2>
-        <p><strong>First: </strong>Click a Voice tab to select it.</p>
-        <p><strong>Second:</strong> Tick the checkbox to enable it, and make that Voice ready to play.</p>
-        <p><strong>Third:</strong> Adjust the Voice Parameters and set their operating range and behavior.</p>
+    <h4>Step 2: Set Up Voice 2 (High Sparkle)</h4>
+    <ol>
+        <li><span class="bold">Click the Voice 2 tab</span> and <span class="bold">check the checkbox</span> to enable it</li>
+        <li><span class="bold">Expand the Instrument rollup</span>
+            <ul>
+                <li>Select "Vibraphone" or "Music Box"</li>
+                <li>Click notes in the <span class="bold">highest two octaves</span> of the piano keyboard (right side)</li>
+                <li>Set behavior to <span class="bold">100%</span> (maximum variation)</li>
+            </ul>
+        </li>
+        <li><span class="bold">Expand "Rhythms" rollup</span>:
+            <ul>
+                <li>Check <span class="bold">"Sixteenth Notes"</span>, <span class="bold">"Eighth Notes"</span>, and <span class="bold">"Quarter Notes"</span> (fast patterns)</li>
+                <li>Set Rhythms behavior to <span class="bold">75%</span></li>
+            </ul>
+        </li>
+        <li><span class="bold">Expand "Rests" rollup</span>:
+            <ul>
+                <li>Check <span class="bold">"Eighth Notes"</span> and <span class="bold">"Quarter Notes"</span> for Rests (breathing space)</li>
+                <li>Set Rests behavior to <span class="bold">60%</span></li>
+            </ul>
+        </li>
+        <li><span class="bold">Expand "Volume" rollup</span>:
+            <ul>
+                <li>Set Volume from <span class="bold">20% to 45%</span> with behavior at <span class="bold">85%</span> (fluttering dynamics)</li>
+            </ul>
+        </li>
+        <li><span class="bold">Expand "Stereo Balance" rollup</span>:
+            <ul>
+                <li>Set Stereo Balance from <span class="bold">-100 to +100</span> with behavior at <span class="bold">90%</span> (dramatic panning)</li>
+            </ul>
+        </li>
+    </ol>
 
-        <h3>Range Select Methods</h3>
-        <p>set the low and high operating range of each parameter with the single or dual handle slider, a dropdown box, or the piano keyboard.</p>
-        
-        <ul>
-            <li><strong>DUAL HANDLE SLIDERS:</strong> Use the left slider handle to set the lowest limit of your chosen melodic range, and the right slider handle to set the upper limits of the range. Setting both handles to the zero position essentially disables the parameter. A tooltip centered over the slider displays the current slider value.</li>
-            
-            <li><strong>DROP DOWN BOX:</strong> The Rhythms and Rests parameters each feature two dropdown boxes for setting the shortest and longest notes values possible. Look for the tooltips!</li>
-            
-            <li><strong>MELODIC RANGE:</strong> Add to or subtract from the melodic range with either of two ways:
-                <ul>
-                    <li>Click individual keyboard notes to add or remove them from the selected range.</li>
-                    <li>Swipe across a chromatic range of notes to create an inclusive melodic range.</li>
-                </ul>
-            </li>
-        </ul>
+    <h4>Step 3: Listen</h4>
+    <ol>
+        <li><span class="bold">On Voice 1 tab, press the PREVIEW button</span> to hear it alone. <span class="bold">Press STOP</span> when ready</li>
+        <li><span class="bold">On Voice 2 tab, press the PREVIEW button</span> to hear it alone. <span class="bold">Press STOP</span> when ready</li>
+        <li><span class="bold">Press the PLAY button</span> (top bar) to hear both voices together</li>
+        <li><span class="bold">Adjust any parameter in real-time</span> - changes take effect immediately</li>
+        <li><span class="bold">Watch the evolution</span> - the music will never sound exactly the same way twice</li>
+    </ol>
+</div>
 
-        <h3>What is a Behavior Setting?</h3>
-        <p>The <strong>Behavior slider control</strong> can be thought of as a <strong>Rate of Change control</strong>, and shapes the randomization within the selected range.</p>
-        <ul>
-            <li> A high setting allows more drastic leaps between successive notes within the permitted range.</li>
-            <li> A low setting enforces smaller leaps within the set range.</li>.
-        </ul>
-        <p> This creates the <strong>"controlled randomization engine"</strong> that's central the Nest Builder's generative music philosophy - where low behavior settings create smooth parameter changes and high settings create dramatic variations, all within the user-defined ranges.</p>
-    </div>
+<div class="section-divider">
+    <hr>
+</div>
 
-    <div class="section">
-        <h2>How to Set Up a Voice: The Parameters in Detail</h2>
-        <p>Use the parameter rollups as described below.</p>
-        <h3>ROLLUP #1: INSTRUMENT & SOUND 🎹 </h3>
-        
-        <h4>SOUND</h4>
-        <p>Use this dropdown box to select the sound. The dropdown box is populated with the sounds built into the user's computer's soundcard. The user selects a sound and all the notes in the voice will use this sound.</p>
+<div class="content-box">
+    <h2>Understanding the Interface</h2>
 
-        <h4>MELODIC RANGE</h4>
-        <p>The melodic range of each voice can be the entire <strong>88 key piano keyboard</strong> In the melodic range row</p>
-        <ul>
-            <li>Click on an individual note to select or deselect it</li>
-            <li>Click and swipe to select an inclusive range of notes</li>
-        </ul>
-        <p>Use the Behavior slider control to adjust whether changes during playback are smooth and connected (low setting) or wider and more drastic (high setting).</p>
+    <h4>Voice Tabs (Left Sidebar)</h4>
+    <ul>
+        <li><span class="bold">16 tabs:</span> numbered 1-16</li>
+        <li><span class="bold">Checkbox</span>: Enable/disable the voice (unchecked voices are silent)</li>
+        <li><span class="bold">Click tab</span>: Select that voice to view/edit its parameters</li>
+        <li><span class="bold">Active tab</span>: Highlighted in blue</li>
+    </ul>
 
-        <h4>POLYPHONY</h4>
-        <p>Use the range slider controls to set the minimum and maximum number of simultaneous notes that can be played at any moment. Is this voice a bass part that needs only one note at a time, or is it a chordal voice that could benefit time to time from a simultaneous splash of notes?</p>
-        <p>Use the Behavior slider control to adjust whether changes to the polyphony setting during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    <h4>Parameter Sections (Main Area)</h4>
+    <ul>
+        <li>Five main parameter organizations:</li>
+        <li>🎵 Instrument & Sound</li>
+        <li>🎚️ Mixing & Levels</li>
+        <li>🎯 Rhythm & Timing</li>
+        <li>🌀 Modulation Effects</li>
+        <li>🏛️ Spatial Effects</li>
+    </ul>
 
-        <h4>ATTACK VELOCITY</h4>
-        <p>Use the Attack Velocity slider control to set the low and high limits to the attack velocity range. Some sound patches have touch sensitivity, and by adjusting the attack velocity you will control how much of which sound you want to hear. When playing, the voice's attack velocity will be constrained between the two set limits. Set it for screaming all the time, or have it play with a nice and gentle touch.</p>
-        <p>Use the Behavior control to adjust whether consecutive changes to the attack velocity during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    <h4>Control Types</h4>
+    <p><span class="bold">Dual-Handle Sliders</span>: Most parameters use these</p>
+    <ul>
+        <li><span class="bold">Left handle</span> = minimum value</li>
+        <li><span class="bold">Right handle</span> = maximum value</li>
+        <li>System chooses values between these boundaries during playback</li>
+        <li><span class="bold">Both handles at same position</span> = fixed, unchanging value</li>
+        <li><span class="bold">Hover over slider</span> to see current values in tooltip</li>
+    </ul>
 
-        <h4>DETUNING</h4>
-        <p>Use the dual slider controls to set the minimum and maximum amount of note detuning possible during playback. This range is measured in musical cents, and the range is 4 cents to 90 cents. Detuning can introduce pitch bends.</p>
-        <p>Turn off the parameter by moving both handles to the zero position, effectively disabling it from having any effect on the voice.</p>
+    <p><span class="bold">Checkbox Groups</span>: Used for Rhythms and Rests</p>
+    <ul>
+        <li><span class="bold">Check multiple boxes</span> = system randomly chooses from your selections</li>
+        <li><span class="bold">Check one box</span> = fixed value</li>
+        <li><span class="bold">Behavior at 0%</span> = always uses first checked item</li>
+        <li><span class="bold">Behavior above 0%</span> = random selection from all checked items</li>
+    </ul>
 
-        <h4>PORTAMENTO GLIDE TIME</h4>
-        <p>Portamento is a gliding effect that connects successive notes together.</p>
-        <p>Use the dual slider control to set the minimum and maximum glide time when the effect is used. The Behavior slider control to adjust whether changes to the portamento/glide time setting during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
-        <p>You can effectively turn the parameter off by moving both handles to the zero position.</p>
-    </div>
+    <p><span class="bold">Piano Keyboard</span>: Used for Melodic Range</p>
+    <ul>
+        <li><span class="bold">Click individual keys</span> to select/deselect specific notes</li>
+        <li><span class="bold">Click and drag</span> to select ranges</li>
+        <li><span class="bold">Orange/coral highlight</span> shows selected notes</li>
+        <li><span class="bold">Info bar below keyboard</span> displays your selection</li>
+    </ul>
 
-    <div class="section">
-        <h3>ROLLUP #2: MIXING & LEVELS 🎚️ </h3>
-        
-        <h4>VOLUME</h4>
-        <p>Use the Volume dual control sliders to set the low and high limits to the volume range. When playing, the voice's note range is constrained within the two set limits.</p>
-        <p>Use the Behavior slider control to adjust whether consecutive changes to the volume during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    <p><span class="bold">Dropdown Menus</span>: Used for Instrument and Beat Unit selection</p>
+    <ul>
+        <li>Simple list selection</li>
+    </ul>
 
-        <h4>STEREO BALANCE</h4>
-        <p>Use the Stereo Balance slider control to set the range of the voice in the stereo field. When playing, the voice's placement within the stereo field will be constrained between the two set limits. Set both stereo balance handles to the same value to fix it in the stereo field.</p>
-        <p>Use the Behavior slider control to adjust whether consecutive changes to the stereo balance during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
-    </div>
+    <h4>Voice Control Buttons</h4>
+    <ul>
+        <li><span class="bold">PREVIEW</span>: Test this voice alone (button turns light red while playing)</li>
+        <li><span class="bold">SYNC</span>: Copy this voice's tempo settings to all other voices</li>
+        <li><span class="bold">LOCK</span>: Prevent accidental changes (requires account login)</li>
+    </ul>
 
-    <div class="section">
-        <h3>ROLLUP #3: RHYTHM & TIMING 🥁 </h3>
-        
-        <h4>TEMPO (BPM)</h4>
-        <p>Each voice has its own TEMPO parameter. This creates <strong>polyrhythmic generative music</strong> where voices evolve at different rates, creating complex evolving textures rather than synchronized changes.</p>
-        <p>Use the Tempo Range slider control to set the low and high limits to the possible tempo range. The lowest tempo in the range is 40 BPM and the highest is 240 BPM. When playing, the voice's tempo is constrained between the two set limits. Set both handles to the same number to fix the performance tempo.</p>
-        <p>Use the Behavior slider control to adjust whether changes to notes within the Tempo range during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    <h4>Top Control Bar</h4>
+    <ul>
+        <li><span class="bold">NEW</span>: Start fresh - resets all voices to defaults (asks for confirmation)</li>
+        <li><span class="bold">OPEN</span>: Load a previously saved nest file (native file browser)</li>
+        <li><span class="bold">SAVE</span>: Save current settings (native save dialog - you choose location and filename)</li>
+        <li><span class="bold">PLAY/STOP</span>: Play all enabled voices together (button turns red while playing)</li>
+        <li><span class="bold">POST</span>: Share your nest publicly (requires account login)</li>
+    </ul>
+</div>
 
-        <h4>RHYTHMS</h4>
-        <p>The Rhythm limits are set with two dropdown boxes, one for the setting the low limit and one for setting the high limit. The performance will include all rhythmic values between the two limits. Set low and high to the same value to fix an unchanging rhythmic value.</p>
-        <p><strong>Possible rhythms include:</strong> thirtysecond notes, sixteenth note triplets, sixteenth notes, eighth note triplets, eighth notes, quarter note triplets, quarter notes, half note triplets, half notes, one whole note, two whole notes, three whole notes, four whole notes.</p>
-        <p>Use the Behavior slider control to adjust whether consecutive changes to the rhythms during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+<div class="section-divider">
+    <hr>
+</div>
 
-        <h4>RESTS</h4>
-        <p>The Rests limits are set with two dropdown boxes, one for the setting the low limit and one for setting the high limit. The performance will include all rest values between the two limits. To fix a single rest value, set both handles to the same value.</p>
-        <p><strong>Possible rests include:</strong> thirtysecond notes, sixteenth note triplets, sixteenth notes, eighth note triplets, eighth notes, quarter note triplets, quarter notes, half note triplets, half notes, one whole note, two whole notes, three whole notes, four whole notes.</p>
-        <p>Use the Behavior slider control to adjust whether consecutive changes to the rhythms during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+<div class="content-box">
+    <h2>How Parameters Work: The Details</h2>
+    <p>Each parameter follows the same logic: you set boundaries (min/max), and the behavior slider controls how the system moves within those boundaries during playback.</p>
 
-        <h4>LIFE SPAN</h4>
-        <p>Life Span parameter has three single slider controls and a checkbox control:</p>
-        <ul>
-            <li><strong>Duration:</strong> How long does the voice play before it stops or repeats?</li>
-            <li><strong>Entrance:</strong> How long after Run button pressed before the voice begins playing?</li>
-            <li><strong>Exit:</strong> How long after the Entrance before the voice drops out?</li>
-            <li><strong>Repeat Y/N:</strong> Whether the voice repeats its program or terminates after 1 time?</li>
-        </ul>
-        
-        <div class="example">
-            <strong>Example 1:</strong> set the duration for three minutes, to start 1 minute after the run button is pressed, to drop out at the 2 minute mark, then repeat
-        </div>
-        
-        <div class="example">
-            <strong>Example 2:</strong> set the Duration for two minutes, set Entrance to zero-far-left position meaning start when the Run button is pressed, set Exit for 1 minute meaning stop playing 1 minute after starting and stay silent for the remainder of the Duration, with no repeat so stay silent for the remainder of the Run.
-        </div>
-    </div>
+    <h4>The Behavior Slider Formula</h4>
+    <p>Every parameter has a behavior slider (except dropdown menus). Here's what behavior percentages mean:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Parameter stays at the exact midpoint between min and max (completely static)</li>
+        <li><span class="bold">1-25%</span>: Smooth, gentle changes - values drift slowly</li>
+        <li><span class="bold">26-50%</span>: Moderate evolution - noticeable but musical changes</li>
+        <li><span class="bold">51-75%</span>: Active variation - frequent, substantial changes</li>
+        <li><span class="bold">76-100%</span>: Maximum drama - wild jumps within your defined boundaries</li>
+    </ul>
 
-    <div class="section">
-        <h3>ROLLUP #4: MODULATION EFFECTS 🌊 </h3>
-        
-        <h4>TREMOLO</h4>
-        <p>Setting the Tremolo range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
-        <p>Use the Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
-        <p>If you want to effectively turn off the effect, set both sliders to zero.</p>
+    <p><span class="bold">Example</span>: Volume set from 20% to 80% with 50% behavior</p>
+    <ul>
+        <li>System starts near the middle (around 50% volume)</li>
+        <li>Gradually drifts up and down within the 20-80% range</li>
+        <li>Never goes below 20% or above 80%</li>
+        <li>Changes are moderate and musical</li>
+    </ul>
 
-        <h4>CHORUS</h4>
-        <p>Setting the Chorus range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
-        <p>Use Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
+    <p><span class="bold">Example</span>: Volume set from 20% to 80% with 100% behavior</p>
+    <ul>
+        <li>System makes dramatic leaps</li>
+        <li>Might jump from 25% to 75% suddenly</li>
+        <li>Still respects your 20-80% boundaries</li>
+        <li>Creates dynamic, unpredictable energy</li>
+    </ul>
+</div>
 
-        <h4>PHASER</h4>
-        <p>Setting the Phaser range requires two dual sliders, one for Speed and the other for Depth. Use the dual slider controls to set the minimum and maximums for both settings.</p>
-        <p>Use the Behavior slider control to adjust whether changes to the speed and depth values during playback are smooth and connected (low setting) or wider, more drastic (high setting).</p>
-    </div>
+<div class="section-divider">
+    <hr>
+</div>
 
-    <div class="section">
-        <h3>ROLLUP #5: SPATIAL EFFECTS 🏛️ </h3>
-        
-        <h4>REVERB</h4>
-        <p><em>Note: Layout to be updated similar to timing parameter row</em></p>
-        <ul>
-            <li>A single slider to set the delay time</li>
-            <li>A single slider to set the wet/dry mix</li>
-            <li>A radio box for type of reverb?</li>
-            <li>Set the behavior slider</li>
-        </ul>
+<div class="content-box">
+    <h2>Detailed Parameter Reference</h2>
 
-        <h4>DELAY</h4>
-        <ul>
-            <li>Set high and low ranges for both speed and depth of the Tremolo</li>
-            <li>Set the behavior slider</li>
-        </ul>
-    </div>
+    <h4>🎵 INSTRUMENT</h4>
+    <p><span class="bold">Purpose</span>: Choose the sound source for this voice</p>
+    <p><span class="bold">Control</span>: Simple dropdown menu</p>
+    <ul>
+        <li>Lists all sounds available in your system</li>
+        <li>Default sounds use your computer's built-in synthesizer</li>
+        <li>With Professional Sample Library (free account): access to authentic instrument recordings</li>
+    </ul>
+    <p><span class="bold">No behavior slider</span> - sound selection is fixed per voice</p>
+</div>
 
-    <div class="section">
-        <h2>Preview the Voice and Adjust Parameters</h2>
-        <p>Each voice has its own Preview button. A Preview button will play only its voice with its current settings, but not any other voices which may be already designed and enabled. Use the Preview button to test the setup while you are setting up the voice. The Preview button is a toggle on/off button labeled Preview and Stop. Press the button once to begin playback of the Voice. While playing, the Preview button label becomes "Stop" and the button bg color becomes a light red color. Press it again to stop the voice preview playing.</p>
+<div class="section-divider">
+    <hr>
+</div>
 
-        <h3>Press the Lock Button:</h3>
-        <p>Press any Voice's Lock button to prevent any accidental changes to the Voice's settings while you may be working on other Voices. The button is a red color when locked. Press again to unlock the Voice, and color change back to default. Lock button is only functional when the user is logged in.</p>
+<div class="content-box">
+    <h4>🎵 MELODIC RANGE</h4>
+    <p><span class="bold">Purpose</span>: Define which notes the voice can play</p>
+    <p><span class="bold">Control</span>: Interactive 88-key piano keyboard (A0 to C8)</p>
+    <ul>
+        <li><span class="bold">Click individual keys</span> to select/deselect notes</li>
+        <li><span class="bold">Click-drag</span> to select ranges</li>
+        <li><span class="bold">Selected notes highlighted</span> in coral/orange</li>
+        <li><span class="bold">Info display</span> shows your selection (e.g., "A2 to C5 (18 notes)")</li>
+    </ul>
 
-        <h3>Set Up Other Voices:</h3>
-        <p>Now that you have one voice sounding like you want it, set up all the others you may want, up to a total of 16.</p>
-    </div>
+    <p><span class="bold">Musical Intelligence</span>: The system doesn't just pick random notes from your selection. It uses a <span class="bold">chord generation algorithm</span> that understands music theory:</p>
+    <ul>
+        <li>Creates musically pleasing harmonies (major, minor, diminished, augmented chords)</li>
+        <li>Chooses intervals that sound good together</li>
+        <li>Adapts chord complexity based on your Polyphony setting</li>
+    </ul>
 
-    <div class="section">
-        <h2>Press Play Button:</h2>
-        <p>The Play button begins playing all the Voices simultaneously so you can listen to your creation evolve. The Play button's color turns blue during playing, and the nest will play until it is pressed again.</p>
+    <p><span class="bold">Behavior Slider</span> controls melodic motion:</p>
+    <ul>
+        <li><span class="bold">Low (0-25%)</span>: Stepwise motion, notes close together, smooth melodies</li>
+        <li><span class="bold">Medium (26-75%)</span>: Mix of steps and leaps, balanced movement</li>
+        <li><span class="bold">High (76-100%)</span>: Wide intervalic leaps, exploring full range dramatically</li>
+    </ul>
 
-        <h2>Save Your Nest file:</h2>
-        <p>Press the Save button to save your Nest's setting's file so you can open and play it again any time you want it, and not worry about losing it. Best Practice is to save often so latest changes are never lost. You must create an account and be logged in to save your nest files.</p>
+    <p><span class="bold">Tip</span>: For bass voices, select only low notes. For sparkle/color, select only high notes. For full-range instruments, select broadly and let the system explore.</p>
+</div>
 
-        <h2>Open a Nest File:</h2>
-        <p>Press the Open button to view your saved Nests. Select your nest's name to open the file for playing or editing. Also displayed are creation date, modification date, and a description field for user's comments.</p>
+<div class="section-divider">
+    <hr>
+</div>
 
-        <h2>Post Your Nest For Others to Enjoy:</h2>
-        <p>Press the Post button to display your nest on the Website's public page. You must be logged in to post. The public page lists all the published nests from everybody. Clicking on a nest displayed on the public page will start it to play for a listener. If the listener has an account and is logged in, they will be able to see the settings but not be able to change anything. Those who are not logged in can hear a posted nest played but will not be able to see any of the nest settings or to cast an upvote for a posted nest.</p>
+<div class="content-box">
+    <h4>🎵 POLYPHONY</h4>
+    <p><span class="bold">Purpose</span>: How many simultaneous notes can play at once</p>
+    <p><span class="bold">Control</span>: Dual-handle slider (1 to 16 notes)</p>
+    <ul>
+        <li><span class="bold">1 note</span>: Monophonic - single melody line</li>
+        <li><span class="bold">2-4 notes</span>: Small chords, duets, simple harmonies</li>
+        <li><span class="bold">5-8 notes</span>: Rich chords, complex harmonies</li>
+        <li><span class="bold">9-16 notes</span>: Dense clusters, orchestral textures</li>
+    </ul>
 
-        <h2>Search for Another User's Nest file:</h2>
-        <p>Press the Search button and enter a username, a nest filename, or a date range to see a listing of the nests that meet the search criteria. These are displayed in the same format as the Public Nest Page.</p>
+    <p><span class="bold">Behavior Slider</span> controls how polyphony changes:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Fixed note count (both handles same position)</li>
+        <li><span class="bold">Low</span>: Gradual shifts (1 note, then 2, then 1, then 3...)</li>
+        <li><span class="bold">High</span>: Dramatic changes (suddenly 1 note, then 12, then 2...)</li>
+    </ul>
 
-        <h2>Make an Account:</h2>
-        <p>Make an account to be able to save nests, lock voices, to view the parameter settings of public nest, to comment, and to cast an upvote for any published nest.</p>
+    <p><span class="bold">Musical Intelligence</span>: The system's chord generation algorithm adapts to your polyphony setting:</p>
+    <ul>
+        <li>At 1-2 notes: Creates melodic intervals</li>
+        <li>At 3-4 notes: Builds triads and seventh chords</li>
+        <li>At 5-8 notes: Adds extensions (9ths, 11ths, 13ths)</li>
+        <li>At 9+ notes: Creates cluster chords and complex voicings</li>
+    </ul>
 
-        <h2>Sign In:</h2>
-        <p>Sign in to be able to save your nest, to access your saved nests, to see others' publicly posted nests' settings, or to comment, and to cast an upvote for any published nest.</p>
-    </div>
+    <p><span class="bold">Tip</span>: Bass voices work well with 1-2 notes. Pad/background voices sound lush with 4-8 notes.</p>
+</div>
 
-    <div class="footer">
-        <p>Copyright 2025 Mark Loren Wilson</p>
-    </div>
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎵 ATTACK VELOCITY</h4>
+    <p><span class="bold">Purpose</span>: Controls how hard notes are "struck" - affects brightness and intensity</p>
+    <p><span class="bold">Control</span>: Dual-handle slider (0 to 127, MIDI standard)</p>
+    <ul>
+        <li><span class="bold">0-40</span>: Soft, gentle, mellow tones</li>
+        <li><span class="bold">41-80</span>: Medium dynamics, balanced</li>
+        <li><span class="bold">81-127</span>: Loud, bright, aggressive attack</li>
+    </ul>
+
+    <p><span class="bold">Real-time Effect</span>:</p>
+    <ul>
+        <li><span class="bold">Waveform selection</span>: Soft attacks use sine waves (mellow), hard attacks use square waves (bright/harsh)</li>
+        <li><span class="bold">Filter cutoff</span>: Soft attacks roll off high frequencies, hard attacks open the filter (more brightness)</li>
+        <li><span class="bold">Envelope shape</span>: Soft attacks have slower attack time, hard attacks have snappy, immediate onset</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> controls velocity changes:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Fixed dynamics</li>
+        <li><span class="bold">Low</span>: Gentle breathing (like a musician's natural phrasing)</li>
+        <li><span class="bold">High</span>: Dramatic dynamic contrasts (whisper to scream)</li>
+    </ul>
+
+    <p><span class="bold">Tip</span>: For ambient pads, use 20-50 with low behavior. For percussive parts, use 80-127 with high behavior.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎵 DETUNING</h4>
+    <p><span class="bold">Purpose</span>: Shift pitch slightly sharp or flat (measured in cents: 100 cents = 1 semitone)</p>
+    <p><span class="bold">Control</span>: Dual-handle slider (-50 to +50 cents)</p>
+    <ul>
+        <li><span class="bold">0 cents</span>: Perfect tuning</li>
+        <li><span class="bold">-50 to -10 cents</span>: Slightly flat (darker, warmer)</li>
+        <li><span class="bold">+10 to +50 cents</span>: Slightly sharp (brighter, tenser)</li>
+    </ul>
+
+    <p><span class="bold">Musical Effects</span>:</p>
+    <ul>
+        <li><span class="bold">Slight detuning (±5-15 cents)</span>: Creates natural chorusing, thickness</li>
+        <li><span class="bold">Moderate detuning (±15-30 cents)</span>: Quarter-tone effects, tension</li>
+        <li><span class="bold">Heavy detuning (±30-50 cents)</span>: Dissonant, experimental sounds</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> adds <span class="bold">micro-detuning evolution</span>: Even during sustained notes, the pitch subtly wobbles creating organic, living tones</p>
+
+    <p><span class="bold">To disable</span>: Set both handles to 0</p>
+
+    <p><span class="bold">Tip</span>: Try ±8 cents with 40% behavior for lush, slightly out-of-tune ensemble effect (like vintage synthesizers)</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎵 PORTAMENTO GLIDE TIME</h4>
+    <p><span class="bold">Purpose</span>: Smooth pitch gliding between notes (like a slide on trombone or violin)</p>
+    <p><span class="bold">Control</span>: Dual-handle slider (0 to 1000 milliseconds)</p>
+    <ul>
+        <li><span class="bold">0 ms</span>: No glide, immediate pitch change</li>
+        <li><span class="bold">50-200 ms</span>: Quick, subtle glide</li>
+        <li><span class="bold">200-500 ms</span>: Noticeable glide</li>
+        <li><span class="bold">500-1000 ms</span>: Dramatic, slow glide</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> controls glide time variation:</p>
+    <ul>
+        <li>Sometimes quick snaps between notes</li>
+        <li>Sometimes slow, expressive slides</li>
+    </ul>
+
+    <p><span class="bold">To disable</span>: Set both handles to 0</p>
+
+    <p><span class="bold">Tip</span>: Sounds great on bass voices (150-400ms) and lead melodies (100-250ms). Usually too much on fast, busy voices.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎚️ VOLUME</h4>
+    <p><span class="bold">Purpose</span>: Control loudness (0% to 100%)</p>
+    <p><span class="bold">Control</span>: Dual-handle slider</p>
+    <ul>
+        <li><span class="bold">0%</span>: Silent</li>
+        <li><span class="bold">25-50%</span>: Background/pad level</li>
+        <li><span class="bold">50-75%</span>: Present but not dominant</li>
+        <li><span class="bold">75-100%</span>: Prominent/lead level</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> creates <span class="bold">dynamic breathing</span>:</p>
+    <ul>
+        <li><span class="bold">Low</span>: Gentle swells and dips (natural phrasing)</li>
+        <li><span class="bold">High</span>: Dramatic volume changes (sudden appearances and disappearances)</li>
+    </ul>
+
+    <p><span class="bold">Real-time updates</span>: Changes apply immediately during playback</p>
+
+    <p><span class="bold">Tip</span>: For evolving textures, try 20-60% with 85% behavior - voices fade in and out organically</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎚️ STEREO BALANCE</h4>
+    <p><span class="bold">Purpose</span>: Position voice in stereo field</p>
+    <p><span class="bold">Control</span>: Dual-handle slider (-100 to +100)</p>
+    <ul>
+        <li><span class="bold">-100</span>: Hard left</li>
+        <li><span class="bold">0</span>: Center</li>
+        <li><span class="bold">+100</span>: Hard right</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> creates <span class="bold">spatial movement</span>:</p>
+    <ul>
+        <li><span class="bold">Low</span>: Gentle left-right drifting</li>
+        <li><span class="bold">High</span>: Dramatic panning (voice flies across stereo field)</li>
+    </ul>
+
+    <p><span class="bold">Real-time updates</span>: Changes apply immediately during playback</p>
+
+    <p><span class="bold">Tip</span>: Multiple voices with different stereo ranges create immersive, 3D soundscapes</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎯 TEMPO (BPM)</h4>
+    <p><span class="bold">Purpose</span>: Control playback speed (40 to 240 beats per minute)</p>
+    <p><span class="bold">Control</span>: Dual-handle slider</p>
+    <ul>
+        <li><span class="bold">40-60 BPM</span>: Very slow, meditative</li>
+        <li><span class="bold">60-90 BPM</span>: Slow, relaxed</li>
+        <li><span class="bold">90-120 BPM</span>: Moderate, walking pace</li>
+        <li><span class="bold">120-160 BPM</span>: Upbeat, energetic</li>
+        <li><span class="bold">160-240 BPM</span>: Very fast, intense</li>
+    </ul>
+
+    <p><span class="bold">Revolutionary Feature</span>: <span class="bold">Each voice has independent tempo</span></p>
+    <ul>
+        <li>Voice 1 might play at 60 BPM (slow bass)</li>
+        <li>Voice 2 might play at 180 BPM (fast sparkle)</li>
+        <li>Creates <span class="bold">polyrhythmic textures</span> where different speeds interact</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span> controls tempo changes:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Fixed tempo</li>
+        <li><span class="bold">Low</span>: Gradual tempo drifts (rubato feel)</li>
+        <li><span class="bold">High</span>: Dramatic speed changes</li>
+    </ul>
+
+    <p><span class="bold">SYNC Button</span>: Copy this voice's tempo settings (min, max, behavior) to all other voices instantly - useful when you want synchronized ensemble playing</p>
+
+    <p><span class="bold">Tip</span>: Voices at very different tempos (60 BPM vs 180 BPM) create fascinating rhythmic interactions</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎯 RHYTHMS</h4>
+    <p><span class="bold">Purpose</span>: Define which note durations are available</p>
+    <p><span class="bold">Control</span>: Checkbox grid with 15 options</p>
+    <ul>
+        <li>Thirty-second Notes (very fast)</li>
+        <li>Thirty-second Note Triplets</li>
+        <li>Sixteenth Notes</li>
+        <li>Sixteenth Note Triplets</li>
+        <li>Eighth Notes</li>
+        <li>Eighth Note Triplets</li>
+        <li>Quarter Note Triplets</li>
+        <li>Quarter Notes (standard beat)</li>
+        <li>Half Note Triplets</li>
+        <li>Half Notes</li>
+        <li>Whole Note Triplets</li>
+        <li>Whole Note (4 beats)</li>
+        <li>Two Whole Notes (8 beats)</li>
+        <li>Three Whole Notes (12 beats)</li>
+        <li>Four Whole Notes (16 beats)</li>
+    </ul>
+
+    <p><span class="bold">How it Works</span>:</p>
+    <ul>
+        <li><span class="bold">Check multiple boxes</span>: System randomly selects from your palette</li>
+        <li><span class="bold">Check one box</span>: Fixed rhythmic value</li>
+        <li><span class="bold">Selected boxes highlighted</span> in blue</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span>:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Always uses first checked rhythm (no variation)</li>
+        <li><span class="bold">1-100%</span>: Random selection from all checked rhythms (higher = more frequent changes)</li>
+    </ul>
+
+    <p><span class="bold">Tip</span>: For bass, check only slow values (Half Notes, Whole Notes). For percussion/sparkle, check fast values (Sixteenth, Eighth Notes). For melody, mix several adjacent values.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎯 RESTS</h4>
+    <p><span class="bold">Purpose</span>: Define silence durations between notes</p>
+    <p><span class="bold">Control</span>: Checkbox grid (same 15 durations as Rhythms, plus special "No Rests" option)</p>
+
+    <p><span class="bold">Special "No Rests" Checkbox</span>:</p>
+    <ul>
+        <li><span class="bold">When checked</span>: Voice plays continuously with no pauses (unchecks all other rest values automatically)</li>
+        <li><span class="bold">When unchecked</span>: Voice uses selected rest values for spacing</li>
+    </ul>
+
+    <p><span class="bold">Auto-Exclusive Logic</span>:</p>
+    <ul>
+        <li>Checking "No Rests" unchecks all other rest values</li>
+        <li>Checking any other rest value unchecks "No Rests"</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span>:</p>
+    <ul>
+        <li><span class="bold">0%</span>: Fixed rest duration (if multiple checked, always uses first one)</li>
+        <li><span class="bold">1-100%</span>: Random selection creates varied spacing patterns</li>
+    </ul>
+
+    <p><span class="bold">Tip</span>: "No Rests" works great for drones and pads. For rhythmic voices, check 2-3 rest values that complement your chosen rhythm values.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🎯 LIFE SPAN</h4>
+    <p><span class="bold">Purpose</span>: Control precisely <em>when</em> and <em>how long</em> a voice plays - creates entrances, exits, and layering</p>
+
+    <p><span class="bold">Controls</span>:</p>
+
+    <p>1. <span class="bold">Total Time Length</span> (text input, MM:SS format)</p>
+    <ul>
+        <li>Range: 0:05 (5 seconds) minimum to 60:00 (1 hour) maximum</li>
+        <li>Defines the timeline for all entrance/exit timing</li>
+    </ul>
+
+    <p>2. <span class="bold">Beat Unit</span> (dropdown menu)</p>
+    <ul>
+        <li>Choose how time is displayed in tooltips</li>
+        <li>Options: All 15 rhythm values (Thirty-second Notes through Four Whole Notes)</li>
+        <li>Example: Set to "Quarter Notes" - tooltips show "120 beats (2:00)"</li>
+    </ul>
+
+    <p>3. <span class="bold">Entrance 1, 2, 3</span> (three dual-handle sliders)</p>
+    <ul>
+        <li><span class="bold">Left handle</span>: When voice starts playing (Enter time)</li>
+        <li><span class="bold">Right handle</span>: When voice stops playing (Exit time)</li>
+        <li><span class="bold">Set to infinity (∞)</span>: Voice plays until manually stopped</li>
+        <li><span class="bold">Set both to 0:00</span>: Disable this entrance slot</li>
+    </ul>
+
+    <p>4. <span class="bold">Repeat</span> (checkbox)</p>
+    <ul>
+        <li><span class="bold">Unchecked</span>: Pattern plays once then stops permanently</li>
+        <li><span class="bold">Checked</span>: Pattern cycles continuously based on Total Time Length</li>
+    </ul>
+
+    <p><span class="bold">Tooltip Display</span>: Each slider handle shows TWO pieces of information:</p>
+    <ul>
+        <li><span class="bold">Musical time</span>: "120 beats" (based on your Beat Unit selection)</li>
+        <li><span class="bold">Clock time</span>: "(2:00)" in minutes:seconds</li>
+    </ul>
+
+    <p><span class="bold">How Multiple Entrances Work</span>:</p>
+    <ul>
+        <li>Voice plays during <span class="bold">ANY</span> entrance time window</li>
+        <li>Entrance windows can overlap</li>
+        <li>If times overlap, voice plays continuously through the overlap</li>
+    </ul>
+
+    <p><span class="bold">How Repeat Works</span>:</p>
+    <ul>
+        <li>When checked, entire pattern cycles based on Total Time Length</li>
+        <li>Example: Total Time 1:00, Entrance 1 from 0:00-0:20</li>
+        <li>Pattern: Play 20 seconds, silent 40 seconds, repeat forever</li>
+        <li>When unchecked, voice stops permanently after last exit</li>
+    </ul>
+
+    <p><span class="bold">Important</span>: Life Span timing is <span class="bold">independent</span> of Tempo</p>
+    <ul>
+        <li>Life Span times are absolute clock time</li>
+        <li>Tempo only affects how fast notes play during active periods</li>
+    </ul>
+
+    <p><span class="bold">Example 1 - Delayed Entrance (Classical Orchestration)</span>:</p>
+    <blockquote>
+        Total Time Length: 5:00<br>
+        Entrance 1: 1:00 to ∞ (infinity)<br>
+        Repeat: Unchecked<br><br>
+        Result: Silence for 1 minute, then voice enters and plays continuously for remaining 4 minutes (perfect for building intensity)
+    </blockquote>
+
+    <p><span class="bold">Example 2 - Multiple Entrances (Call and Response)</span>:</p>
+    <blockquote>
+        Total Time Length: 3:00<br>
+        Entrance 1: 0:00 to 0:30<br>
+        Entrance 2: 1:00 to 1:30<br>
+        Entrance 3: 2:00 to ∞<br>
+        Repeat: Unchecked<br><br>
+        Result: Voice plays three times - first 30 seconds, again at 1:00-1:30, finally from 2:00 onwards (creates rhythmic punctuation)
+    </blockquote>
+
+    <p><span class="bold">Example 3 - Repeating Pattern (Minimalist Texture)</span>:</p>
+    <blockquote>
+        Total Time Length: 1:00<br>
+        Entrance 1: 0:00 to 0:20<br>
+        Entrance 2: 0:40 to 1:00<br>
+        Repeat: Checked<br><br>
+        Result: Voice plays seconds 0-20 and 40-60 of each minute, cycling forever (creates pulsing in-and-out pattern)
+    </blockquote>
+
+    <p><span class="bold">Example 4 - Overlapping Entrances (Dense Layering)</span>:</p>
+    <blockquote>
+        Total Time Length: 2:00<br>
+        Entrance 1: 0:00 to 1:00<br>
+        Entrance 2: 0:30 to 1:30<br>
+        Entrance 3: 1:00 to 2:00<br>
+        Repeat: Unchecked<br><br>
+        Result: Continuous sound from 0:00-2:00, but different entrance "layers" activate and deactivate creating subtle textural shifts
+    </blockquote>
+
+    <p><span class="bold">Tips</span>:</p>
+    <ul>
+        <li>Use delayed entrances to build complexity gradually</li>
+        <li>Set some voices to short entrances (punctuation/accents)</li>
+        <li>Use Repeat with short patterns (5-15 seconds) for pulsing textures</li>
+        <li>Combine voices with different Life Span patterns for complex orchestration</li>
+        <li>Set Total Time Length to your desired composition duration, or use infinity (∞) for open-ended exploration</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🌀 TREMOLO</h4>
+    <p><span class="bold">Purpose</span>: Rhythmic volume pulsing (classic "wobble" effect)</p>
+    <p><span class="bold">Controls</span>: Two dual-handle sliders</p>
+
+    <p>1. <span class="bold">Speed</span> (0.5 Hz to 12 Hz)</p>
+    <ul>
+        <li><span class="bold">0.5-2 Hz</span>: Slow, gentle pulsing</li>
+        <li><span class="bold">2-5 Hz</span>: Medium wobble (classic tremolo)</li>
+        <li><span class="bold">5-12 Hz</span>: Fast vibrato-like effect</li>
+    </ul>
+
+    <p>2. <span class="bold">Depth</span> (0% to 100%)</p>
+    <ul>
+        <li><span class="bold">0%</span>: No effect (disabled)</li>
+        <li><span class="bold">25-50%</span>: Subtle pulsing</li>
+        <li><span class="bold">50-75%</span>: Noticeable wobble</li>
+        <li><span class="bold">75-100%</span>: Dramatic on/off pulsing</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span>: Controls how Speed and Depth evolve</p>
+    <ul>
+        <li><span class="bold">0%</span>: Fixed tremolo</li>
+        <li><span class="bold">Low-High</span>: Tremolo intensity varies during playback</li>
+    </ul>
+
+    <p><span class="bold">To disable</span>: Set both Depth handles to 0%</p>
+
+    <p><span class="bold">Tip</span>: Try 3-5 Hz Speed with 40-60% Depth for classic tremolo. Higher speeds (8-12 Hz) create vibrato-like effects.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🌀 CHORUS</h4>
+    <p><span class="bold">Purpose</span>: Thickening and shimmer effect (like multiple instruments playing slightly out of tune)</p>
+    <p><span class="bold">Controls</span>: Two dual-handle sliders</p>
+
+    <p>1. <span class="bold">Speed</span> (0.2 Hz to 3 Hz)</p>
+    <ul>
+        <li><span class="bold">0.2-0.8 Hz</span>: Slow, wide modulation</li>
+        <li><span class="bold">0.8-1.5 Hz</span>: Classic chorus speed</li>
+        <li><span class="bold">1.5-3 Hz</span>: Fast, vibrato-like</li>
+    </ul>
+
+    <p>2. <span class="bold">Depth</span> (0% to 100%)</p>
+    <ul>
+        <li><span class="bold">0%</span>: No effect (disabled)</li>
+        <li><span class="bold">20-40%</span>: Subtle thickening</li>
+        <li><span class="bold">40-70%</span>: Rich, lush chorus</li>
+        <li><span class="bold">70-100%</span>: Extreme detuning</li>
+    </ul>
+
+    <p><span class="bold">Technical</span>: Uses three delay lines with different modulation rates for authentic analog chorus sound</p>
+
+    <p><span class="bold">Behavior Slider</span>: Controls Speed and Depth variation</p>
+
+    <p><span class="bold">To disable</span>: Set both Depth handles to 0%</p>
+
+    <p><span class="bold">Tip</span>: 1.0 Hz Speed with 45% Depth creates lush, professional chorus. Great on pads and strings.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🌀 PHASER</h4>
+    <p><span class="bold">Purpose</span>: Sweeping, swirling effect (frequency notches moving through spectrum)</p>
+    <p><span class="bold">Controls</span>: Two dual-handle sliders</p>
+
+    <p>1. <span class="bold">Speed</span> (0.1 Hz to 2 Hz)</p>
+    <ul>
+        <li><span class="bold">0.1-0.5 Hz</span>: Slow sweep (spacey)</li>
+        <li><span class="bold">0.5-1.0 Hz</span>: Medium sweep (classic phaser)</li>
+        <li><span class="bold">1.0-2.0 Hz</span>: Fast sweep (intense)</li>
+    </ul>
+
+    <p>2. <span class="bold">Depth</span> (0% to 100%)</p>
+    <ul>
+        <li><span class="bold">0%</span>: No effect (disabled)</li>
+        <li><span class="bold">20-40%</span>: Subtle movement</li>
+        <li><span class="bold">40-70%</span>: Strong phasing</li>
+        <li><span class="bold">70-100%</span>: Extreme sweep</li>
+    </ul>
+
+    <p><span class="bold">Technical</span>: Uses four cascaded all-pass filter stages (authentic analog phaser design)</p>
+
+    <p><span class="bold">Behavior Slider</span>: Controls Speed and Depth variation</p>
+
+    <p><span class="bold">To disable</span>: Set both Depth handles to 0%</p>
+
+    <p><span class="bold">Tip</span>: 0.4 Hz Speed with 55% Depth creates classic '70s phaser sound. Combine with Chorus for complex modulation.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🏛️ REVERB</h4>
+    <p><span class="bold">Purpose</span>: Add spatial depth (simulates acoustic spaces from small rooms to cathedrals)</p>
+    <p><span class="bold">Controls</span>: Two dual-handle sliders</p>
+
+    <p>1. <span class="bold">Time</span> (0.5 to 6.0 seconds)</p>
+    <ul>
+        <li><span class="bold">0.5-1.5s</span>: Small room, tight ambience</li>
+        <li><span class="bold">1.5-3.0s</span>: Hall, medium space</li>
+        <li><span class="bold">3.0-6.0s</span>: Cathedral, vast space</li>
+    </ul>
+
+    <p>2. <span class="bold">Mix</span> (0% to 100% wet/dry)</p>
+    <ul>
+        <li><span class="bold">0%</span>: No reverb (completely dry)</li>
+        <li><span class="bold">20-40%</span>: Subtle ambience (natural)</li>
+        <li><span class="bold">50-70%</span>: Prominent space</li>
+        <li><span class="bold">80-100%</span>: Dominated by reverb (ethereal)</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span>: Both Time and Mix evolve during playback</p>
+    <ul>
+        <li><span class="bold">0%</span>: Static reverb</li>
+        <li><span class="bold">Low</span>: Gentle space changes</li>
+        <li><span class="bold">High</span>: Dramatic acoustic shifts (small room suddenly becomes cathedral)</li>
+    </ul>
+
+    <p><span class="bold">To disable</span>: Set both Mix handles to 0%, or both Time handles to 0.5s</p>
+
+    <p><span class="bold">Tip</span>: For ambient music, try 3.0-5.0s Time with 45-65% Mix and 60% behavior - creates evolving, breathing spaces</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h4>🏛️ DELAY</h4>
+    <p><span class="bold">Purpose</span>: Rhythmic echoes synchronized to tempo (creates depth and rhythmic complexity)</p>
+    <p><span class="bold">Controls</span>: Three dual-handle sliders</p>
+
+    <p>1. <span class="bold">Time</span> (100ms to 2000ms)</p>
+    <ul>
+        <li>Tooltips show <span class="bold">both</span> milliseconds and musical values</li>
+        <li>Example: "250ms = 1/8 (Eighth Note)" at 120 BPM</li>
+        <li><span class="bold">Automatically syncs</span> to voice's current tempo</li>
+        <li><span class="bold">100-300ms</span>: Fast, tight echoes</li>
+        <li><span class="bold">300-800ms</span>: Medium delays (rhythmic punctuation)</li>
+        <li><span class="bold">800-2000ms</span>: Long delays (ambient wash)</li>
+    </ul>
+
+    <p>2. <span class="bold">Mix</span> (0% to 100% wet/dry)</p>
+    <ul>
+        <li><span class="bold">0%</span>: No delay (completely dry)</li>
+        <li><span class="bold">20-40%</span>: Subtle echo (adds depth)</li>
+        <li><span class="bold">50-80%</span>: Prominent repeats</li>
+        <li><span class="bold">80-100%</span>: Delay dominates</li>
+    </ul>
+
+    <p>3. <span class="bold">Feedback</span> (0% to 100%)</p>
+    <ul>
+        <li><span class="bold">0%</span>: Single echo</li>
+        <li><span class="bold">30-50%</span>: 2-3 repeats</li>
+        <li><span class="bold">50-70%</span>: 4-6 repeats</li>
+        <li><span class="bold">70-90%</span>: Long tail of fading echoes</li>
+        <li><span class="bold">90-100%</span>: Very long sustain (<span class="bold">caution</span>: can build up!)</li>
+    </ul>
+
+    <p><span class="bold">Musical Synchronization</span>:</p>
+    <ul>
+        <li>Delay time stays locked to musical subdivisions as tempo changes</li>
+        <li>Example: Set to "1/4 note" - if tempo speeds up, delay time shortens automatically to maintain quarter-note spacing</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider</span>: All three parameters (Time, Mix, Feedback) evolve</p>
+    <ul>
+        <li><span class="bold">0%</span>: Static delay</li>
+        <li><span class="bold">Low-High</span>: Creates shifting, evolving echo patterns</li>
+    </ul>
+
+    <p><span class="bold">To disable</span>: Set both Mix handles to 0%</p>
+
+    <p><span class="bold">Example 1 - Rhythmic Eighth-Note Delays</span>:</p>
+    <blockquote>
+        Time: 250ms-500ms (displays as "1/8" to "1/4" at 120 BPM)<br>
+        Mix: 30%-50%<br>
+        Feedback: 40%-60%<br>
+        Behavior: 60%<br><br>
+        Result: Rhythmically synchronized echoes that dance between eighth and quarter note timing with 3-5 repeats
+    </blockquote>
+
+    <p><span class="bold">Example 2 - Ambient Wash</span>:</p>
+    <blockquote>
+        Time: 800ms-1500ms<br>
+        Mix: 50%-70%<br>
+        Feedback: 70%-85%<br>
+        Behavior: 40%<br><br>
+        Result: Long, overlapping delays create lush ambient texture with slowly evolving echo patterns
+    </blockquote>
+
+    <p><span class="bold">Caution</span>: High feedback (85%+) with long delay times can create building, sustained echoes. This can be beautiful for ambient music but may overpower the mix. The system automatically limits maximum feedback to prevent runaway buildup.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Advanced Techniques</h2>
+
+    <h4>Polyrhythmic Textures</h4>
+    <p>Each voice has independent tempo - use this to create complex interactions:</p>
+    <p><span class="bold">Example - Three-Speed Texture</span>:</p>
+    <ul>
+        <li>Voice 1 (bass): 60 BPM, Whole Notes (very slow foundation)</li>
+        <li>Voice 2 (mid): 120 BPM, Quarter Notes (walking pace)</li>
+        <li>Voice 3 (high): 180 BPM, Sixteenth Notes (rapid sparkle)</li>
+    </ul>
+    <p>Result: Three different time scales interact, creating organic complexity</p>
+
+    <h4>Layered Entrances</h4>
+    <p>Use Life Span to build complexity gradually:</p>
+    <p><span class="bold">Example - 5-Minute Build</span>:</p>
+    <blockquote>
+        Total Time Length: 5:00<br><br>
+        Voice 1 (drone): 0:00 to ∞<br>
+        Voice 2 (bass): 1:00 to ∞<br>
+        Voice 3 (mid): 2:00 to ∞<br>
+        Voice 4 (high): 3:00 to 4:00 (temporary appearance)<br>
+        Voice 5 (lead): 3:30 to ∞
+    </blockquote>
+    <p>Result: Composition builds from solo drone through full texture, with temporary voice creating moment of climax</p>
+
+    <h4>Call and Response</h4>
+    <p>Use Life Span with non-overlapping time windows:</p>
+    <p><span class="bold">Example - Dialog</span>:</p>
+    <blockquote>
+        Total Time Length: 2:00, Repeat: Checked<br><br>
+        Voice 1: 0:00-0:15, 0:30-0:45, 1:00-1:15, 1:30-1:45<br>
+        Voice 2: 0:15-0:30, 0:45-1:00, 1:15-1:30, 1:45-2:00
+    </blockquote>
+    <p>Result: Voices alternate in call-and-response pattern, never playing simultaneously</p>
+
+    <h4>Stereo Choreography</h4>
+    <p>Use extreme stereo settings with high behavior to create spatial movement:</p>
+    <p><span class="bold">Example - Swirling Stereo</span>:</p>
+    <ul>
+        <li>Voice 1: Balance -100 to -50, Behavior 85% (active on left)</li>
+        <li>Voice 2: Balance +50 to +100, Behavior 85% (active on right)</li>
+        <li>Voice 3: Balance -100 to +100, Behavior 95% (flies across entire field)</li>
+    </ul>
+    <p>Result: Three-dimensional soundscape with voices moving independently</p>
+
+    <h4>Evolution From Simple to Complex</h4>
+    <p>Start with constrained settings, then expand:</p>
+    <p><span class="bold">First 2 Minutes</span>:</p>
+    <ul>
+        <li>Melodic Range: Only 5 notes selected</li>
+        <li>Rhythms: Only Quarter Notes checked</li>
+        <li>Polyphony: 1-2 notes</li>
+        <li>All behavior sliders: 20-30%</li>
+    </ul>
+    <p><span class="bold">Last 3 Minutes</span>:</p>
+    <ul>
+        <li>Melodic Range: Full octaves selected</li>
+        <li>Rhythms: Multiple values checked</li>
+        <li>Polyphony: 4-8 notes</li>
+        <li>All behavior sliders: 70-85%</li>
+    </ul>
+    <p>You can use two voices to do this and save it as a .json file using the Save button, or you can use it as a performance tool by manually adjusting parameters during playback, creating a live performance</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Saving, Loading, and Sharing</h2>
+
+    <h4>Creating a New Composition</h4>
+    <p><span class="bold">NEW Button</span>: Resets all 16 voices to defaults</p>
+    <ul>
+        <li>Voice 1 enabled, rest disabled</li>
+        <li>All parameters at safe starting values</li>
+        <li>All effects turned off</li>
+        <li>Default Life Span (Entrance 1: 0:00 to ∞, no repeat)</li>
+        <li>System asks for confirmation if you have unsaved work</li>
+    </ul>
+
+    <h4>Saving Your Work</h4>
+    <p><span class="bold">SAVE Button</span>: Opens native file save dialog</p>
+    <ul>
+        <li>Choose any location on your computer</li>
+        <li>Choose any filename you want</li>
+        <li>Files saved as .json format</li>
+        <li>Organize into folders however you like</li>
+        <li>File contains complete state: all 16 voices, all parameters, all settings</li>
+    </ul>
+
+    <p><span class="bold">Best Practice</span>: Save frequently with descriptive names</p>
+    <ul>
+        <li>"Ambient-Cathedral-Drone-v1.json"</li>
+        <li>"Fast-Polyrhythm-Experiment.json"</li>
+        <li>"Slow-Build-5min.json"</li>
+    </ul>
+
+    <h4>Opening Saved Compositions</h4>
+    <p><span class="bold">OPEN Button</span>: Opens native file picker</p>
+    <ul>
+        <li>Navigate to your saved nest files</li>
+        <li>Select file to load</li>
+        <li>System restores exact state: all voices, all parameters, all settings</li>
+        <li>Ready to play or continue editing</li>
+    </ul>
+
+    <h4>Sharing with Others</h4>
+    <p>Files are portable - share them however you like:</p>
+    <ul>
+        <li>Email attachment</li>
+        <li>Cloud storage (Dropbox, Google Drive)</li>
+        <li>USB drive</li>
+        <li>Direct file transfer</li>
+    </ul>
+    <p>Recipient simply opens the .json file in The Tuner to hear your composition exactly as you created it</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>The Tuners Community (Requires Free Account)</h2>
+
+    <h4>Create Free Account</h4>
+    <p>Benefits of creating an account:</p>
+    <ul>
+        <li><span class="bold">Professional Sample Library</span>: One-time download of authentic instrument recordings</li>
+        <li><span class="bold">Save to cloud</span>: Access your compositions from any device</li>
+        <li><span class="bold">Post publicly</span>: Share your work with the community</li>
+        <li><span class="bold">Lock voices</span>: Prevent accidental changes while editing</li>
+        <li><span class="bold">View others' settings</span>: Learn from community compositions</li>
+        <li><span class="bold">Vote and comment</span>: Engage with other creators</li>
+        <li><span class="bold">Search library</span>: Find compositions by creator, title, or date</li>
+    </ul>
+
+    <h4>The Tunespace</h4>
+    <p>Browse community creations:</p>
+    <ul>
+        <li>Listen to any posted composition</li>
+        <li>See exactly how it was made (all parameter settings visible)</li>
+        <li>Learn techniques from other composers</li>
+        <li>Vote for favorites</li>
+        <li>Leave comments and feedback</li>
+    </ul>
+
+    <h4>Posting Your Compositions</h4>
+    <p><span class="bold">POST Button</span> (requires login):</p>
+    <ul>
+        <li>Share your work publicly</li>
+        <li>Add title and description</li>
+        <li>Community can listen, view settings, vote, and comment</li>
+        <li>Your compositions remain yours - others can study but not modify your originals</li>
+    </ul>
+
+    <h4>Learning from Others</h4>
+    <p>When viewing another user's composition:</p>
+    <ul>
+        <li>All 16 voices visible</li>
+        <li>All parameter settings visible</li>
+        <li>Can study their techniques</li>
+        <li>Cannot modify (view-only)</li>
+        <li>Can save your own inspired-by version</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Tips for Success</h2>
+
+    <h4>Start Simple</h4>
+    <ul>
+        <li>Enable only 1-2 voices initially</li>
+        <li>Use low behavior settings (20-40%) while learning</li>
+        <li>Stick to one or two octaves in Melodic Range</li>
+        <li>Check only 2-3 rhythm values</li>
+    </ul>
+
+    <h4>Build Gradually</h4>
+    <ul>
+        <li>Add voices one at a time</li>
+        <li>Preview each voice individually before enabling in full mix</li>
+        <li>Start with long, slow values (Whole Notes) and add faster elements later</li>
+        <li>Begin with low polyphony (1-2 notes) and increase if desired</li>
+    </ul>
+
+    <h4>Create Contrast</h4>
+    <ul>
+        <li>Mix slow and fast voices (different tempos)</li>
+        <li>Mix high and low (different melodic ranges)</li>
+        <li>Mix busy and sparse (different rhythm densities)</li>
+        <li>Mix loud and soft (different volume ranges)</li>
+    </ul>
+
+    <h4>Use Effects Subtly</h4>
+    <ul>
+        <li>Start with Mix/Depth at 20-30% and increase gradually</li>
+        <li>Too much reverb makes everything muddy</li>
+        <li>Too much delay creates rhythmic confusion</li>
+        <li>Less is often more with modulation effects</li>
+    </ul>
+
+    <h4>Embrace Evolution</h4>
+    <ul>
+        <li>Let the composition run for several minutes</li>
+        <li>Don't expect immediate perfection</li>
+        <li>The music should surprise you</li>
+        <li>Make small adjustments and observe results over time</li>
+    </ul>
+
+    <h4>Save Variations</h4>
+    <ul>
+        <li>Save multiple versions as you experiment</li>
+        <li>"Ambient-v1.json", "Ambient-v2.json", etc.</li>
+        <li>Easy to return to earlier versions</li>
+        <li>Compare different approaches</li>
+    </ul>
+
+    <h4>Use PREVIEW Extensively</h4>
+    <ul>
+        <li>Test each voice in isolation</li>
+        <li>Easier to hear what each voice contributes</li>
+        <li>Catch problems before adding to full mix</li>
+        <li>Adjust parameters without stopping main playback</li>
+    </ul>
+
+    <h4>Think in Layers</h4>
+    <ul>
+        <li>Foundation layer: Bass, drones (Voices 1-3)</li>
+        <li>Middle layer: Harmony, texture (Voices 4-8)</li>
+        <li>Top layer: Melody, sparkle (Voices 9-12)</li>
+        <li>Accent layer: Punctuation, effects (Voices 13-16)</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>System Requirements</h2>
+    <ul>
+        <li>Modern web browser (Chrome, Firefox, Safari, Edge)</li>
+        <li>JavaScript enabled</li>
+        <li>Web Audio API support (all modern browsers)</li>
+        <li>Minimum 4GB RAM recommended</li>
+        <li>Audio output device (speakers or headphones)</li>
+        <li>Mouse or touchscreen for interactive controls</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Keyboard Shortcuts</h2>
+    <p>Currently, all controls are mouse/touch-based. Future versions may include:</p>
+    <ul>
+        <li>Spacebar: Play/Stop</li>
+        <li>Number keys: Select Voice 1-16</li>
+        <li>Arrow keys: Adjust selected parameter</li>
+        <li>Escape: Stop all playback</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Credits and Copyright</h2>
+    <p><span class="bold">The Tuner</span> - Copyright 2025 Mark Loren Wilson</p>
+    <p>All rights reserved. The Tuner engine, interface design, and generative algorithms are proprietary software.</p>
+    <p>Users retain full rights to compositions created with The Tuner. Share, perform, and publish your work freely.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <h2>Support and Feedback</h2>
+    <p>For questions, bug reports, or feature requests:</p>
+    <ul>
+        <li>Visit the community forum</li>
+        <li>Contact support through your account page</li>
+        <li>Email support at mark@tuners.com</li>
+    </ul>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <p style="font-size: 8pt; font-weight: bold; color: #111827;">Updated November 11, 2025</p>
+    <p>This guide reflects the current state of The Tuner as of this version. Features and interface may evolve based on user feedback and ongoing development.</p>
+</div>
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
+    <p style="font-size: 14pt; font-weight: bold; color: #1F497D;">Welcome to the Tuners community. Start creating your evolving musical landscapes today.</p>
+</div>
+
 </body>
 </html>
-
