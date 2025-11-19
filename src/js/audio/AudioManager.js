@@ -15,48 +15,142 @@
 /**
  * AudioManager - Core Audio Implementation
  */
-class AudioManager {
-    constructor() {
-        this.audioContext = null;
-        this.masterGainNode = null;
-        this.isInitialized = false;
-        this.testOscillator = null;
-        this.testGainNode = null;
-        this.stereoPannerNode = null;
-        this.isPlaying = false;
+// class AudioManager {
+//     constructor() {
+//         this.audioContext = null;
+//         this.masterGainNode = null;
+//         this.isInitialized = false;
+//         this.testOscillator = null;
+//         this.testGainNode = null;
+//         this.stereoPannerNode = null;
+//         this.isPlaying = false;
         
-        // FIXED: Track preview audio nodes for real-time control
-        this.previewGainNodes = new Set(); // Track all active preview gain nodes
-        this.previewPanNodes = new Set();  // Track all active preview pan nodes
-        this.previewEffectGainNodes = new Set(); // Track effect-specific gain nodes (tremolo, chorus, etc.)
-        this.currentUserVolume = 50;       // Store current user volume (0-100)
-        this.currentUserBalance = 0;       // Store current user balance (-100 to +100)
-        this.previousUserVolume = 0.5;     // Track previous volume for ADSR coordination
-    }
-
+//         // FIXED: Track preview audio nodes for real-time control
+//         this.previewGainNodes = new Set(); // Track all active preview gain nodes
+//         this.previewPanNodes = new Set();  // Track all active preview pan nodes
+//         this.previewEffectGainNodes = new Set(); // Track effect-specific gain nodes (tremolo, chorus, etc.)
+//         this.currentUserVolume = 50;       // Store current user volume (0-100)
+//         this.currentUserBalance = 0;       // Store current user balance (-100 to +100)
+//         this.previousUserVolume = 0.5;     // Track previous volume for ADSR coordination
+//     }
+class AudioManager {
+  constructor() {
+    this.audioContext = null;
+    this.masterGainNode = null;
+    this.isInitialized = false;
+    this.isPlaying = false;
+    this.currentUserVolume = 75;
+    this.currentUserBalance = 0;
+    this.previewGainNodes = new Set();
+    this.previewPanNodes = new Set();
+    this.previewEffectGainNodes = new Set();
+    
+    // Performance monitoring instances - will be initialized in initialize()
+    this.performanceMonitor = null;
+    this.audioHealthMonitor = null;
+    this.memoryMonitor = null;
+    this.oscillatorPool = null;
+  }
 
     /**
      * Initialize Web Audio API context
      * Must be called after user interaction due to browser autoplay policies
-     */
+    //  */
+    // async initialize() {
+    //     try {
+    //         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+    //         if (this.audioContext.state === 'suspended') {
+    //             await this.audioContext.resume();
+    //         }
+            
+    //         this.masterGainNode = this.audioContext.createGain();
+    //         this.masterGainNode.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+    //         this.masterGainNode.connect(this.audioContext.destination);
+            
+    //         this.isInitialized = true;
+            
+    //     } catch (error) {
+    //         this.isInitialized = false;
+    //     }
+    // }
     async initialize() {
-        try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
-            if (this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
-            }
-            
-            this.masterGainNode = this.audioContext.createGain();
-            this.masterGainNode.gain.setValueAtTime(0.5, this.audioContext.currentTime);
-            this.masterGainNode.connect(this.audioContext.destination);
-            
-            this.isInitialized = true;
-            
-        } catch (error) {
-            this.isInitialized = false;
-        }
+    if (this.isInitialized) return true;
+
+    try {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      
+      this.masterGainNode = this.audioContext.createGain();
+      this.masterGainNode.connect(this.audioContext.destination);
+      this.masterGainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+      
+      // INITIALIZE PERFORMANCE MONITORING SYSTEMS
+      console.log('🚀 Initializing performance monitoring systems...');
+      
+      this.performanceMonitor = new PerformanceMonitor();
+      this.audioHealthMonitor = new AudioHealthMonitor(this.audioContext);
+      this.memoryMonitor = new MemoryMonitor();
+      this.oscillatorPool = new OscillatorPool(this.audioContext, 100);
+      
+      // Start monitoring loops
+      this.startMonitoring();
+      
+      this.isInitialized = true;
+      
+      console.log('✅ AudioManager initialized with performance monitoring');
+      console.log('📊 Performance systems:', {
+        performanceMonitor: !!this.performanceMonitor,
+        audioHealthMonitor: !!this.audioHealthMonitor,
+        memoryMonitor: !!this.memoryMonitor,
+        oscillatorPool: !!this.oscillatorPool
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('❌ AudioManager initialization failed:', error);
+      return false;
     }
+  }
+  
+  // REPLACE the startMonitoring method in AudioManager with this:
+
+startMonitoring() {
+  // Performance monitoring every 33ms (30fps) - less aggressive
+  setInterval(() => {
+    if (this.performanceMonitor) {
+      this.performanceMonitor.update();
+    }
+  }, 33);
+  
+  // Audio health check only every 500ms and only during playback
+  setInterval(() => {
+    if (this.audioHealthMonitor && this.isPlaying) {
+      this.audioHealthMonitor.checkHealth();
+    }
+  }, 500);
+  
+  // Memory sampling every 10 seconds (less frequent)
+  setInterval(() => {
+    if (this.memoryMonitor) {
+      this.memoryMonitor.sample();
+    }
+  }, 10000);
+  
+  // Pool stats every 15 seconds
+  setInterval(() => {
+    if (this.oscillatorPool && this.isPlaying) {
+      const poolStats = this.oscillatorPool.getStats();
+      console.log(`🎛️ Pool: ${poolStats.active} active, ${poolStats.available} available, ${poolStats.hitRate}% hit rate`);
+    }
+  }, 15000);
+  
+  console.log('📊 Optimized monitoring loops started');
+}
+
 
     /**
      * Create a simple test oscillator
@@ -81,34 +175,7 @@ class AudioManager {
         this.isPlaying = true;
     }
 
-    /**
-     * Stop the test oscillator
-     * FIXED: Also cleanup preview nodes
-     */
-    // stopTestOscillator() {
-    //     if (this.testOscillator) {
-    //         try {
-    //             this.testOscillator.stop();
-    //         } catch (e) {
-    //             // Oscillator already stopped
-    //         }
-    //         this.testOscillator.disconnect();
-    //         this.testOscillator = null;
-    //     }
-    //     if (this.testGainNode) {
-    //         this.testGainNode.disconnect();
-    //         this.testGainNode = null;
-    //     }
-    //     if (this.stereoPannerNode) {
-    //         this.stereoPannerNode.disconnect();
-    //         this.stereoPannerNode = null;
-    //     }
-        
-    //     // FIXED: Cleanup preview nodes when stopping
-    //     this.cleanupPreviewNodes();
-        
-    //     this.isPlaying = false;
-    // }
+
 
 /**
  * Stop the test oscillator
@@ -257,6 +324,8 @@ stopTestOscillator() {
     
 //     this.previousUserVolume = gainValue; // Track for next update
 // }
+
+
 setVolumeRealTime(volume) {
     this.currentUserVolume = volume; // Store for new notes
     const gainValue = Math.max(0, Math.min(1, volume / 100));
@@ -334,79 +403,7 @@ setVolumeRealTime(volume) {
      * @param {number} speed - LFO frequency in Hz
      * @param {number} depth - Modulation depth 0-1
      */
-    // setTremoloRealTime(speed, depth) {
-    //     if (!this.isInitialized || !this.isPlaying) return;
-        
-    //     // If tremolo nodes don't exist yet, we'll update on next note
-    //     // This is a placeholder that prepares for real-time updates
-    //     this.currentTremoloSpeed = speed;
-    //     this.currentTremoloDepth = depth;
-        
-    //     console.log(`🔘 Tremolo: Speed ${speed.toFixed(1)}Hz, Depth ${(depth * 100).toFixed(0)}%`);
-    // }
-
-    // /**
-    //  * Set chorus effect in real-time (speed and depth)
-    //  * @param {number} speed - LFO frequency in Hz
-    //  * @param {number} depth - Modulation depth 0-1
-    //  */
-    // setChorusRealTime(speed, depth) {
-    //     if (!this.isInitialized || !this.isPlaying) return;
-        
-    //     this.currentChorusSpeed = speed;
-    //     this.currentChorusDepth = depth;
-        
-    //     console.log(`🎼 Chorus: Speed ${speed.toFixed(1)}Hz, Depth ${(depth * 100).toFixed(0)}%`);
-    // }
-
-    // /**
-    //  * Set phaser effect in real-time (speed and depth)
-    //  * @param {number} speed - LFO frequency in Hz
-    //  * @param {number} depth - Modulation depth 0-1
-    //  */
-    // setPhaserRealTime(speed, depth) {
-    //     if (!this.isInitialized || !this.isPlaying) return;
-        
-    //     this.currentPhaserSpeed = speed;
-    //     this.currentPhaserDepth = depth;
-        
-    //     console.log(`🌀 Phaser: Speed ${speed.toFixed(1)}Hz, Depth ${(depth * 100).toFixed(0)}%`);
-    // }
-
-    // /**
-    //  * Set reverb effect in real-time (decay time and mix)
-    //  * @param {number} time - Reverb decay time in seconds
-    //  * @param {number} mix - Wet/dry mix 0-1
-    //  */
-    // setReverbRealTime(time, mix) {
-    //     if (!this.isInitialized || !this.isPlaying) return;
-        
-    //     this.currentReverbTime = time;
-    //     this.currentReverbMix = mix;
-        
-    //     console.log(`🏛️ Reverb: Time ${time.toFixed(2)}s, Mix ${(mix * 100).toFixed(0)}%`);
-    // }
-
-    // /**
-    //  * Set delay effect in real-time (time, feedback, and mix)
-    //  * @param {number} time - Delay time in milliseconds
-    //  * @param {number} feedback - Feedback amount 0-1
-    //  * @param {number} mix - Wet/dry mix 0-1
-    //  */
-    // setDelayRealTime(time, feedback, mix) {
-    //     if (!this.isInitialized || !this.isPlaying) return;
-        
-    //     this.currentDelayTime = time;
-    //     this.currentDelayFeedback = feedback;
-    //     this.currentDelayMix = mix;
-        
-    //     console.log(`🔄 Delay: Time ${time.toFixed(0)}ms, Feedback ${(feedback * 100).toFixed(0)}%, Mix ${(mix * 100).toFixed(0)}%`);
-    // }
-
-    /**
-     * Cleanup all preview nodes when preview stops
-     * FIXED: Clear tracking sets to prevent memory leaks
-     */
+    
     cleanupPreviewNodes() {
         this.previewGainNodes.clear();
         this.previewPanNodes.clear();

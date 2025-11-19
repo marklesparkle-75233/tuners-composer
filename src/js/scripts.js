@@ -1,4 +1,4 @@
-// Parameter definitions
+/ Parameter definitions
 const parameterDefinitions = [
   // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
   { name: "INSTRUMENT", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
@@ -1570,6 +1570,8 @@ function toggleLockVoice(voiceIndex) {
 
 async function toggleMasterPlayback() {
   console.log('🎯 MASTER PLAY clicked (Fixed Version)');
+
+  console.trace('toggleMasterPlayback called from:'); // WHO CALLED THIS?
   
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
   
@@ -1583,7 +1585,11 @@ async function toggleMasterPlayback() {
     if (masterClock) {
       masterClock.stop();
     }
-    
+// In the STOP section (around line 1586), add:
+    if (audioManager && audioManager.audioHealthMonitor) {
+      audioManager.audioHealthMonitor.stopMonitoring();
+    }
+
     playButton.textContent = 'PLAY';
     playButton.style.backgroundColor = '';
     playButton.style.color = '';
@@ -1639,6 +1645,10 @@ async function toggleMasterPlayback() {
     console.log('🎵 Starting voice clocks...');
     voiceClockManager.startAllVoices();
     
+    // In the START section (around line 1647), add:
+    if (audioManager && audioManager.audioHealthMonitor) {
+      audioManager.audioHealthMonitor.startMonitoring();
+    }
     playButton.textContent = 'STOP';
     playButton.style.backgroundColor = '#dc3545';
     playButton.style.color = 'white';
@@ -2956,6 +2966,9 @@ class VoiceClock {
     this.lastTempoUpdate = 0;
     
     console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
+
+  // NEW: Lookahead scheduler
+  this.lookaheadScheduler = null; // Will initialize when audioManager is ready
   }
   
   start() {
@@ -2975,14 +2988,48 @@ class VoiceClock {
     // Schedule first note 100ms from now
     this.nextNoteTime = masterTime + 100;
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1} clock started with Life Span integration`);
-    console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM`);
+    // console.log(`🎵 Voice ${this.voiceIndex + 1} clock started with Life Span integration`);
+    // console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM`);
+
+// NEW: Initialize lookahead scheduler if audioManager available
+if (audioManager && audioManager.audioContext) {
+  console.log(`🔍 Voice ${this.voiceIndex + 1}: audioManager check passed`);
+  
+  if (!this.lookaheadScheduler) {
+    console.log(`🔍 Voice ${this.voiceIndex + 1}: Creating new LookaheadScheduler`);
+    this.lookaheadScheduler = new LookaheadScheduler(
+      this.voiceIndex,
+      audioManager.audioContext,
+      this.masterClock
+    );
+  }
+  
+  // Start lookahead scheduling
+  console.log(`🔍 Voice ${this.voiceIndex + 1}: Calling lookaheadScheduler.start()`);
+  this.lookaheadScheduler.start();
+  
+  // Verify it started
+  console.log(`🔍 Voice ${this.voiceIndex + 1}: Scheduler active? ${this.lookaheadScheduler.isActive}`);
+  console.log(`🔍 Voice ${this.voiceIndex + 1}: Interval set? ${!!this.lookaheadScheduler.schedulerInterval}`);
+  
+  console.log(`▶ Voice ${this.voiceIndex + 1} started with lookahead scheduling`);
+} else {
+  console.warn(`Voice ${this.voiceIndex + 1}: Starting without lookahead (audioManager not ready)`);
+}
+
+
   }
   
   stop() {
-    this.isActive = false;
-    
-    console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
+this.isActive = false;
+
+// NEW: Stop lookahead scheduler
+if (this.lookaheadScheduler) {
+  this.lookaheadScheduler.stop();
+}
+
+console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
+
     
     if (voiceClockManager) {
       setTimeout(() => {
@@ -3023,7 +3070,7 @@ class VoiceClock {
     return this.isInLifeSpan(elapsedMs);
   }
   
-isInLifeSpan(elapsedMs) {
+  isInLifeSpan(elapsedMs) {
   const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   
   if (!lifeSpanParam) {
@@ -3047,17 +3094,17 @@ isInLifeSpan(elapsedMs) {
     return false; // No active spans
   }
   
-  // SIMPLE REPEAT LOGIC: If repeat is enabled, just keep cycling
+  // CORRECTED REPEAT LOGIC: Use maxTimeMs as cycle length
   if (lifeSpanParam.repeat) {
-    // Find the maximum exit time for cycle length
-    let maxExitTime = 0;
-    let hasInfiniteSpan = false;
+    // Get the total cycle length from maxTimeMs
+    const cycleLength = lifeSpanParam.maxTimeMs || 300000; // Fallback to 5 minutes
     
+    // Check for infinite spans
+    let hasInfiniteSpan = false;
     for (const span of activeSpans) {
       if (span.exit === Infinity) {
         hasInfiniteSpan = true;
-      } else {
-        maxExitTime = Math.max(maxExitTime, span.exit);
+        break;
       }
     }
     
@@ -3067,24 +3114,19 @@ isInLifeSpan(elapsedMs) {
       return true;
     }
     
-    // If no valid cycle time, don't play
-    if (maxExitTime <= 0) {
-      return false;
-    }
-    
-    // Calculate position within current cycle
-    const cyclePosition = elapsedMs % maxExitTime;
-    const cycleNumber = Math.floor(elapsedMs / maxExitTime) + 1;
+    // Calculate position within current cycle (using maxTimeMs, not exit time!)
+    const cyclePosition = elapsedMs % cycleLength;
+    const cycleNumber = Math.floor(elapsedMs / cycleLength) + 1;
     
     // Check if we're in any active span at this cycle position
     for (const span of activeSpans) {
       if (cyclePosition >= span.enter && cyclePosition < span.exit) {
-        console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - in span ${span.number} at ${formatMsToMMSS(cyclePosition)}`);
+        console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - in span ${span.number} at ${formatMsToMMSS(cyclePosition)} of ${formatMsToMMSS(cycleLength)} cycle`);
         return true;
       }
     }
     
-    console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - outside spans at ${formatMsToMMSS(cyclePosition)}`);
+    console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - outside spans at ${formatMsToMMSS(cyclePosition)} of ${formatMsToMMSS(cycleLength)} cycle`);
     return false;
   }
   
@@ -3257,358 +3299,768 @@ scheduleNextNote() {
     return restInfo.beats * beatDurationMs;
   }
   
-  triggerNote(noteInfoArray, durationMs) {
-    if (!audioManager || !audioManager.isInitialized || !audioManager.audioContext) {
-        console.warn(`Voice ${this.voiceIndex + 1}: Audio not ready, skipping notes`);
-        return;
-    }
-    
-    const startTime = audioManager.audioContext.currentTime + 0.01;
-    const durationSeconds = durationMs / 1000;
-    const scheduledNotes = [];
-    
-    noteInfoArray.forEach((noteInfo, index) => {
-        const scheduledNote = this.createScheduledAudioNote(
-            noteInfo.frequency,
-            durationSeconds,
-            startTime,
-            index / noteInfoArray.length
-        );
-        
-        if (scheduledNote) {
-            scheduledNotes.push(scheduledNote);
-        }
-    });
-    
-    if (scheduledNotes.length > 0) {
-        const noteNames = noteInfoArray.map(n => n.noteName).join(', ');
-        console.log(`🎵 Voice ${this.voiceIndex + 1}: [${noteNames}] (${scheduledNotes.length} notes) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
-    }
-    
-    return scheduledNotes;
+  triggerNote(noteInfoArray, durationMs, scheduleTime = null) {
+  if (!audioManager || !audioManager.isInitialized || !audioManager.audioContext) {
+    console.warn(`Voice ${this.voiceIndex + 1}: Audio not ready, skipping notes`);
+    return;
   }
+  
+  // Use provided schedule time, or default to "now + 10ms" for backward compatibility
+  const startTime = scheduleTime !== null ? scheduleTime : (audioManager.audioContext.currentTime + 0.01);
+  const durationSeconds = durationMs / 1000;
+  const scheduledNotes = [];
+  
+  console.log(`🎯 triggerNote: scheduling at ${startTime.toFixed(3)}s (${scheduleTime !== null ? 'LOOKAHEAD' : 'immediate'})`);
+  
+  noteInfoArray.forEach((noteInfo, index) => {
+    const scheduledNote = this.createScheduledAudioNote(
+      noteInfo.frequency,
+      durationSeconds,
+      startTime,
+      index / noteInfoArray.length
+    );
+    
+    if (scheduledNote) {
+      scheduledNotes.push(scheduledNote);
+    }
+  });
+  
+  if (scheduledNotes.length > 0) {
+    const noteNames = noteInfoArray.map(n => n.noteName).join(', ');
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: [${noteNames}] (${scheduledNotes.length} notes) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
+  }
+  
+  return scheduledNotes;
+}
 
-  createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
-    if (!audioManager || !audioManager.audioContext) return null;
+  // createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
+  //   if (!audioManager || !audioManager.audioContext) return null;
     
-    const actualStartTime = startTime + (offset * 0.001);
+  //   const actualStartTime = startTime + (offset * 0.001);
     
-    console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
-    console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
+  //   console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
+  //   console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
       
-    const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
-    const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
-    const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+  //   const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
+  //   const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
+  //   const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
 
-    const currentVelocity = this.getCurrentVelocity();
-    const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
-    const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
+  //   const currentVelocity = this.getCurrentVelocity();
+  //   const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
+  //   const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
     
-    const voiceParams = this.getAllCurrentVoiceParameters();
+  //   const voiceParams = this.getAllCurrentVoiceParameters();
 
-    console.log(`🎛️ Effect Parameters:`);
-    console.log(`   Reverb: time=${voiceParams.reverbTime.toFixed(2)}s, depth=${(voiceParams.reverbDepth*100).toFixed(0)}%`);
-    console.log(`   Delay: time=${voiceParams.delayTime.toFixed(0)}ms, depth=${(voiceParams.delayDepth*100).toFixed(0)}%, feedback=${(voiceParams.delayFeedback*100).toFixed(0)}%`);
+  //   console.log(`🎛️ Effect Parameters:`);
+  //   console.log(`   Reverb: time=${voiceParams.reverbTime.toFixed(2)}s, depth=${(voiceParams.reverbDepth*100).toFixed(0)}%`);
+  //   console.log(`   Delay: time=${voiceParams.delayTime.toFixed(0)}ms, depth=${(voiceParams.delayDepth*100).toFixed(0)}%, feedback=${(voiceParams.delayFeedback*100).toFixed(0)}%`);
 
-    const oscillator = audioManager.audioContext.createOscillator();
-    const gainNode = audioManager.audioContext.createGain();
-    const panNode = audioManager.audioContext.createStereoPanner();
-    const filterNode = audioManager.audioContext.createBiquadFilter();
+  //   const oscillator = audioManager.audioContext.createOscillator();
+  //   const gainNode = audioManager.audioContext.createGain();
+  //   const panNode = audioManager.audioContext.createStereoPanner();
+  //   const filterNode = audioManager.audioContext.createBiquadFilter();
     
-    const tremoloLFO = audioManager.audioContext.createOscillator();
-    const tremoloGain = audioManager.audioContext.createGain();
-    const tremoloDepth = audioManager.audioContext.createGain();
-    const tremoloWet = audioManager.audioContext.createGain();
-    const tremoloDry = audioManager.audioContext.createGain();
+  //   const tremoloLFO = audioManager.audioContext.createOscillator();
+  //   const tremoloGain = audioManager.audioContext.createGain();
+  //   const tremoloDepth = audioManager.audioContext.createGain();
+  //   const tremoloWet = audioManager.audioContext.createGain();
+  //   const tremoloDry = audioManager.audioContext.createGain();
 
-    const chorusDelay1 = audioManager.audioContext.createDelay(0.1);
-    const chorusDelay2 = audioManager.audioContext.createDelay(0.1);
-    const chorusDelay3 = audioManager.audioContext.createDelay(0.1);
-    const chorusLFO1 = audioManager.audioContext.createOscillator();
-    const chorusLFO2 = audioManager.audioContext.createOscillator();
-    const chorusLFO3 = audioManager.audioContext.createOscillator();
-    const chorusGain1 = audioManager.audioContext.createGain();
-    const chorusGain2 = audioManager.audioContext.createGain();
-    const chorusGain3 = audioManager.audioContext.createGain();
-    const chorusDepth1 = audioManager.audioContext.createGain();
-    const chorusDepth2 = audioManager.audioContext.createGain();
-    const chorusDepth3 = audioManager.audioContext.createGain();
-    const chorusMix = audioManager.audioContext.createGain();
-    const dryGain = audioManager.audioContext.createGain();
+  //   const chorusDelay1 = audioManager.audioContext.createDelay(0.1);
+  //   const chorusDelay2 = audioManager.audioContext.createDelay(0.1);
+  //   const chorusDelay3 = audioManager.audioContext.createDelay(0.1);
+  //   const chorusLFO1 = audioManager.audioContext.createOscillator();
+  //   const chorusLFO2 = audioManager.audioContext.createOscillator();
+  //   const chorusLFO3 = audioManager.audioContext.createOscillator();
+  //   const chorusGain1 = audioManager.audioContext.createGain();
+  //   const chorusGain2 = audioManager.audioContext.createGain();
+  //   const chorusGain3 = audioManager.audioContext.createGain();
+  //   const chorusDepth1 = audioManager.audioContext.createGain();
+  //   const chorusDepth2 = audioManager.audioContext.createGain();
+  //   const chorusDepth3 = audioManager.audioContext.createGain();
+  //   const chorusMix = audioManager.audioContext.createGain();
+  //   const dryGain = audioManager.audioContext.createGain();
     
-    const phaserStage1 = audioManager.audioContext.createBiquadFilter();
-    const phaserStage2 = audioManager.audioContext.createBiquadFilter();
-    const phaserStage3 = audioManager.audioContext.createBiquadFilter();
-    const phaserStage4 = audioManager.audioContext.createBiquadFilter();
-    const phaserStages = [phaserStage1, phaserStage2, phaserStage3, phaserStage4];
-    const phaserLFO = audioManager.audioContext.createOscillator();
-    const phaserDepth = audioManager.audioContext.createGain();
-    const phaserFeedback = audioManager.audioContext.createGain();
-    const phaserMix = audioManager.audioContext.createGain();
-    const phaserDry = audioManager.audioContext.createGain();
+  //   const phaserStage1 = audioManager.audioContext.createBiquadFilter();
+  //   const phaserStage2 = audioManager.audioContext.createBiquadFilter();
+  //   const phaserStage3 = audioManager.audioContext.createBiquadFilter();
+  //   const phaserStage4 = audioManager.audioContext.createBiquadFilter();
+  //   const phaserStages = [phaserStage1, phaserStage2, phaserStage3, phaserStage4];
+  //   const phaserLFO = audioManager.audioContext.createOscillator();
+  //   const phaserDepth = audioManager.audioContext.createGain();
+  //   const phaserFeedback = audioManager.audioContext.createGain();
+  //   const phaserMix = audioManager.audioContext.createGain();
+  //   const phaserDry = audioManager.audioContext.createGain();
     
-    const reverbNode = audioManager.audioContext.createConvolver();
-    const reverbGain = audioManager.audioContext.createGain();
-    const reverbDry = audioManager.audioContext.createGain();
-    const reverbWet = audioManager.audioContext.createGain();
+  //   const reverbNode = audioManager.audioContext.createConvolver();
+  //   const reverbGain = audioManager.audioContext.createGain();
+  //   const reverbDry = audioManager.audioContext.createGain();
+  //   const reverbWet = audioManager.audioContext.createGain();
     
-    const delayNode = audioManager.audioContext.createDelay(2.0);
-    const delayFeedback = audioManager.audioContext.createGain();
-    const delayWet = audioManager.audioContext.createGain();
-    const delayDry = audioManager.audioContext.createGain();
+  //   const delayNode = audioManager.audioContext.createDelay(2.0);
+  //   const delayFeedback = audioManager.audioContext.createGain();
+  //   const delayWet = audioManager.audioContext.createGain();
+  //   const delayDry = audioManager.audioContext.createGain();
 
-    const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
-    const delayTimeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
-    const delayDepthValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+  //   const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  //   const delayTimeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+  //   const delayDepthValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
 
-    if (delayDepthValue > 0.001) {
-        const delayTimeSeconds = (100 + (delayTimeValue / 100) * 1900) / 1000;
-        const clampedDelayTime = Math.min(delayTimeSeconds, 2.0);
+  //   if (delayDepthValue > 0.001) {
+  //       const delayTimeSeconds = (100 + (delayTimeValue / 100) * 1900) / 1000;
+  //       const clampedDelayTime = Math.min(delayTimeSeconds, 2.0);
         
-        delayNode.delayTime.cancelScheduledValues(audioManager.audioContext.currentTime);
-        delayNode.delayTime.value = clampedDelayTime;
+  //       delayNode.delayTime.cancelScheduledValues(audioManager.audioContext.currentTime);
+  //       delayNode.delayTime.value = clampedDelayTime;
         
-        console.log(`🔧 DELAY TIME SET DIRECTLY: ${delayNode.delayTime.value.toFixed(3)}s`);
-    }
+  //       console.log(`🔧 DELAY TIME SET DIRECTLY: ${delayNode.delayTime.value.toFixed(3)}s`);
+  //   }
 
-      const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
-      oscillator.type = velocitySensitiveWaveform;
+  //     const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
+  //     oscillator.type = velocitySensitiveWaveform;
 
-      const portamentoTime = this.getCurrentPortamentoTime();
-      this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
+  //     const portamentoTime = this.getCurrentPortamentoTime();
+  //     this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
 
-      this.applyDetuning(oscillator, actualStartTime, duration);
+  //     this.applyDetuning(oscillator, actualStartTime, duration);
 
-    this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-    this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
+  //   this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+  //   this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
     
-    const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration);
+  //   const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration);
     
-    const chorusIsActive = this.applyChorusADSR(
-        chorusDelay1, chorusDelay2, chorusDelay3,
-        chorusLFO1, chorusLFO2, chorusLFO3,
-        chorusGain1, chorusGain2, chorusGain3,
-        chorusDepth1, chorusDepth2, chorusDepth3,
-        adsrEnvelope, voiceParams, actualStartTime, duration
-    );
+  //   const chorusIsActive = this.applyChorusADSR(
+  //       chorusDelay1, chorusDelay2, chorusDelay3,
+  //       chorusLFO1, chorusLFO2, chorusLFO3,
+  //       chorusGain1, chorusGain2, chorusGain3,
+  //       chorusDepth1, chorusDepth2, chorusDepth3,
+  //       adsrEnvelope, voiceParams, actualStartTime, duration
+  //   );
     
-    const phaserIsActive = this.applyPhaserADSR(
-        phaserStages, phaserLFO, phaserDepth, phaserFeedback,
-        adsrEnvelope, voiceParams, actualStartTime, duration
-    );
+  //   const phaserIsActive = this.applyPhaserADSR(
+  //       phaserStages, phaserLFO, phaserDepth, phaserFeedback,
+  //       adsrEnvelope, voiceParams, actualStartTime, duration
+  //   );
     
-    const reverbIsActive = this.applyReverbADSR(
-        reverbNode, reverbDry, reverbWet,
-        adsrEnvelope, voiceParams, actualStartTime, duration
-    );
+  //   const reverbIsActive = this.applyReverbADSR(
+  //       reverbNode, reverbDry, reverbWet,
+  //       adsrEnvelope, voiceParams, actualStartTime, duration
+  //   );
 
-    const delayIsActive = this.applyDelayADSR(
-        delayNode, delayFeedback, delayWet, delayDry,
-        adsrEnvelope, voiceParams, actualStartTime, duration
-    );
+  //   const delayIsActive = this.applyDelayADSR(
+  //       delayNode, delayFeedback, delayWet, delayDry,
+  //       adsrEnvelope, voiceParams, actualStartTime, duration
+  //   );
     
-    this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+  //   this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
 
-    // Build audio chain
-    let audioChain = oscillator;
-    console.log(`🔗 Building audio chain...`);
+  //   // Build audio chain
+  //   let audioChain = oscillator;
+  //   console.log(`🔗 Building audio chain...`);
 
-    oscillator.connect(filterNode);
-    console.log(`   ✓ oscillator → filter`);
-    audioChain = filterNode;
+  //   oscillator.connect(filterNode);
+  //   console.log(`   ✓ oscillator → filter`);
+  //   audioChain = filterNode;
 
-    audioChain.connect(gainNode);
-    console.log(`   ✓ chain → gain (ADSR)`);
-    audioChain = gainNode;
+  //   audioChain.connect(gainNode);
+  //   console.log(`   ✓ chain → gain (ADSR)`);
+  //   audioChain = gainNode;
 
-    if (reverbIsActive) {
-        console.log(`   🏛️ Connecting REVERB...`);
-        const reverbMixer = audioManager.audioContext.createGain();
-        reverbMixer.gain.value = 1.0;
+  //   if (reverbIsActive) {
+  //       console.log(`   🏛️ Connecting REVERB...`);
+  //       const reverbMixer = audioManager.audioContext.createGain();
+  //       reverbMixer.gain.value = 1.0;
         
-        audioChain.connect(reverbDry);
-        audioChain.connect(reverbNode);
-        reverbNode.connect(reverbWet);
+  //       audioChain.connect(reverbDry);
+  //       audioChain.connect(reverbNode);
+  //       reverbNode.connect(reverbWet);
         
-        reverbDry.connect(reverbMixer);
-        reverbWet.connect(reverbMixer);
+  //       reverbDry.connect(reverbMixer);
+  //       reverbWet.connect(reverbMixer);
         
-        console.log(`      ✓ reverb connected`);
-        audioChain = reverbMixer;
-    }
+  //       console.log(`      ✓ reverb connected`);
+  //       audioChain = reverbMixer;
+  //   }
 
-    if (delayIsActive) {
-        console.log(`   🔄 Connecting DELAY...`);
-        const delayMixer = audioManager.audioContext.createGain();
-        delayMixer.gain.value = 1.0;
+  //   if (delayIsActive) {
+  //       console.log(`   🔄 Connecting DELAY...`);
+  //       const delayMixer = audioManager.audioContext.createGain();
+  //       delayMixer.gain.value = 1.0;
         
-        audioChain.connect(delayDry);
-        audioChain.connect(delayNode);
+  //       audioChain.connect(delayDry);
+  //       audioChain.connect(delayNode);
         
-        delayNode.connect(delayWet);
-        delayNode.connect(delayFeedback);
-        delayFeedback.connect(delayNode);
+  //       delayNode.connect(delayWet);
+  //       delayNode.connect(delayFeedback);
+  //       delayFeedback.connect(delayNode);
         
-        delayDry.connect(delayMixer);
-        delayWet.connect(delayMixer);
+  //       delayDry.connect(delayMixer);
+  //       delayWet.connect(delayMixer);
         
-        console.log(`      ✓ delay connected`);
-        audioChain = delayMixer;
-    }
+  //       console.log(`      ✓ delay connected`);
+  //       audioChain = delayMixer;
+  //   }
 
-    audioChain.connect(panNode);
-    console.log(`   ✓ chain → pan → master`);
-    panNode.connect(audioManager.masterGainNode);
-    console.log(`🔗 Audio chain complete!\n`);
+  //   audioChain.connect(panNode);
+  //   console.log(`   ✓ chain → pan → master`);
+  //   panNode.connect(audioManager.masterGainNode);
+  //   console.log(`🔗 Audio chain complete!\n`);
 
-    if (audioManager.isPlaying) {
-        audioManager.previewGainNodes.add(gainNode);
-        audioManager.previewPanNodes.add(panNode);
+  //   if (audioManager.isPlaying) {
+  //       audioManager.previewGainNodes.add(gainNode);
+  //       audioManager.previewPanNodes.add(panNode);
         
-        if (tremoloIsActive && audioManager.previewEffectGainNodes) {
-            audioManager.previewEffectGainNodes.add(tremoloGain);
-        }
-        if (chorusIsActive && audioManager.previewEffectGainNodes) {
-            audioManager.previewEffectGainNodes.add(chorusGain1);
-            audioManager.previewEffectGainNodes.add(chorusGain2);
-            audioManager.previewEffectGainNodes.add(chorusGain3);
-        }
+  //       if (tremoloIsActive && audioManager.previewEffectGainNodes) {
+  //           audioManager.previewEffectGainNodes.add(tremoloGain);
+  //       }
+  //       if (chorusIsActive && audioManager.previewEffectGainNodes) {
+  //           audioManager.previewEffectGainNodes.add(chorusGain1);
+  //           audioManager.previewEffectGainNodes.add(chorusGain2);
+  //           audioManager.previewEffectGainNodes.add(chorusGain3);
+  //       }
         
-        const userVolumeMultiplier = audioManager.currentUserVolume / 100;
-        const userPanValue = Math.max(-1, Math.min(1, audioManager.currentUserBalance / 100));
+  //       const userVolumeMultiplier = audioManager.currentUserVolume / 100;
+  //       const userPanValue = Math.max(-1, Math.min(1, audioManager.currentUserBalance / 100));
         
-        panNode.pan.setValueAtTime(userPanValue, actualStartTime);
-    }
+  //       panNode.pan.setValueAtTime(userPanValue, actualStartTime);
+  //   }
 
-    oscillator.start(actualStartTime);
-    oscillator.stop(actualStartTime + duration);
+  //   oscillator.start(actualStartTime);
+  //   oscillator.stop(actualStartTime + duration);
 
-    oscillator.onended = () => {
-      try {
-        oscillator.disconnect();
-        filterNode.disconnect();
+  //   oscillator.onended = () => {
+  //     try {
+  //       oscillator.disconnect();
+  //       filterNode.disconnect();
         
-        if (tremoloIsActive) {
-          tremoloLFO.disconnect();
-          tremoloGain.disconnect();
-          tremoloDepth.disconnect();
-        }
+  //       if (tremoloIsActive) {
+  //         tremoloLFO.disconnect();
+  //         tremoloGain.disconnect();
+  //         tremoloDepth.disconnect();
+  //       }
         
-        if (chorusIsActive) {
-          chorusDelay1.disconnect();
-          chorusDelay2.disconnect();
-          chorusDelay3.disconnect();
-          chorusLFO1.disconnect();
-          chorusLFO2.disconnect();
-          chorusLFO3.disconnect();
-          chorusGain1.disconnect();
-          chorusGain2.disconnect();
-          chorusGain3.disconnect();
-          chorusDepth1.disconnect();
-          chorusDepth2.disconnect();
-          chorusDepth3.disconnect();
-          chorusMix.disconnect();
-          dryGain.disconnect();
-        }
+  //       if (chorusIsActive) {
+  //         chorusDelay1.disconnect();
+  //         chorusDelay2.disconnect();
+  //         chorusDelay3.disconnect();
+  //         chorusLFO1.disconnect();
+  //         chorusLFO2.disconnect();
+  //         chorusLFO3.disconnect();
+  //         chorusGain1.disconnect();
+  //         chorusGain2.disconnect();
+  //         chorusGain3.disconnect();
+  //         chorusDepth1.disconnect();
+  //         chorusDepth2.disconnect();
+  //         chorusDepth3.disconnect();
+  //         chorusMix.disconnect();
+  //         dryGain.disconnect();
+  //       }
         
-        if (phaserIsActive) {
-          phaserStages.forEach(stage => stage.disconnect());
-          phaserLFO.disconnect();
-          phaserDepth.disconnect();
-          phaserFeedback.disconnect();
-          phaserMix.disconnect();
-          phaserDry.disconnect();
-        }
+  //       if (phaserIsActive) {
+  //         phaserStages.forEach(stage => stage.disconnect());
+  //         phaserLFO.disconnect();
+  //         phaserDepth.disconnect();
+  //         phaserFeedback.disconnect();
+  //         phaserMix.disconnect();
+  //         phaserDry.disconnect();
+  //       }
         
-        if (reverbIsActive || delayIsActive) {
-          let maxTailTime = 1000;
+  //       if (reverbIsActive || delayIsActive) {
+  //         let maxTailTime = 1000;
           
-          if (reverbIsActive) {
-            const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
-            const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
-            const reverbTime = 0.5 + (timeValue / 100) * 5.5;
+  //         if (reverbIsActive) {
+  //           const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+  //           const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+  //           const reverbTime = 0.5 + (timeValue / 100) * 5.5;
             
-            const reverbTail = reverbTime * 15000;
-            maxTailTime = Math.max(maxTailTime, reverbTail);
+  //           const reverbTail = reverbTime * 15000;
+  //           maxTailTime = Math.max(maxTailTime, reverbTail);
             
-            console.log(`🏛️ Extended reverb tail: ${(reverbTail/1000).toFixed(1)}s for ${reverbTime.toFixed(1)}s reverb time`);
-          }
+  //           console.log(`🏛️ Extended reverb tail: ${(reverbTail/1000).toFixed(1)}s for ${reverbTime.toFixed(1)}s reverb time`);
+  //         }
 
-          if (delayIsActive) {
-            const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
-            const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
-            const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
+  //         if (delayIsActive) {
+  //           const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  //           const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+  //           const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
             
-            const delayTimeSeconds = (100 + (timeValue / 100) * 1900) / 1000;
-            const feedbackAmount = feedbackValue / 100;
+  //           const delayTimeSeconds = (100 + (timeValue / 100) * 1900) / 1000;
+  //           const feedbackAmount = feedbackValue / 100;
             
-            const delayTail = this.calculateDelayTailTime(delayTimeSeconds, feedbackAmount);
-            maxTailTime = Math.max(maxTailTime, delayTail);
+  //           const delayTail = this.calculateDelayTailTime(delayTimeSeconds, feedbackAmount);
+  //           maxTailTime = Math.max(maxTailTime, delayTail);
             
-            console.log(`🧹 Delay tail calculated: ${(delayTail/1000).toFixed(2)}s (feedback=${(feedbackAmount*100).toFixed(0)}%)`);
-          }
+  //           console.log(`🧹 Delay tail calculated: ${(delayTail/1000).toFixed(2)}s (feedback=${(feedbackAmount*100).toFixed(0)}%)`);
+  //         }
           
-          console.log(`🧹 Scheduling cleanup in ${(maxTailTime/1000).toFixed(2)}s`);
+  //         console.log(`🧹 Scheduling cleanup in ${(maxTailTime/1000).toFixed(2)}s`);
           
-          setTimeout(() => {
-            try {
-              if (reverbIsActive) {
-                reverbNode.disconnect();
-                reverbDry.disconnect();
-                reverbWet.disconnect();
-              }
+  //         setTimeout(() => {
+  //           try {
+  //             if (reverbIsActive) {
+  //               reverbNode.disconnect();
+  //               reverbDry.disconnect();
+  //               reverbWet.disconnect();
+  //             }
               
-              if (delayIsActive) {
-                delayNode.disconnect();
-                delayFeedback.disconnect();
-                delayWet.disconnect();
-                delayDry.disconnect();
-              }
+  //             if (delayIsActive) {
+  //               delayNode.disconnect();
+  //               delayFeedback.disconnect();
+  //               delayWet.disconnect();
+  //               delayDry.disconnect();
+  //             }
               
-              gainNode.disconnect();
-              panNode.disconnect();
+  //             gainNode.disconnect();
+  //             panNode.disconnect();
               
-              console.log('🧹 Cleanup completed after tail');
-            } catch (e) {
-              console.warn('Cleanup warning:', e);
-            }
-          }, maxTailTime);
-        } else {
-          gainNode.disconnect();
-          panNode.disconnect();
-        }
+  //             console.log('🧹 Cleanup completed after tail');
+  //           } catch (e) {
+  //             console.warn('Cleanup warning:', e);
+  //           }
+  //         }, maxTailTime);
+  //       } else {
+  //         gainNode.disconnect();
+  //         panNode.disconnect();
+  //       }
         
-        if (audioManager.previewGainNodes) {
-          audioManager.previewGainNodes.delete(gainNode);
-        }
-        if (audioManager.previewPanNodes) {
-          audioManager.previewPanNodes.delete(panNode);
-        }
+  //       if (audioManager.previewGainNodes) {
+  //         audioManager.previewGainNodes.delete(gainNode);
+  //       }
+  //       if (audioManager.previewPanNodes) {
+  //         audioManager.previewPanNodes.delete(panNode);
+  //       }
         
-      } catch (e) {
-        console.warn('Cleanup warning:', e);
-      }
-    };
+  //     } catch (e) {
+  //       console.warn('Cleanup warning:', e);
+  //     }
+  //   };
 
-    return {
-        oscillator,
-        filterNode,
-        gainNode,
-        panNode,
-        tremoloActive: tremoloIsActive,
-        chorusActive: chorusIsActive,
-        phaserActive: phaserIsActive,
-        reverbActive: reverbIsActive,
-        delayActive: delayIsActive,
-        startTime: actualStartTime,
-        duration,
-        frequency,
-        voiceIndex: this.voiceIndex,
-        velocity: currentVelocity
-    };
-  }
+  //   return {
+  //       oscillator,
+  //       filterNode,
+  //       gainNode,
+  //       panNode,
+  //       tremoloActive: tremoloIsActive,
+  //       chorusActive: chorusIsActive,
+  //       phaserActive: phaserIsActive,
+  //       reverbActive: reverbIsActive,
+  //       delayActive: delayIsActive,
+  //       startTime: actualStartTime,
+  //       duration,
+  //       frequency,
+  //       voiceIndex: this.voiceIndex,
+  //       velocity: currentVelocity
+  //   };
+  // }
 
   // Add all the ADSR application methods here
+  
+  // REPLACE the entire createScheduledAudioNote method in VoiceClock class
+createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
+  if (!audioManager || !audioManager.audioContext) return null;
+  
+  const actualStartTime = startTime + (offset * 0.001);
+  
+  console.log(`🔍 === CREATING NOTE WITH POOL: Voice ${this.voiceIndex + 1} ===`);
+  console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
+  
+  // ACQUIRE NODE SET FROM POOL
+  let nodeSet = null;
+  let usingPool = false;
+  
+  if (audioManager.oscillatorPool) {
+    nodeSet = audioManager.oscillatorPool.acquire();
+    usingPool = true;
+    console.log(`🎛️ Using pooled node set: ${nodeSet.id}`);
+  } else {
+    // Fallback: create nodes directly
+    nodeSet = {
+      oscillator: audioManager.audioContext.createOscillator(),
+      gainNode: audioManager.audioContext.createGain(),
+      filterNode: audioManager.audioContext.createBiquadFilter(),
+      panNode: audioManager.audioContext.createStereoPanner(),
+      inUse: true,
+      id: 'direct-' + Math.random().toString(36).substr(2, 6)
+    };
+    console.log(`⚠️ Using direct node creation: ${nodeSet.id}`);
+  }
+  
+  const { oscillator, gainNode, filterNode, panNode } = nodeSet;
+  
+  // Get voice parameters and setup
+  const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
+  const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
+  const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+  
+  const currentVelocity = this.getCurrentVelocity();
+  const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
+  const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
+  const voiceParams = this.getAllCurrentVoiceParameters();
+  
+  // Configure oscillator
+  const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
+  oscillator.type = velocitySensitiveWaveform;
+  
+  // Apply frequency, portamento, and detuning
+  const portamentoTime = this.getCurrentPortamentoTime();
+  this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
+  this.applyDetuning(oscillator, actualStartTime, duration);
+  
+  // Apply ADSR envelopes
+  this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+  this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
+  this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+  
+  // Create effects nodes (NOT pooled - these are per-note)
+  const effectNodes = this.createEffectNodes();
+  
+  // Build audio chain with effects
+  this.buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration);
+  
+  // Start and schedule stop
+  oscillator.start(actualStartTime);
+  oscillator.stop(actualStartTime + duration);
+  
+  // Enhanced cleanup with pool return
+  const cleanup = () => {
+    try {
+      // Disconnect effect nodes
+      if (effectNodes) {
+        this.cleanupEffectNodes(effectNodes);
+      }
+      
+      // Return to pool or cleanup directly
+      if (usingPool && audioManager.oscillatorPool) {
+        audioManager.oscillatorPool.release(nodeSet);
+        console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
+      } else {
+        // Direct cleanup
+        oscillator.disconnect();
+        gainNode.disconnect();  
+        filterNode.disconnect();
+        panNode.disconnect();
+        console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
+      }
+      
+      // Remove from tracking
+      if (audioManager.previewGainNodes) {
+        audioManager.previewGainNodes.delete(gainNode);
+      }
+      if (audioManager.previewPanNodes) {
+        audioManager.previewPanNodes.delete(panNode);
+      }
+      
+    } catch (e) {
+      console.warn('Cleanup warning:', e);
+    }
+  };
+  
+  // Schedule cleanup after note + effect tails (using audio context time, not wall clock)
+  const noteEndTime = actualStartTime + duration;
+  const tailDuration = this.calculateMaxTailTime(voiceParams, duration);
+  const cleanupTime = noteEndTime + (tailDuration / 1000); // Convert ms to seconds
+  
+  // Create silent "timer oscillator" that triggers cleanup at the correct audio time
+  const cleanupOscillator = audioManager.audioContext.createOscillator();
+  const silentGain = audioManager.audioContext.createGain();
+  silentGain.gain.value = 0; // Completely silent
+  
+  cleanupOscillator.connect(silentGain);
+  silentGain.connect(audioManager.audioContext.destination);
+  
+  cleanupOscillator.onended = cleanup;
+  cleanupOscillator.start(cleanupTime);
+  cleanupOscillator.stop(cleanupTime + 0.001); // Stop immediately after starting
+  
+  console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
+  
+  return {
+    oscillator,
+    filterNode, 
+    gainNode,
+    panNode,
+    effectNodes,
+    nodeSet,
+    usingPool,
+    startTime: actualStartTime,
+    duration,
+    frequency,
+    voiceIndex: this.voiceIndex,
+    velocity: currentVelocity
+  };
+}
+
+// ADD these helper methods after createScheduledAudioNote in VoiceClock class
+
+createEffectNodes() {
+  const effectNodes = {};
+  
+  // Create effect nodes (these are NOT pooled - created fresh per note)
+  effectNodes.tremolo = {
+    lfo: audioManager.audioContext.createOscillator(),
+    gain: audioManager.audioContext.createGain(),
+    depth: audioManager.audioContext.createGain(),
+    wet: audioManager.audioContext.createGain(),
+    dry: audioManager.audioContext.createGain()
+  };
+  
+  effectNodes.chorus = {
+    delay1: audioManager.audioContext.createDelay(0.1),
+    delay2: audioManager.audioContext.createDelay(0.1),
+    delay3: audioManager.audioContext.createDelay(0.1),
+    lfo1: audioManager.audioContext.createOscillator(),
+    lfo2: audioManager.audioContext.createOscillator(),
+    lfo3: audioManager.audioContext.createOscillator(),
+    gain1: audioManager.audioContext.createGain(),
+    gain2: audioManager.audioContext.createGain(),
+    gain3: audioManager.audioContext.createGain(),
+    depth1: audioManager.audioContext.createGain(),
+    depth2: audioManager.audioContext.createGain(),
+    depth3: audioManager.audioContext.createGain(),
+    mix: audioManager.audioContext.createGain(),
+    dry: audioManager.audioContext.createGain()
+  };
+  
+  effectNodes.phaser = {
+    stage1: audioManager.audioContext.createBiquadFilter(),
+    stage2: audioManager.audioContext.createBiquadFilter(),
+    stage3: audioManager.audioContext.createBiquadFilter(),
+    stage4: audioManager.audioContext.createBiquadFilter(),
+    lfo: audioManager.audioContext.createOscillator(),
+    depth: audioManager.audioContext.createGain(),
+    feedback: audioManager.audioContext.createGain(),
+    mix: audioManager.audioContext.createGain(),
+    dry: audioManager.audioContext.createGain()
+  };
+  
+  effectNodes.reverb = {
+    convolver: audioManager.audioContext.createConvolver(),
+    dry: audioManager.audioContext.createGain(),
+    wet: audioManager.audioContext.createGain()
+  };
+  
+  effectNodes.delay = {
+    delay: audioManager.audioContext.createDelay(2.0),
+    feedback: audioManager.audioContext.createGain(),
+    wet: audioManager.audioContext.createGain(),
+    dry: audioManager.audioContext.createGain()
+  };
+  
+  return effectNodes;
+}
+
+buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  const { oscillator, gainNode, filterNode, panNode } = nodeSet;
+  
+  console.log(`🔗 Building audio chain with pooled nodes...`);
+  
+  // Basic chain: oscillator → filter → gain
+  oscillator.connect(filterNode);
+  filterNode.connect(gainNode);
+  
+  let audioChain = gainNode;
+  
+  // Apply effects based on voice parameters
+  const tremoloIsActive = this.connectTremoloIfActive(audioChain, effectNodes.tremolo, adsrEnvelope, voiceParams, actualStartTime, duration);
+  if (tremoloIsActive) {
+    audioChain = effectNodes.tremolo.mix || audioChain;
+  }
+  
+  const chorusIsActive = this.connectChorusIfActive(audioChain, effectNodes.chorus, adsrEnvelope, voiceParams, actualStartTime, duration);
+  if (chorusIsActive) {
+    audioChain = effectNodes.chorus.mix || audioChain;
+  }
+  
+  const phaserIsActive = this.connectPhaserIfActive(audioChain, effectNodes.phaser, adsrEnvelope, voiceParams, actualStartTime, duration);
+  if (phaserIsActive) {
+    audioChain = effectNodes.phaser.mix || audioChain;
+  }
+  
+  const reverbIsActive = this.connectReverbIfActive(audioChain, effectNodes.reverb, adsrEnvelope, voiceParams, actualStartTime, duration);
+  if (reverbIsActive) {
+    const reverbMixer = audioManager.audioContext.createGain();
+    reverbMixer.gain.value = 1.0;
+    effectNodes.reverb.dry.connect(reverbMixer);
+    effectNodes.reverb.wet.connect(reverbMixer);
+    audioChain = reverbMixer;
+  }
+  
+  const delayIsActive = this.connectDelayIfActive(audioChain, effectNodes.delay, adsrEnvelope, voiceParams, actualStartTime, duration);
+  if (delayIsActive) {
+    const delayMixer = audioManager.audioContext.createGain();
+    delayMixer.gain.value = 1.0;
+    effectNodes.delay.dry.connect(delayMixer);
+    effectNodes.delay.wet.connect(delayMixer);
+    audioChain = delayMixer;
+  }
+  
+  // Final connection to pan and master
+  audioChain.connect(panNode);
+  panNode.connect(audioManager.masterGainNode);
+  
+  console.log(`🔗 Audio chain complete with pooled nodes`);
+}
+
+connectTremoloIfActive(inputNode, tremoloNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  if (voiceParams.tremoloDepth <= 0.001) return false;
+  
+  // Apply tremolo using existing ADSR method
+  const isActive = this.applyTremoloADSR(
+    tremoloNodes.lfo, tremoloNodes.gain, tremoloNodes.depth, 
+    tremoloNodes.wet, tremoloNodes.dry, 
+    adsrEnvelope, voiceParams, actualStartTime, duration
+  );
+  
+  if (isActive) {
+    inputNode.connect(tremoloNodes.gain);
+  }
+  
+  return isActive;
+}
+
+connectChorusIfActive(inputNode, chorusNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  if (voiceParams.chorusDepth <= 0.001) return false;
+  
+  const isActive = this.applyChorusADSR(
+    chorusNodes.delay1, chorusNodes.delay2, chorusNodes.delay3,
+    chorusNodes.lfo1, chorusNodes.lfo2, chorusNodes.lfo3,
+    chorusNodes.gain1, chorusNodes.gain2, chorusNodes.gain3,
+    chorusNodes.depth1, chorusNodes.depth2, chorusNodes.depth3,
+    adsrEnvelope, voiceParams, actualStartTime, duration
+  );
+  
+  return isActive;
+}
+
+connectPhaserIfActive(inputNode, phaserNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  if (voiceParams.phaserDepth <= 0.001) return false;
+  
+  const phaserStages = [phaserNodes.stage1, phaserNodes.stage2, phaserNodes.stage3, phaserNodes.stage4];
+  
+  const isActive = this.applyPhaserADSR(
+    phaserStages, phaserNodes.lfo, phaserNodes.depth, phaserNodes.feedback,
+    adsrEnvelope, voiceParams, actualStartTime, duration
+  );
+  
+  return isActive;
+}
+
+connectReverbIfActive(inputNode, reverbNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+  const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+  if (mixValue <= 0.001) return false;
+  
+  const isActive = this.applyReverbADSR(
+    reverbNodes.convolver, reverbNodes.dry, reverbNodes.wet,
+    adsrEnvelope, voiceParams, actualStartTime, duration
+  );
+  
+  if (isActive) {
+    inputNode.connect(reverbNodes.dry);
+    inputNode.connect(reverbNodes.convolver);
+    reverbNodes.convolver.connect(reverbNodes.wet);
+  }
+  
+  return isActive;
+}
+
+connectDelayIfActive(inputNode, delayNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
+  const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  const mixValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+  if (mixValue <= 0.001) return false;
+  
+  const isActive = this.applyDelayADSR(
+    delayNodes.delay, delayNodes.feedback, delayNodes.wet, delayNodes.dry,
+    adsrEnvelope, voiceParams, actualStartTime, duration
+  );
+  
+  if (isActive) {
+    inputNode.connect(delayNodes.dry);
+    inputNode.connect(delayNodes.delay);
+    delayNodes.delay.connect(delayNodes.wet);
+    delayNodes.delay.connect(delayNodes.feedback);
+    delayNodes.feedback.connect(delayNodes.delay);
+  }
+  
+  return isActive;
+}
+
+cleanupEffectNodes(effectNodes) {
+  // Cleanup tremolo
+  if (effectNodes.tremolo) {
+    try {
+      effectNodes.tremolo.lfo.stop();
+      effectNodes.tremolo.lfo.disconnect();
+      effectNodes.tremolo.gain.disconnect();
+      effectNodes.tremolo.depth.disconnect();
+      effectNodes.tremolo.wet.disconnect();
+      effectNodes.tremolo.dry.disconnect();
+    } catch (e) {}
+  }
+  
+  // Cleanup chorus
+  if (effectNodes.chorus) {
+    try {
+      effectNodes.chorus.lfo1.stop();
+      effectNodes.chorus.lfo2.stop();
+      effectNodes.chorus.lfo3.stop();
+      Object.values(effectNodes.chorus).forEach(node => {
+        if (node.disconnect) node.disconnect();
+      });
+    } catch (e) {}
+  }
+  
+  // Cleanup phaser
+  if (effectNodes.phaser) {
+    try {
+      effectNodes.phaser.lfo.stop();
+      Object.values(effectNodes.phaser).forEach(node => {
+        if (node.disconnect) node.disconnect();
+      });
+    } catch (e) {}
+  }
+  
+  // Cleanup reverb and delay
+  ['reverb', 'delay'].forEach(effectType => {
+    if (effectNodes[effectType]) {
+      try {
+        Object.values(effectNodes[effectType]).forEach(node => {
+          if (node.disconnect) node.disconnect();
+        });
+      } catch (e) {}
+    }
+  });
+}
+
+calculateMaxTailTime(voiceParams, duration) {
+  let maxTail = 1000; // 1 second minimum
+  
+  // Calculate reverb tail
+  const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+  if (reverbParam && reverbParam.depth) {
+    const reverbDepth = (reverbParam.depth.min + reverbParam.depth.max) / 2;
+    if (reverbDepth > 0.001) {
+      const reverbTime = 0.5 + ((reverbParam.speed?.min + reverbParam.speed?.max) / 2 / 100) * 5.5;
+      maxTail = Math.max(maxTail, reverbTime * 15000);
+    }
+  }
+  
+  // Calculate delay tail
+  const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  if (delayParam && delayParam.depth) {
+    const delayDepth = (delayParam.depth.min + delayParam.depth.max) / 2;
+    if (delayDepth > 0.001) {
+      const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
+      const delayTimeSeconds = (100 + ((delayParam.speed?.min + delayParam.speed?.max) / 2 / 100) * 1900) / 1000;
+      maxTail = Math.max(maxTail, this.calculateDelayTailTime(delayTimeSeconds, feedbackValue / 100));
+    }
+  }
+  
+  return Math.min(maxTail, 60000); // Cap at 60 seconds
+}
+
+  
+  
   applyVolumeADSR(gainNode, envelope, voiceParams, startTime, duration) {
     const velocityMultiplier = voiceParams.velocityScale || 1.0;
     const baseGain = voiceParams.volume * velocityMultiplier * voiceParams.polyphonyScale;
@@ -4462,10 +4914,16 @@ updateAllVoices() {
     // Check if this voice should play AND if it has actually completed
     const shouldPlay = voiceClock.shouldPlayNote();
     const hasCompleted = this.hasVoiceCompletedLifeSpan(i);
+
+    if (hasCompleted) {
+      console.log(`⚠️ Voice ${i+1} marked as completed at ${formatMsToMMSS(this.masterClock.getElapsedTime())}`);
+    }
     
     if (hasCompleted && !shouldPlay) {
       // Voice has ACTUALLY completed its Life Span - auto-stop it
-      console.log(`🏁 Voice ${i + 1} completed its Life Span - auto-stopping`);
+      const elapsed = this.masterClock.getElapsedTime();
+      console.log(`🏁 Voice ${i + 1} completed its Life Span - auto-stopping at ${formatMsToMMSS(elapsed)}`);
+      console.log(`   Expected exit: ${formatMsToMMSS(voiceData[i].parameters['LIFE SPAN'].lifeSpan1.exit)}`);
       
       // Check if this was a preview voice
       const voiceControls = document.querySelector('.voice-controls');
@@ -4486,10 +4944,7 @@ updateAllVoices() {
     
     activeVoiceCount++;
     
-    // Schedule notes when needed AND when Life Span allows it
-    if (voiceClock.isTimeForNextNote()) {
-      voiceClock.scheduleNextNote();
-    }
+
   }
   
   // Handle preview button resets
@@ -4499,13 +4954,47 @@ updateAllVoices() {
   });
   
 // Auto-reset check for main PLAY button - only if ALL enabled voices have completed
-const totalEnabledVoices = voiceData.filter(voice => voice.enabled).length;
+  const totalEnabledVoices = voiceData.filter(voice => voice.enabled).length;
 
-if (voicesCompletedNaturally > 0 && activeVoiceCount === 0 && voicesCompletedNaturally === totalEnabledVoices) {
-  console.log(`🔄 ALL ${totalEnabledVoices} enabled voices completed naturally - triggering auto-reset in 1 second`);
-  setTimeout(() => {
-    this.performAutoReset();
-  }, 1000);
+// NEW: Check if any voices haven't started yet OR are waiting to enter
+let voicesWaitingToEnter = 0;
+const elapsedMs = this.masterClock.getElapsedTime();
+
+for (let i = 0; i < 16; i++) {
+  if (!voiceData[i].enabled) continue;
+  
+  const voiceClock = this.voiceClocks[i];
+  if (!voiceClock) continue;
+  
+  const shouldPlay = voiceClock.shouldPlayNote();
+  const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+  
+  console.log(`  Voice ${i+1}: active=${voiceClock.isActive}, shouldPlay=${shouldPlay}`);
+  
+  // Check if this voice has a future enter time
+  if (lifeSpan) {
+    for (let spanNum = 1; spanNum <= 3; spanNum++) {
+      const span = lifeSpan[`lifeSpan${spanNum}`];
+      if (span && span.exit > 0 && span.enter > elapsedMs) {
+        voicesWaitingToEnter++;
+        console.log(`    ⏰ Voice ${i+1} will enter at ${formatMsToMMSS(span.enter)}`);
+        break; // Count this voice only once
+      }
+    }
+  }
+}
+
+
+  // Only auto-reset if NO voices are waiting to enter
+  console.log(`🔍 Auto-reset check: ${voicesCompletedNaturally} completed, ${activeVoiceCount} active, ${voicesWaitingToEnter} waiting`);
+
+  if (voicesCompletedNaturally > 0 && activeVoiceCount === 0 && voicesWaitingToEnter === 0 && voicesCompletedNaturally === totalEnabledVoices) {
+    console.log(`🔄 ALL ${totalEnabledVoices} enabled voices completed naturally - triggering auto-reset in 1 second`);
+    setTimeout(() => {
+      this.performAutoReset();
+    }, 1000);
+
+
 } else if (voicesCompletedNaturally > 0 && activeVoiceCount > 0) {
   console.log(`📊 ${voicesCompletedNaturally} voice(s) completed, but ${activeVoiceCount} still active (some have Repeat enabled) - continuing playback`);
 }
@@ -4622,7 +5111,9 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
 
   performAutoReset() {
     console.log('🔄 AUTO-RESET: All voices completed naturally - resetting PLAY button');
-    
+    console.log('  Elapsed time:', formatMsToMMSS(this.masterClock.getElapsedTime()));
+    console.trace('performAutoReset called from:');
+
     const playButton = document.querySelector('#file-controls button:nth-child(4)');
     if (playButton && playButton.textContent === 'STOP') {
       playButton.textContent = 'PLAY';
@@ -4666,6 +5157,523 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
     return this.voiceClocks.filter(clock => clock.isActive).length;
   }
 }
+// ===== MELODIC PHRASE GENERATOR CLASS =====
+class MelodicPhraseGenerator {
+  constructor(voiceIndex) {
+    this.voiceIndex = voiceIndex;
+    
+    // Available patterns
+    this.patterns = {
+      'static': this.generateStatic.bind(this),
+      'ascending': this.generateAscending.bind(this),
+      'descending': this.generateDescending.bind(this),
+      'pendulum': this.generatePendulum.bind(this),
+      'wave': this.generateWave.bind(this),
+      'spiral': this.generateSpiral.bind(this)
+    };
+    
+    console.log(`🎼 MelodicPhraseGenerator created for Voice ${this.voiceIndex + 1}`);
+  }
+  
+  generate(notePool, noteCount, behaviorSetting) {
+    if (!notePool || notePool.length === 0) {
+      console.warn(`Voice ${this.voiceIndex + 1}: Empty note pool`);
+      return [60]; // Default to middle C
+    }
+    
+    // Select pattern based on behavior setting
+    const pattern = this.selectPattern(behaviorSetting);
+    
+    console.log(`🎨 Voice ${this.voiceIndex + 1}: Generating ${noteCount}-note phrase using ${pattern} pattern`);
+    
+    // Generate phrase
+    const phrase = this.patterns[pattern](notePool, noteCount);
+    
+    console.log(`   Generated: [${phrase.map(n => midiNoteNames[n]).join(', ')}]`);
+    
+    return phrase;
+  }
+  
+  selectPattern(behaviorSetting) {
+    if (behaviorSetting === 0) {
+      return 'static';
+    } else if (behaviorSetting < 25) {
+      return 'ascending';
+    } else if (behaviorSetting < 50) {
+      return 'descending';
+    } else if (behaviorSetting < 75) {
+      return 'pendulum';
+    } else {
+      return 'wave';
+    }
+  }
+  
+  generateStatic(notePool, noteCount) {
+    // Always return the same note (middle of range)
+    const sorted = [...notePool].sort((a, b) => a - b);
+    const middleNote = sorted[Math.floor(sorted.length / 2)];
+    return Array(noteCount).fill(middleNote);
+  }
+  
+  generateAscending(notePool, noteCount) {
+    // Simple ascending sweep through range
+    const sorted = [...notePool].sort((a, b) => a - b);
+    const phrase = [];
+    
+    for (let i = 0; i < noteCount; i++) {
+      const index = i % sorted.length;
+      phrase.push(sorted[index]);
+    }
+    
+    return phrase;
+  }
+  
+  generateDescending(notePool, noteCount) {
+    // Simple descending sweep through range
+    const sorted = [...notePool].sort((a, b) => b - a); // Reverse sort
+    const phrase = [];
+    
+    for (let i = 0; i < noteCount; i++) {
+      const index = i % sorted.length;
+      phrase.push(sorted[index]);
+    }
+    
+    return phrase;
+  }
+  
+  generatePendulum(notePool, noteCount) {
+  // Up to top, then down to bottom, repeat
+  const sorted = [...notePool].sort((a, b) => a - b);
+  const phrase = [];
+  let direction = 1; // 1 = up, -1 = down
+  let index = 0;
+  
+  for (let i = 0; i < noteCount; i++) {
+    phrase.push(sorted[index]);
+    
+    // Move to next note
+    index += direction;
+    
+    // Reverse at boundaries
+    if (index >= sorted.length) {
+      direction = -1;
+      index = sorted.length - 2; // Start descending from second-to-last
+      // Handle case where pool only has 1 note
+      if (index < 0) index = 0;
+    } else if (index < 0) {
+      direction = 1;
+      index = 1; // Start ascending from second note
+      // Handle case where pool only has 1 note
+      if (index >= sorted.length) index = 0;
+    }
+  }
+  
+  return phrase;
+}
+
+  
+  generateWave(notePool, noteCount) {
+    // Sine wave-like motion through range
+    const sorted = [...notePool].sort((a, b) => a - b);
+    const phrase = [];
+    
+    for (let i = 0; i < noteCount; i++) {
+      // Calculate sine wave position (0 to 1)
+      const phase = (i / noteCount) * Math.PI * 4; // 2 complete sine waves
+      const sineValue = Math.sin(phase); // -1 to 1
+      const normalized = (sineValue + 1) / 2; // 0 to 1
+      
+      // Map to note index
+      const index = Math.floor(normalized * (sorted.length - 1));
+      phrase.push(sorted[index]);
+    }
+    
+    return phrase;
+  }
+  
+  generateSpiral(notePool, noteCount) {
+    // Start narrow, gradually expand range
+    const sorted = [...notePool].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    const phrase = [];
+    
+    for (let i = 0; i < noteCount; i++) {
+      // Expansion factor (0 to 1)
+      const expansion = i / noteCount;
+      
+      // Maximum range at this point
+      const range = Math.floor(expansion * middle);
+      
+      // Alternate above and below middle
+      const offset = (i % 2 === 0) ? range : -range;
+      
+      // Clamp to valid index
+      const index = Math.max(0, Math.min(sorted.length - 1, middle + offset));
+      
+      phrase.push(sorted[index]);
+    }
+    
+    return phrase;
+  }
+}
+
+console.log('✅ MelodicPhraseGenerator class loaded');
+
+
+
+// ===== LOOKAHEAD SCHEDULER CLASS =====
+class LookaheadScheduler {
+  constructor(voiceIndex, audioContext, masterClock) {
+    this.voiceIndex = voiceIndex;
+    this.audioContext = audioContext;
+    this.masterClock = masterClock;
+    
+    // Scheduling state
+    this.isActive = false;
+    this.schedulerInterval = null;
+    this.updateRate = 25; // Update every 25ms (40 Hz)
+    
+    // Time tracking (in audio context seconds)
+    this.lastScheduledTime = 0;
+    this.nextNoteTime = 0;
+    
+    // Lookahead configuration
+    this.baseLookahead = 0.150; // 150ms minimum technical buffer
+    this.maxLookahead = 2.0; // 2 second maximum
+    this.currentLookahead = this.baseLookahead;
+    
+    // Phrase generation
+    this.phraseGenerator = null; // Will initialize when needed
+    this.currentPhrase = [];
+    this.phraseIndex = 0;
+    
+    console.log(`🎯 LookaheadScheduler created for Voice ${this.voiceIndex + 1}`);
+  }
+  
+  start() {
+    if (this.isActive) return;
+    
+    this.isActive = true;
+    
+    // Initialize timing
+    // this.lastScheduledTime = this.audioContext.currentTime;
+    // this.nextNoteTime = this.audioContext.currentTime + 0.100; // 100ms in future
+
+    // Initialize timing - ALWAYS use current audio context time
+    const now = this.audioContext.currentTime;
+    this.lastScheduledTime = now;
+    this.nextNoteTime = now + 0.100; // 100ms in future
+
+    console.log(`   🕐 Scheduler timing initialized: now=${now.toFixed(3)}s, first note at ${this.nextNoteTime.toFixed(3)}s`);
+
+    
+    // Calculate initial lookahead
+    this.currentLookahead = this.calculateLookahead();
+    
+    // Create phrase generator
+    if (!this.phraseGenerator) {
+      this.phraseGenerator = new MelodicPhraseGenerator(this.voiceIndex);
+    }
+    
+    console.log(`▶ LookaheadScheduler started for Voice ${this.voiceIndex + 1}`);
+    console.log(`   Lookahead: ${(this.currentLookahead * 1000).toFixed(0)}ms`);
+    console.log(`   Update rate: ${this.updateRate}ms`);
+    
+    // Start update loop
+    this.schedulerInterval = setInterval(() => {
+      this.update();
+    }, this.updateRate);
+  }
+  
+  stop() {
+  if (!this.isActive) return;
+  
+  console.log(`🛑 STOP() CALLED for Voice ${this.voiceIndex + 1}`);
+  console.trace('Stop called from:'); // This will show us WHO called stop()
+  
+  this.isActive = false;
+  
+  if (this.schedulerInterval) {
+    clearInterval(this.schedulerInterval);
+    this.schedulerInterval = null;
+  }
+  
+  console.log(`⏹ LookaheadScheduler stopped for Voice ${this.voiceIndex + 1}`);
+}
+
+  
+  update() {
+  if (!this.isActive) return;
+  
+  // Check if voice should play (Life Span integration)
+  const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+  const shouldPlay = voiceClock ? voiceClock.shouldPlayNote() : false;
+
+  if (!voiceClock || !shouldPlay) {
+    return; // Silent skip
+  }
+  
+  // Log occasionally to see if we're here
+  if (Math.random() < 0.05) { // 5% of calls
+    console.log(`🔄 Voice ${this.voiceIndex + 1} update() → calling scheduleAhead()`);
+  }
+  
+  // Update lookahead if parameters changed
+  this.updateLookahead();
+  
+  // Schedule notes ahead
+  this.scheduleAhead();
+}
+
+scheduleAhead() {
+  const currentTime = this.audioContext.currentTime;
+  const scheduleUntil = currentTime + this.currentLookahead;
+  
+  // Log every call with timing
+  if (Math.random() < 0.1) { // 10% of calls
+    console.log(`⏰ scheduleAhead: current=${currentTime.toFixed(1)}s, until=${scheduleUntil.toFixed(1)}s, next=${this.nextNoteTime.toFixed(1)}s`);
+  }
+  
+  // Safety check: if we're scheduling in the past, reset
+  if (this.nextNoteTime < currentTime) {
+    console.warn(`⚠️ Voice ${this.voiceIndex + 1}: Resetting nextNoteTime from past (${this.nextNoteTime.toFixed(3)}) to now (${currentTime.toFixed(3)})`);
+    this.nextNoteTime = currentTime + 0.050; // 50ms from now
+  }
+  
+  // Schedule notes to fill the lookahead window
+  let scheduledCount = 0;
+  const maxNotesPerCycle = 20; // Safety limit
+  
+  // Schedule if next note is before the end of our lookahead window
+  while (this.nextNoteTime < scheduleUntil && scheduledCount < maxNotesPerCycle) {
+    // Generate next note in phrase
+    if (this.phraseIndex >= this.currentPhrase.length) {
+      // Need new phrase
+      const avgRhythmDuration = this.calculateAverageRhythmDuration(
+        voiceData[this.voiceIndex].parameters['RHYTHMS']
+      );
+      const notesToSchedule = Math.ceil(this.currentLookahead / avgRhythmDuration);
+      
+      this.currentPhrase = this.generatePhrase(notesToSchedule);
+      this.phraseIndex = 0;
+      
+      console.log(`🎨 Generated new ${notesToSchedule}-note phrase:`, this.currentPhrase.map(n => midiNoteNames[n]));
+    }
+    
+    // Get next note from phrase
+    const midiNote = this.currentPhrase[this.phraseIndex];
+    this.phraseIndex++;
+    
+    // Schedule this note
+    this.scheduleNoteAtTime(midiNote, this.nextNoteTime);
+    scheduledCount++;
+    
+    // Advance time for next note
+    const rhythmDuration = this.getNextRhythmDuration();
+    const restDuration = this.getNextRestDuration();
+    this.nextNoteTime += (rhythmDuration + restDuration);
+  }
+  
+  if (scheduledCount > 0) {
+    console.log(`✅ Voice ${this.voiceIndex + 1}: Scheduled ${scheduledCount} notes`);
+  }
+}
+
+
+
+  calculateLookahead() {
+    console.log('🚨 LOOKAHEAD CALC CALLED - Voice', this.voiceIndex + 1, 'TIMESTAMP:', Date.now());
+    
+    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+    const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
+    
+    // Count available notes
+    let noteCount = 1;
+
+    console.log(`🔍 calculateLookahead() reading melodicParam:`, melodicParam);
+    console.log(`🔍 selectedNotes exists:`, !!melodicParam.selectedNotes);
+    console.log(`🔍 selectedNotes length:`, melodicParam.selectedNotes?.length);
+    console.log(`🔍 selectedNotes array:`, melodicParam.selectedNotes);
+
+    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
+      noteCount = melodicParam.selectedNotes.length;
+      console.log(`✅ Using piano selection: ${noteCount} notes`);
+    } else {
+      const minNote = Math.round(melodicParam.min);
+      const maxNote = Math.round(melodicParam.max);
+      noteCount = maxNote - minNote + 1;
+      console.log(`✅ Using range: ${minNote}-${maxNote} = ${noteCount} notes`);
+    }
+
+    
+    // Calculate average rhythm duration (in seconds)
+    const avgRhythmDuration = this.calculateAverageRhythmDuration(rhythmParam);
+    
+    // Get behavior multiplier (0% = 1.0x, 50% = 1.5x, 100% = 2.0x)
+    const behavior = melodicParam.behavior || 50;
+    const behaviorMultiplier = 1.0 + (behavior / 100.0);
+    
+    // Calculate melodic lookahead
+    // Formula: noteCount × avgRhythmDuration × behaviorMultiplier
+    const melodicLookahead = noteCount * avgRhythmDuration * behaviorMultiplier;
+    
+    // Ensure minimum technical buffer
+    const totalLookahead = Math.max(this.baseLookahead, melodicLookahead);
+    
+    // Cap at maximum
+    const finalLookahead = Math.min(totalLookahead, this.maxLookahead);
+    
+    console.log(`📐 Voice ${this.voiceIndex + 1} Lookahead Calculation:`);
+    console.log(`   Note count: ${noteCount}`);
+    console.log(`   Avg rhythm: ${(avgRhythmDuration * 1000).toFixed(0)}ms`);
+    console.log(`   Behavior: ${behavior}% (${behaviorMultiplier.toFixed(2)}x multiplier)`);
+    console.log(`   Melodic lookahead: ${(melodicLookahead * 1000).toFixed(0)}ms`);
+    console.log(`   Final lookahead: ${(finalLookahead * 1000).toFixed(0)}ms`);
+    
+    return finalLookahead;
+  }
+  
+  calculateAverageRhythmDuration(rhythmParam) {
+    const selectedRhythms = rhythmParam.selectedValues || [7]; // Default quarter note
+    
+    if (selectedRhythms.length === 0) {
+      selectedRhythms.push(7);
+    }
+    
+    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+    const tempo = voiceClock ? voiceClock.currentTempo : 120;
+    const beatDuration = 60 / tempo; // Seconds per beat
+    
+    let totalDuration = 0;
+    selectedRhythms.forEach(rhythmIndex => {
+      const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[7];
+      const noteDuration = rhythmInfo.beats * beatDuration;
+      totalDuration += noteDuration;
+    });
+    
+    return totalDuration / selectedRhythms.length; // Average in seconds
+  }
+  
+  updateLookahead() {
+    const newLookahead = this.calculateLookahead();
+    
+    if (Math.abs(newLookahead - this.currentLookahead) > 0.050) { // Changed by >50ms
+      console.log(`🔄 Voice ${this.voiceIndex + 1}: Lookahead updated from ${(this.currentLookahead * 1000).toFixed(0)}ms to ${(newLookahead * 1000).toFixed(0)}ms`);
+      this.currentLookahead = newLookahead;
+    }
+  }
+  
+  generatePhrase(noteCount) {
+    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+    
+    // Get note pool
+    let notePool;
+    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
+      notePool = melodicParam.selectedNotes;
+    } else {
+      // Generate pool from range
+      const minNote = Math.round(melodicParam.min);
+      const maxNote = Math.round(melodicParam.max);
+      notePool = [];
+      for (let note = minNote; note <= maxNote; note++) {
+        notePool.push(note);
+      }
+    }
+    
+    // Generate phrase using behavior setting
+    const behaviorSetting = melodicParam.behavior || 50;
+    return this.phraseGenerator.generate(notePool, noteCount, behaviorSetting);
+  }
+  
+  getNextRhythmDuration() {
+    const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
+    const rhythmIndex = this.selectValueFromParam(rhythmParam);
+    return this.getRhythmDuration(rhythmIndex);
+  }
+  
+  getNextRestDuration() {
+    const restParam = voiceData[this.voiceIndex].parameters['RESTS'];
+    const restIndex = this.selectValueFromParam(restParam);
+    
+    if (restIndex === 0) return 0; // No rest
+    
+    const restInfo = rhythmDurations[restIndex - 1];
+    if (!restInfo) return 0;
+    
+    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+    const tempo = voiceClock ? voiceClock.currentTempo : 120;
+    const beatDuration = 60 / tempo;
+    
+    return restInfo.beats * beatDuration; // Seconds
+  }
+  
+  selectValueFromParam(param) {
+    // Simple selection for now
+    if (param.selectedValues && param.selectedValues.length > 0) {
+      const randomIndex = Math.floor(Math.random() * param.selectedValues.length);
+      return param.selectedValues[randomIndex];
+    }
+    return 7; // Default quarter note
+  }
+  
+  getRhythmDuration(rhythmIndex) {
+    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+    const tempo = voiceClock ? voiceClock.currentTempo : 120;
+    
+    const rhythmInfo = rhythmDurations[rhythmIndex] || rhythmDurations[7];
+    const beatDuration = 60 / tempo;
+    return rhythmInfo.beats * beatDuration; // Returns seconds
+  }
+  
+  
+  scheduleNoteAtTime(midiNote, scheduleTime) {
+    console.log(`🎯 scheduleNoteAtTime() called: note=${midiNoteNames[midiNote]}, time=${scheduleTime.toFixed(3)}`);
+
+    // Get voice clock for access to audio methods
+    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+    if (!voiceClock) return;
+    
+    // Get rhythm duration
+    const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
+    const rhythmIndex = this.selectValueFromParam(rhythmParam);
+    const noteDuration = this.getRhythmDuration(rhythmIndex);
+    
+    // Get polyphony setting
+    const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
+    const polyphonyCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
+    
+    // Create note info array
+    const noteInfoArray = [{
+      midiNote: midiNote,
+      frequency: midiToFrequency(midiNote),
+      noteName: midiNoteNames[midiNote] || `MIDI${midiNote}`
+    }];
+    
+    // If polyphony > 1, add additional notes (use existing chord generation)
+    if (polyphonyCount > 1) {
+      const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+      const behaviorSetting = melodicParam.behavior || 50;
+      
+      // Generate chord from base note
+      const baseNote = noteInfoArray[0];
+      const minNote = Math.round(melodicParam.min);
+      const maxNote = Math.round(melodicParam.max);
+      
+      const chord = generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting);
+      noteInfoArray.length = 0; // Clear
+      noteInfoArray.push(...chord);
+    }
+    
+    // Schedule using existing audio infrastructure
+    voiceClock.triggerNote(noteInfoArray, noteDuration * 1000, scheduleTime); // Pass schedule time!
+
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1}: Scheduled ${noteInfoArray.map(n => n.noteName).join('+')} at ${scheduleTime.toFixed(3)}s`);
+  }
+}
+
+console.log('✅ LookaheadScheduler class loaded');
+
 
 function createParameterRollup(param, voiceIndex) {
   if (Object.keys(parameterRollupState).length === 0) {
@@ -5874,6 +6882,316 @@ Are you sure you want to continue?`);
     }
 }
 
+// Performance Monitoring Classes - INSERT AFTER PresetManager class, BEFORE global instances
+
+// Performance Monitor Class
+class PerformanceMonitor {
+  constructor() {
+    this.frameCount = 0;
+    this.lastFrameTime = performance.now();
+    this.cpuUsage = 0;
+    this.audioDropouts = 0;
+    this.samples = [];
+    this.maxSamples = 100;
+    
+    console.log('📊 PerformanceMonitor initialized');
+  }
+  
+  update() {
+    const now = performance.now();
+    const delta = now - this.lastFrameTime;
+    
+    // Calculate CPU usage (simplified)
+    this.cpuUsage = Math.min(100, (delta / 16.67) * 100); // 16.67ms = 60fps baseline
+    
+    // Store sample for trending
+    this.samples.push({
+      time: now,
+      cpuUsage: this.cpuUsage,
+      delta: delta
+    });
+    
+    if (this.samples.length > this.maxSamples) {
+      this.samples.shift();
+    }
+    
+    this.lastFrameTime = now;
+    this.frameCount++;
+    
+    // Log every 60 updates (roughly 1 second)
+    if (this.frameCount % 60 === 0) {
+      const avgCpu = this.samples.slice(-60).reduce((sum, s) => sum + s.cpuUsage, 0) / 60;
+      console.log(`📊 CPU: ${avgCpu.toFixed(1)}%, Dropouts: ${this.audioDropouts}`);
+    }
+  }
+  
+  getStats() {
+    const recent = this.samples.slice(-30);
+    const avgCpu = recent.length > 0 ? 
+      recent.reduce((sum, s) => sum + s.cpuUsage, 0) / recent.length : 0;
+    
+    return {
+      currentCpu: this.cpuUsage,
+      averageCpu: avgCpu,
+      dropouts: this.audioDropouts,
+      frameCount: this.frameCount
+    };
+  }
+}
+// REPLACE the AudioHealthMonitor class with this improved version:
+
+class AudioHealthMonitor {
+  constructor(audioContext) {
+    this.audioContext = audioContext;
+    this.lastCheckTime = 0;
+    this.dropoutCount = 0;
+    this.isHealthy = true;
+    this.isMonitoringActive = false; // Only monitor during playback
+    
+    console.log('🔊 AudioHealthMonitor initialized');
+  }
+  
+  startMonitoring() {
+    this.isMonitoringActive = true;
+    this.lastCheckTime = this.audioContext.currentTime;
+    this.dropoutCount = 0;
+    console.log('🔊 Audio health monitoring started');
+  }
+  
+  stopMonitoring() {
+    this.isMonitoringActive = false;
+    this.lastCheckTime = 0;
+    console.log('🔊 Audio health monitoring stopped');
+  }
+  
+  checkHealth() {
+    if (!this.audioContext || !this.isMonitoringActive) return true;
+    
+    const now = this.audioContext.currentTime;
+    
+    // Check audio context state
+    if (this.audioContext.state !== 'running') {
+      console.warn('⚠️ Audio context not running:', this.audioContext.state);
+      this.isHealthy = false;
+      return false;
+    }
+    
+    // Only check timing gaps during active monitoring (playback)
+    if (this.lastCheckTime > 0) {
+      const timeDelta = now - this.lastCheckTime;
+      if (timeDelta > 0.200) { // 200ms gap during playback is suspicious
+        console.warn('⚠️ Audio timing gap during playback:', timeDelta.toFixed(3), 'seconds');
+        this.dropoutCount++;
+        this.isHealthy = false;
+        
+        if (audioManager && audioManager.performanceMonitor) {
+          audioManager.performanceMonitor.audioDropouts++;
+        }
+        
+        return false;
+      }
+    }
+    
+    this.lastCheckTime = now;
+    this.isHealthy = true;
+    return true;
+  }
+  
+  getStats() {
+    return {
+      isHealthy: this.isHealthy,
+      dropouts: this.dropoutCount,
+      contextState: this.audioContext ? this.audioContext.state : 'none',
+      currentTime: this.audioContext ? this.audioContext.currentTime.toFixed(3) : '0',
+      monitoring: this.isMonitoringActive
+    };
+  }
+  
+  reset() {
+    this.dropoutCount = 0;
+    this.isHealthy = true;
+    console.log('🔊 AudioHealthMonitor reset');
+  }
+}
+
+// Memory Monitor Class  
+class MemoryMonitor {
+  constructor() {
+    this.samples = [];
+    this.maxSamples = 100;
+    this.baselineMemory = 0;
+    
+    console.log('💾 MemoryMonitor initialized');
+  }
+  
+  sample() {
+    if (performance.memory) {
+      const usage = {
+        time: Date.now(),
+        used: performance.memory.usedJSHeapSize,
+        total: performance.memory.totalJSHeapSize,
+        limit: performance.memory.jsHeapSizeLimit
+      };
+      
+      // Set baseline on first sample
+      if (this.baselineMemory === 0) {
+        this.baselineMemory = usage.used;
+        console.log(`💾 Memory baseline set: ${(this.baselineMemory / 1048576).toFixed(1)} MB`);
+      }
+      
+      this.samples.push(usage);
+      
+      if (this.samples.length > this.maxSamples) {
+        this.samples.shift();
+      }
+      
+      return usage;
+    }
+    return null;
+  }
+  
+  detectLeak() {
+    if (this.samples.length < 10) return false;
+    
+    const recent = this.samples.slice(-10);
+    const growth = recent[recent.length - 1].used - recent[0].used;
+    const avgGrowth = growth / 10;
+    
+    // If consistently growing more than 2MB per sample
+    if (avgGrowth > 2097152) { // 2MB
+      console.warn('⚠️ Possible memory leak detected:', (avgGrowth / 1048576).toFixed(2), 'MB/sample');
+      return true;
+    }
+    
+    return false;
+  }
+  
+  getStats() {
+    const latest = this.samples[this.samples.length - 1];
+    if (!latest) return null;
+    
+    const growthFromBaseline = latest.used - this.baselineMemory;
+    const utilizationPercent = (latest.used / latest.limit) * 100;
+    
+    return {
+      currentMB: (latest.used / 1048576).toFixed(1),
+      totalMB: (latest.total / 1048576).toFixed(1),
+      limitMB: (latest.limit / 1048576).toFixed(1),
+      growthMB: (growthFromBaseline / 1048576).toFixed(1),
+      utilization: utilizationPercent.toFixed(1),
+      isLeak: this.detectLeak()
+    };
+  }
+}
+
+// Oscillator Pool Class - INSERT AFTER MemoryMonitor class
+class OscillatorPool {
+  constructor(audioContext, poolSize = 50) {
+    this.audioContext = audioContext;
+    this.availableNodes = [];
+    this.activeNodes = new Set();
+    this.poolSize = poolSize;
+    this.createdCount = 0;
+    this.reusedCount = 0;
+    
+    // Pre-create node sets
+    for (let i = 0; i < poolSize; i++) {
+      this.availableNodes.push(this.createNodeSet());
+    }
+    
+    console.log(`🎛️ Oscillator pool initialized: ${poolSize} node sets ready`);
+  }
+  
+  createNodeSet() {
+    const nodeSet = {
+      oscillator: this.audioContext.createOscillator(),
+      gainNode: this.audioContext.createGain(),
+      filterNode: this.audioContext.createBiquadFilter(),
+      panNode: this.audioContext.createStereoPanner(),
+      inUse: false,
+      id: Math.random().toString(36).substr(2, 9)
+    };
+    
+    this.createdCount++;
+    return nodeSet;
+  }
+  
+  acquire() {
+    let nodeSet;
+    
+    if (this.availableNodes.length > 0) {
+      nodeSet = this.availableNodes.pop();
+      this.reusedCount++;
+    } else {
+      // Pool exhausted, create new
+      console.warn('⚠️ Oscillator pool exhausted, creating new node set');
+      nodeSet = this.createNodeSet();
+    }
+    
+    nodeSet.inUse = true;
+    this.activeNodes.add(nodeSet);
+    
+    return nodeSet;
+  }
+  
+  release(nodeSet) {
+    if (!nodeSet || !nodeSet.inUse) return;
+    
+    nodeSet.inUse = false;
+    this.activeNodes.delete(nodeSet);
+    
+    // Disconnect all nodes
+    try {
+      if (nodeSet.oscillator) {
+        nodeSet.oscillator.stop();
+        nodeSet.oscillator.disconnect();
+      }
+      if (nodeSet.gainNode) nodeSet.gainNode.disconnect();
+      if (nodeSet.filterNode) nodeSet.filterNode.disconnect();
+      if (nodeSet.panNode) nodeSet.panNode.disconnect();
+    } catch (e) {
+      // Already disconnected or stopped
+    }
+    
+    // Create fresh oscillator (can't reuse stopped oscillators)
+    nodeSet.oscillator = this.audioContext.createOscillator();
+    
+    // Return to available pool
+    this.availableNodes.push(nodeSet);
+  }
+  
+  getStats() {
+    const hitRate = this.createdCount > 0 ? (this.reusedCount / this.createdCount * 100) : 0;
+    
+    return {
+      available: this.availableNodes.length,
+      active: this.activeNodes.size,
+      total: this.availableNodes.length + this.activeNodes.size,
+      created: this.createdCount,
+      reused: this.reusedCount,
+      hitRate: hitRate.toFixed(1),
+      efficiency: ((this.availableNodes.length / this.poolSize) * 100).toFixed(1)
+    };
+  }
+  
+  cleanup() {
+    // Force cleanup of all nodes
+    console.log('🧹 Cleaning up oscillator pool...');
+    
+    this.activeNodes.forEach(nodeSet => {
+      this.release(nodeSet);
+    });
+    
+    this.activeNodes.clear();
+    
+    console.log(`✅ Pool cleanup complete: ${this.availableNodes.length} nodes available`);
+  }
+}
+
+
+
+
+
 // Global preset manager instance
 let presetManager = null;
 
@@ -6125,6 +7443,194 @@ function resetNewButton() {
         console.log('❌ NEW button not found');
     }
 }
+
+// Performance Dashboard Function - ADD before DOMContentLoaded event
+
+function logPerformanceSummary() {
+  if (!audioManager || !audioManager.isInitialized) return;
+  
+  console.log('══════════════════════════════════════════════════════');
+  console.log('📊 PERFORMANCE SUMMARY');
+  console.log('══════════════════════════════════════════════════════');
+  
+  // Performance Monitor Stats
+  if (audioManager.performanceMonitor) {
+    const pm = audioManager.performanceMonitor.getStats();
+    console.log(`CPU Usage: ${pm.averageCpu.toFixed(1)}% (current: ${pm.currentCpu.toFixed(1)}%)`);
+    console.log(`Frame Count: ${pm.frameCount}`);
+    console.log(`Audio Dropouts: ${pm.dropouts}`);
+  }
+  
+  // Oscillator Pool Stats
+  if (audioManager.oscillatorPool) {
+    const stats = audioManager.oscillatorPool.getStats();
+    console.log(`Active Oscillators: ${stats.active}/${stats.total}`);
+    console.log(`Pool Efficiency: ${stats.efficiency}% available`);
+    console.log(`Hit Rate: ${stats.hitRate}% (${stats.reused}/${stats.created})`);
+  }
+  
+  // Memory Stats
+  if (audioManager.memoryMonitor) {
+    const memStats = audioManager.memoryMonitor.getStats();
+    if (memStats) {
+      console.log(`Memory Used: ${memStats.currentMB} MB`);
+      console.log(`Memory Growth: ${memStats.growthMB} MB from baseline`);
+      console.log(`Memory Utilization: ${memStats.utilization}% of ${memStats.limitMB} MB limit`);
+      if (memStats.isLeak) {
+        console.warn('⚠️ Possible memory leak detected!');
+      }
+    }
+  }
+  
+  // Audio Health Stats  
+  if (audioManager.audioHealthMonitor) {
+    const healthStats = audioManager.audioHealthMonitor.getStats();
+    console.log(`Audio Context: ${healthStats.contextState}`);
+    console.log(`Audio Health: ${healthStats.isHealthy ? '✅ Healthy' : '❌ Issues detected'}`);
+    console.log(`Monitoring Active: ${healthStats.monitoring ? '✅ Yes' : '⏸️ Idle'}`);
+    
+    if (healthStats.dropouts > 0) {
+      console.warn(`⚠️ Audio dropouts detected: ${healthStats.dropouts}`);
+    }
+  }
+  
+  // Voice Clock Stats
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    const activeVoices = voiceClockManager.getActiveVoiceCount();
+    const enabledVoices = voiceData.filter(v => v.enabled).length;
+    console.log(`Active Voices: ${activeVoices}/${enabledVoices} enabled`);
+  } else {
+    console.log(`Voice System: Not active`);
+  }
+  
+  // Master Clock Stats
+  if (masterClock && masterClock.isActive()) {
+    const elapsed = masterClock.getElapsedTime();
+    console.log(`Master Clock: Active (${formatMsToMMSS(elapsed)} elapsed)`);
+  } else {
+    console.log(`Master Clock: Inactive`);
+  }
+  
+  console.log('══════════════════════════════════════════════════════');
+}
+
+// Manual performance summary trigger
+window.showPerformanceStats = logPerformanceSummary;
+
+
+
+// ADD this pool testing function before DOMContentLoaded
+
+function testOscillatorPool() {
+  if (!audioManager || !audioManager.oscillatorPool) {
+    console.log('❌ Oscillator pool not available');
+    return;
+  }
+  
+  console.log('🧪 TESTING OSCILLATOR POOL PERFORMANCE');
+  console.log('═══════════════════════════════════════');
+  
+  const initialStats = audioManager.oscillatorPool.getStats();
+  console.log('📊 Initial Pool State:', initialStats);
+  
+  // Acquire 5 node sets
+  const acquiredNodes = [];
+  for (let i = 0; i < 5; i++) {
+    const nodeSet = audioManager.oscillatorPool.acquire();
+    acquiredNodes.push(nodeSet);
+    console.log(`✅ Acquired node set ${nodeSet.id}`);
+  }
+  
+  const midStats = audioManager.oscillatorPool.getStats();
+  console.log('📊 After Acquiring 5 Nodes:', midStats);
+  
+  // Release them back
+  acquiredNodes.forEach(nodeSet => {
+    audioManager.oscillatorPool.release(nodeSet);
+    console.log(`🔄 Released node set ${nodeSet.id}`);
+  });
+  
+  const finalStats = audioManager.oscillatorPool.getStats();
+  console.log('📊 Final Pool State:', finalStats);
+  
+  console.log('═══════════════════════════════════════');
+  console.log('✅ Pool test complete - efficiency should be 100%');
+}
+
+// ADD this after the testOscillatorPool function
+
+function stressTestMemory() {
+  console.log('🧪 STARTING MEMORY STRESS TEST');
+  console.log('═══════════════════════════════════════');
+  
+  if (!audioManager || !audioManager.memoryMonitor) {
+    console.log('❌ Memory monitor not available');
+    return;
+  }
+  
+  const initialSample = audioManager.memoryMonitor.sample();
+  console.log(`📊 Initial Memory: ${(initialSample.used / 1048576).toFixed(1)} MB`);
+  
+  let testCount = 0;
+  const maxTests = 5; // Reduced for quicker testing
+  
+  const runStressTest = () => {
+    testCount++;
+    console.log(`🔄 Stress Test ${testCount}/${maxTests}`);
+    
+    // Simulate heavy load by acquiring and releasing many nodes
+    const nodes = [];
+    for (let i = 0; i < 10; i++) { // Reduced from 20 to 10
+      if (audioManager.oscillatorPool) {
+        nodes.push(audioManager.oscillatorPool.acquire());
+      }
+    }
+    
+    // Release them after a short delay
+    setTimeout(() => {
+      nodes.forEach(node => {
+        if (audioManager.oscillatorPool) {
+          audioManager.oscillatorPool.release(node);
+        }
+      });
+      
+      // Sample memory
+      const sample = audioManager.memoryMonitor.sample();
+      const growthMB = (sample.used - initialSample.used) / 1048576;
+      console.log(`📊 Memory after test ${testCount}: ${(sample.used / 1048576).toFixed(1)} MB (+${growthMB.toFixed(1)} MB)`);
+      
+      // Check for leaks
+      if (audioManager.memoryMonitor.detectLeak()) {
+        console.warn('⚠️ Memory leak detected during stress test!');
+      }
+      
+      if (testCount < maxTests) {
+        setTimeout(runStressTest, 500); // Reduced from 1000ms to 500ms
+      } else {
+        console.log('✅ Memory stress test complete');
+        
+        const finalSample = audioManager.memoryMonitor.sample();
+        const totalGrowth = (finalSample.used - initialSample.used) / 1048576;
+        console.log(`📊 Total memory growth: ${totalGrowth.toFixed(1)} MB`);
+        
+        if (totalGrowth < 2) {
+          console.log('✅ Memory usage stable - no significant leaks detected');
+        } else {
+          console.warn(`⚠️ Memory growth of ${totalGrowth.toFixed(1)} MB may indicate leaks`);
+        }
+      }
+    }, 100);
+  };
+  
+  runStressTest();
+}
+
+// Make it available globally
+window.stressTestMemory = stressTestMemory;
+
+
+// Make it available globally
+window.testPool = testOscillatorPool;
 
 // Initialize systems on page load
 document.addEventListener('DOMContentLoaded', () => {
