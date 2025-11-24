@@ -63,31 +63,93 @@ function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
   return Math.round(timeSeconds / unitDuration);
 }
 
+// function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
+//   return {
+//     to: function(timeMs) {
+//       const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+//       const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
+      
+//       if (timeMs >= 999999999) return '∞ (∞)'; // Handle infinity
+//       if (timeMs <= 0) return '0 beats (0:00)';
+      
+//       const beats = calculateBeatsFromTime(timeMs, beatUnit, currentTempo);
+//       const timeStr = formatMsToMMSS(timeMs);
+//       return `${beats} beats (${timeStr})`;
+//     },
+//     from: function(value) {
+//       if (value === '∞ (∞)') return 999999999;
+//       const match = value.match(/\((\d+:\d+)\)/);
+//       if (match) {
+//         return parseMMSSToMs(match[1]) || 0;
+//       }
+//       return parseFloat(value) || 0;
+//     }
+//   };
+// }
+
+// GM Sounds list
 function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
   return {
     to: function(timeMs) {
       const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
       const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
       
-      if (timeMs >= 999999999) return '∞ (∞)'; // Handle infinity
+      if (timeMs >= 999999999) return '∞ beats (∞)';
       if (timeMs <= 0) return '0 beats (0:00)';
       
       const beats = calculateBeatsFromTime(timeMs, beatUnit, currentTempo);
       const timeStr = formatMsToMMSS(timeMs);
+      
+      // Format: "45 beats (0:20)"
       return `${beats} beats (${timeStr})`;
     },
     from: function(value) {
-      if (value === '∞ (∞)') return 999999999;
-      const match = value.match(/\((\d+:\d+)\)/);
-      if (match) {
-        return parseMMSSToMs(match[1]) || 0;
+      if (value === '∞ beats (∞)' || value === '∞ (∞)') return 999999999;
+      
+      // Parse "45 beats (0:20)" format
+      const beatsMatch = value.match(/^(\d+) beats/);
+      const timeMatch = value.match(/\((\d+:\d+)\)/);
+      
+      if (timeMatch) {
+        return parseMMSSToMs(timeMatch[1]) || 0;
       }
+      if (beatsMatch) {
+        // Fallback: convert beats to time
+        const beats = parseInt(beatsMatch[1]);
+        const voiceIndex = 0; // Default, will be overridden
+        const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+        const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
+        const beatDuration = 60 / currentTempo;
+        return Math.round(beats * beatDuration * 1000);
+      }
+      
       return parseFloat(value) || 0;
     }
   };
 }
 
-// GM Sounds list
+function calculateBeatDurationMs(voiceIndex, beatUnit) {
+  const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+  const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
+  
+  // Get the rhythm duration for the selected beat unit
+  const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7]; // Default to quarter notes
+  const beatDuration = 60 / currentTempo; // One quarter note in seconds
+  const unitDuration = rhythmInfo.beats * beatDuration; // Duration of selected unit
+  
+  const durationMs = Math.round(unitDuration * 1000);
+  
+  console.log(`🎵 Beat duration for Voice ${voiceIndex + 1}:`);
+  console.log(`   Tempo: ${currentTempo} BPM`);
+  console.log(`   Beat unit: ${rhythmInfo.name}`);
+  console.log(`   Duration: ${durationMs}ms (${rhythmInfo.beats} beats)`);
+  
+  return durationMs;
+}
+
+
+
+
 const gmSounds = [
   "Acoustic Grand Piano",
   "Electric Piano 1", 
@@ -251,16 +313,33 @@ class MasterClock {
     return this.isRunning;
   }
   
+  // updateAllParameters() {
+  //   const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
+    
+  //   for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
+  //     if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
+  //       this.updateVoiceParameters(voiceIndex, deltaTime);
+  //     }
+  //   }
+  // }
   updateAllParameters() {
     const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
     
     for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
       if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
         this.updateVoiceParameters(voiceIndex, deltaTime);
+        
+        // NEW: Apply real-time updates to currently playing notes
+        if (voiceClockManager && voiceClockManager.isInitialized) {
+          const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+          if (voiceClock && voiceClock.isActive) {
+            voiceClock.updateActiveNotesRealTime();
+          }
+        }
       }
     }
   }
-  
+
   updateVoiceParameters(voiceIndex, deltaTime) {
     const voice = voiceData[voiceIndex];
     if (!voice) return;
@@ -608,15 +687,30 @@ function createLifeSpanControl(param, voiceIndex) {
     console.log(`🕐 Creating Life Span ${i} slider with range 0-${formatMsToMMSS(maxTimeMs)}`);
     console.log(`   Start values: enter=${formatMsToMMSS(startEnter)}, exit=${startExit >= 999999999 ? '∞' : formatMsToMMSS(startExit)}`);
     
+    // try {
+    //   noUiSlider.create(sliderDiv, {
+    //     start: [startEnter, Math.min(startExit, maxTimeMs)],
+    //     connect: true,
+    //     range: { min: 0, max: maxTimeMs },
+    //     step: 1000, // 1 second steps
+    //     tooltips: [true, true],
+    //     format: formatter
+    //   });
     try {
+      // Calculate beat-based step size
+      const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
+      
+      console.log(`🎵 Creating Life Span ${i} slider with beat-based steps: ${beatStepMs}ms`);
+      
       noUiSlider.create(sliderDiv, {
         start: [startEnter, Math.min(startExit, maxTimeMs)],
         connect: true,
         range: { min: 0, max: maxTimeMs },
-        step: 1000, // 1 second steps
+        step: beatStepMs, // Beat-based steps instead of 1000ms
         tooltips: [true, true],
         format: formatter
       });
+
       
       console.log(`✅ Life Span ${i} slider created successfully`);
     } catch (error) {
@@ -672,47 +766,62 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   return wrapper;
 }
 
-
 function rebuildLifeSpanSliders(container, voiceIndex) {
   console.log('🔄 Rebuilding Life Span sliders with new max time...');
   
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  const maxTimeMs = lifeSpanParam.maxTimeMs; // Now directly in milliseconds
+  const maxTimeMs = lifeSpanParam.maxTimeMs;
   const beatUnit = lifeSpanParam.beatUnit;
   
   console.log(`New max time: ${formatMsToMMSS(maxTimeMs)} (${maxTimeMs}ms)`);
-  
   
   // Find all Life Span sliders in this container
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
   
   spanSliders.forEach((sliderContainer) => {
     const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
-    const existingSlider = sliderContainer.querySelector('.noUi-target');
     
     // Get current values before destroying
     let currentEnter = 0;
     let currentExit = 0;
     
-    if (existingSlider && existingSlider.noUiSlider) {
-      try {
-        const values = existingSlider.noUiSlider.get();
-        currentEnter = parseLifeSpanValue(values[0]);
-        currentExit = parseLifeSpanValue(values[1]);
-        
-        // Destroy existing slider
-        existingSlider.noUiSlider.destroy();
-        existingSlider.remove();
-        
-        console.log(`🗑️ Destroyed Life Span ${spanNumber} slider, preserving values: enter=${formatMsToMMSS(currentEnter)}, exit=${currentExit >= 999999999 ? '∞' : formatMsToMMSS(currentExit)}`);
-      } catch (e) {
-        console.warn(`Warning destroying Life Span ${spanNumber} slider:`, e);
+    // Find ALL existing slider instances in this container
+    const existingSliders = sliderContainer.querySelectorAll('.noUi-target');
+    
+    if (existingSliders.length > 0) {
+      // Get values from the FIRST slider (the most recent valid one)
+      const firstSlider = existingSliders[0];
+      
+      if (firstSlider.noUiSlider) {
+        try {
+          const values = firstSlider.noUiSlider.get();
+          currentEnter = parseLifeSpanValue(values[0]);
+          currentExit = parseLifeSpanValue(values[1]);
+          
+          console.log(`📖 Read values from Life Span ${spanNumber}: enter=${formatMsToMMSS(currentEnter)}, exit=${currentExit >= 999999999 ? '∞' : formatMsToMMSS(currentExit)}`);
+        } catch (e) {
+          console.warn(`Warning reading Life Span ${spanNumber} values:`, e);
+        }
       }
+      
+      // Destroy and remove ALL existing sliders
+      existingSliders.forEach((slider, index) => {
+        try {
+          if (slider.noUiSlider) {
+            slider.noUiSlider.destroy();
+          }
+          slider.remove();
+          console.log(`🗑️ Removed duplicate slider ${index + 1} from Life Span ${spanNumber}`);
+        } catch (e) {
+          console.warn(`Warning removing slider:`, e);
+        }
+      });
     } else {
       // Get values from data if no existing slider
       const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
       currentEnter = spanData.enter || 0;
       currentExit = spanData.exit || 0;
+      console.log(`📖 Using stored values for Life Span ${spanNumber}`);
     }
     
     // Clamp existing values to new range
@@ -721,29 +830,37 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
     
     // Handle infinity case
     if (currentExit >= 999999999) {
-      currentExit = maxTimeMs; // Set to new max time
+      currentExit = maxTimeMs;
     }
     
     // Update data with clamped values
     lifeSpanParam[`lifeSpan${spanNumber}`].enter = currentEnter;
     lifeSpanParam[`lifeSpan${spanNumber}`].exit = currentExit;
     
-    // Create new slider div
+    // Create NEW slider div (container should now be empty)
     const newSliderDiv = document.createElement('div');
     sliderContainer.appendChild(newSliderDiv);
+    
+    // Calculate beat-based step size
+    const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
     
     // Create new formatter with updated beat unit
     const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
     
     try {
+      console.log(`🎵 Creating Life Span ${spanNumber} with beat steps: ${beatStepMs}ms`);
+      
       noUiSlider.create(newSliderDiv, {
         start: [currentEnter, currentExit],
         connect: true,
         range: { min: 0, max: maxTimeMs },
-        step: 1000,
+        step: beatStepMs,
         tooltips: [true, true],
         format: formatter
       });
+      
+      // NEW: Force immediate tooltip update with new formatter
+      newSliderDiv.noUiSlider.set([currentEnter, currentExit]);
       
       // Reconnect the update handler
       newSliderDiv.noUiSlider.on('update', function(values) {
@@ -759,16 +876,44 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
         console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
       });
       
-      console.log(`✅ Rebuilt Life Span ${spanNumber} slider with new range 0-${formatMsToMMSS(maxTimeMs)}`);
+      console.log(`✅ Created new Life Span ${spanNumber} slider with range 0-${formatMsToMMSS(maxTimeMs)}`);
       
     } catch (error) {
-      console.error(`❌ Error rebuilding Life Span ${spanNumber} slider:`, error);
+      console.error(`❌ Error creating Life Span ${spanNumber} slider:`, error);
     }
   });
   
-  console.log(`🎯 All Life Span sliders rebuilt - max time tooltips now show: ${formatMsToMMSS(maxTimeMs)}`);
+  console.log(`🎯 All Life Span sliders rebuilt - each span now has exactly ONE slider`);
 }
 
+
+function updateLifeSpanSlidersForTempoChange(voiceIndex) {
+  console.log(`🔄 Updating Life Span sliders for Voice ${voiceIndex + 1} due to tempo change`);
+  
+  // Find the Life Span parameter container for this voice
+  if (voiceIndex !== currentVoice) {
+    console.log(`   Skipping: Voice ${voiceIndex + 1} is not currently displayed`);
+    return;
+  }
+  
+  const parameterSection = document.getElementById('parameter-section');
+  const lifeSpanRollup = Array.from(parameterSection.querySelectorAll('.parameter-rollup'))
+    .find(rollup => {
+      const title = rollup.querySelector('.parameter-rollup-title');
+      return title && title.textContent.trim() === 'LIFE SPAN';
+    });
+  
+  if (!lifeSpanRollup) {
+    console.log(`   Life Span rollup not found`);
+    return;
+  }
+  
+  const lifeSpanContainer = lifeSpanRollup.querySelector('.dual-slider');
+  if (lifeSpanContainer) {
+    rebuildLifeSpanSliders(lifeSpanContainer, voiceIndex);
+    console.log(`✅ Life Span sliders rebuilt with new tempo-based beat duration`);
+  }
+}
 
 
 // Create voice tabs
@@ -2955,6 +3100,21 @@ console.log('✅ Chord quality selection system loaded');
 
 // Individual Voice Clock - Synced to Master Clock WITH LIFE SPAN INTEGRATION
 class VoiceClock {
+  // constructor(voiceIndex, masterClock) {
+  //   this.voiceIndex = voiceIndex;
+  //   this.masterClock = masterClock;
+    
+  //   this.isActive = false;
+  //   this.lastNoteTime = 0;
+  //   this.nextNoteTime = 0;
+  //   this.currentTempo = 120;
+  //   this.lastTempoUpdate = 0;
+    
+  //   console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
+
+  // // NEW: Lookahead scheduler
+  // this.lookaheadScheduler = null; // Will initialize when audioManager is ready
+  // }
   constructor(voiceIndex, masterClock) {
     this.voiceIndex = voiceIndex;
     this.masterClock = masterClock;
@@ -2965,12 +3125,15 @@ class VoiceClock {
     this.currentTempo = 120;
     this.lastTempoUpdate = 0;
     
+    // NEW: Track active notes for real-time parameter updates
+    this.activeNotes = new Set();
+    
     console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
 
-  // NEW: Lookahead scheduler
-  this.lookaheadScheduler = null; // Will initialize when audioManager is ready
+    this.lookaheadScheduler = null;
   }
-  
+
+
   start() {
     if (!this.masterClock.isActive()) {
       console.warn(`Voice ${this.voiceIndex + 1}: Cannot start - master clock not running`);
@@ -3333,142 +3496,6 @@ scheduleNextNote() {
   return scheduledNotes;
 }
 
-  
-  
-  // REPLACE the entire createScheduledAudioNote method in VoiceClock class
-// createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
-//   if (!audioManager || !audioManager.audioContext) return null;
-  
-//   const actualStartTime = startTime + (offset * 0.001);
-  
-//   console.log(`🔍 === CREATING NOTE WITH POOL: Voice ${this.voiceIndex + 1} ===`);
-//   console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
-  
-//   // ACQUIRE NODE SET FROM POOL
-//   let nodeSet = null;
-//   let usingPool = false;
-  
-//   if (audioManager.oscillatorPool) {
-//     nodeSet = audioManager.oscillatorPool.acquire();
-//     usingPool = true;
-//     console.log(`🎛️ Using pooled node set: ${nodeSet.id}`);
-//   } else {
-//     // Fallback: create nodes directly
-//     nodeSet = {
-//       oscillator: audioManager.audioContext.createOscillator(),
-//       gainNode: audioManager.audioContext.createGain(),
-//       filterNode: audioManager.audioContext.createBiquadFilter(),
-//       panNode: audioManager.audioContext.createStereoPanner(),
-//       inUse: true,
-//       id: 'direct-' + Math.random().toString(36).substr(2, 6)
-//     };
-//     console.log(`⚠️ Using direct node creation: ${nodeSet.id}`);
-//   }
-  
-//   const { oscillator, gainNode, filterNode, panNode } = nodeSet;
-  
-//   // Get voice parameters and setup
-//   const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
-//   const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
-//   const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
-  
-//   const currentVelocity = this.getCurrentVelocity();
-//   const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
-//   const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
-//   const voiceParams = this.getAllCurrentVoiceParameters();
-  
-//   // Configure oscillator
-//   const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
-//   oscillator.type = velocitySensitiveWaveform;
-  
-//   // Apply frequency, portamento, and detuning
-//   const portamentoTime = this.getCurrentPortamentoTime();
-//   this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
-//   this.applyDetuning(oscillator, actualStartTime, duration);
-  
-//   // Apply ADSR envelopes
-//   this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-//   this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
-//   this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-  
-//   // Create effects nodes (NOT pooled - these are per-note)
-//   const effectNodes = this.createEffectNodes();
-  
-//   // Build audio chain with effects
-//   this.buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration);
-  
-//   // Start and schedule stop
-//   oscillator.start(actualStartTime);
-//   oscillator.stop(actualStartTime + duration);
-  
-//   // Enhanced cleanup with pool return
-//   const cleanup = () => {
-//     try {
-//       // Disconnect effect nodes
-//       if (effectNodes) {
-//         this.cleanupEffectNodes(effectNodes);
-//       }
-      
-//       // Return to pool or cleanup directly
-//       if (usingPool && audioManager.oscillatorPool) {
-//         audioManager.oscillatorPool.release(nodeSet);
-//         console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
-//       } else {
-//         // Direct cleanup
-//         oscillator.disconnect();
-//         gainNode.disconnect();  
-//         filterNode.disconnect();
-//         panNode.disconnect();
-//         console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
-//       }
-      
-//       // Remove from tracking
-//       if (audioManager.previewGainNodes) {
-//         audioManager.previewGainNodes.delete(gainNode);
-//       }
-//       if (audioManager.previewPanNodes) {
-//         audioManager.previewPanNodes.delete(panNode);
-//       }
-      
-//     } catch (e) {
-//       console.warn('Cleanup warning:', e);
-//     }
-//   };
-  
-//   // Schedule cleanup after note + effect tails (using audio context time, not wall clock)
-//   const noteEndTime = actualStartTime + duration;
-//   const tailDuration = this.calculateMaxTailTime(voiceParams, duration);
-//   const cleanupTime = noteEndTime + (tailDuration / 1000); // Convert ms to seconds
-  
-//   // Create silent "timer oscillator" that triggers cleanup at the correct audio time
-//   const cleanupOscillator = audioManager.audioContext.createOscillator();
-//   const silentGain = audioManager.audioContext.createGain();
-//   silentGain.gain.value = 0; // Completely silent
-  
-//   cleanupOscillator.connect(silentGain);
-//   silentGain.connect(audioManager.audioContext.destination);
-  
-//   cleanupOscillator.onended = cleanup;
-//   cleanupOscillator.start(cleanupTime);
-//   cleanupOscillator.stop(cleanupTime + 0.001); // Stop immediately after starting
-  
-//   console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
-  
-//   return {
-//     oscillator,
-//     filterNode, 
-//     gainNode,
-//     panNode,
-//     effectNodes,
-//     nodeSet,
-//     usingPool,
-//     startTime: actualStartTime,
-//     duration,
-//     frequency,
-//     voiceIndex: this.voiceIndex,
-//     velocity: currentVelocity
-//   };
-// }
 
 createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   if (!audioManager || !audioManager.audioContext) return null;
@@ -3620,9 +3647,48 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   oscillator.start(actualStartTime);
   oscillator.stop(actualStartTime + duration);
   
-  // Enhanced cleanup with pool return
+  // // Enhanced cleanup with pool return
+  // const cleanup = () => {
+  //   try {
+  //     // Disconnect effect nodes
+  //     if (effectNodes) {
+  //       this.cleanupEffectNodes(effectNodes);
+  //     }
+      
+  //     // Return to pool or cleanup directly
+  //     if (usingPool && audioManager.oscillatorPool) {
+  //       audioManager.oscillatorPool.release(nodeSet);
+  //       console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
+  //     } else {
+  //       oscillator.disconnect();
+  //       gainNode.disconnect();
+  //       filterNode.disconnect();
+  //       panNode.disconnect();
+  //       console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
+  //     }
+      
+  //     // Remove from tracking
+  //     if (audioManager.previewGainNodes) {
+  //       audioManager.previewGainNodes.delete(gainNode);
+  //     }
+  //     if (audioManager.previewPanNodes) {
+  //       audioManager.previewPanNodes.delete(panNode);
+  //     }
+      
+  //   } catch (e) {
+  //     console.warn('Cleanup warning:', e);
+  //   }
+  // };
+  
+    // Enhanced cleanup with pool return
   const cleanup = () => {
     try {
+      // NEW: Mark note as inactive and remove from tracking
+      noteReference.isActive = false;
+      if (this.activeNotes) {
+        this.activeNotes.delete(noteReference);
+      }
+      
       // Disconnect effect nodes
       if (effectNodes) {
         this.cleanupEffectNodes(effectNodes);
@@ -3652,7 +3718,7 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
       console.warn('Cleanup warning:', e);
     }
   };
-  
+
   // Schedule cleanup after note + effect tails
   const noteEndTime = actualStartTime + duration;
   const tailDuration = this.calculateMaxTailTime(voiceParams, duration);
@@ -3671,7 +3737,8 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   
   console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
   
-  return {
+// NEW: Create note reference object for real-time updates
+  const noteReference = {
     oscillator,
     filterNode,
     gainNode,
@@ -3680,12 +3747,200 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     nodeSet,
     usingPool,
     startTime: actualStartTime,
+    endTime: actualStartTime + duration,
     duration,
     frequency,
     voiceIndex: this.voiceIndex,
-    velocity: currentVelocity
+    velocity: currentVelocity,
+    isActive: true  // NEW: Track if note is still playing
   };
+  
+  // NEW: Add to active notes tracking
+  this.activeNotes.add(noteReference);
+  
+  return noteReference;
+
+  // return {
+  //   oscillator,
+  //   filterNode,
+  //   gainNode,
+  //   panNode,
+  //   effectNodes,
+  //   nodeSet,
+  //   usingPool,
+  //   startTime: actualStartTime,
+  //   duration,
+  //   frequency,
+  //   voiceIndex: this.voiceIndex,
+  //   velocity: currentVelocity
+  // };
 }
+
+// updateActiveNotesRealTime() {
+//   if (this.activeNotes.size === 0) return;
+  
+//   const now = audioManager.audioContext.currentTime;
+//   const voiceParams = voiceData[this.voiceIndex].parameters;
+
+updateActiveNotesRealTime() {
+  // NEW: Update tempo even if no notes are playing (affects next note timing)
+  this.updateTempo();
+  
+  if (this.activeNotes.size === 0) return;
+  
+  const now = audioManager.audioContext.currentTime;
+  const voiceParams = voiceData[this.voiceIndex].parameters;
+  
+  // Get current parameter values
+  const volumeParam = voiceParams['VOLUME'];
+  const balanceParam = voiceParams['STEREO BALANCE'];
+  const tremoloParam = voiceParams['TREMOLO'];
+  const chorusParam = voiceParams['CHORUS'];
+  const phaserParam = voiceParams['PHASER'];
+  const reverbParam = voiceParams['REVERB'];
+  const delayParam = voiceParams['DELAY'];
+  
+  // Calculate current values
+  const currentVolume = volumeParam.currentValue !== undefined ? 
+    volumeParam.currentValue : (volumeParam.min + volumeParam.max) / 2;
+  const currentBalance = balanceParam.currentValue !== undefined ?
+    balanceParam.currentValue : (balanceParam.min + balanceParam.max) / 2;
+  
+  const volumeGain = (currentVolume / 100) * 0.15;
+  const panValue = Math.max(-1, Math.min(1, currentBalance / 100));
+  
+  // Effect parameters
+  const tremoloSpeed = 0.5 + ((tremoloParam.speed?.min + tremoloParam.speed?.max) / 2 / 100) * 11.5;
+  const tremoloDepth = ((tremoloParam.depth?.min + tremoloParam.depth?.max) / 2 / 100) * 0.8;
+  
+  const chorusSpeed = 0.2 + ((chorusParam.speed?.min + chorusParam.speed?.max) / 2 / 100) * 2.8;
+  const chorusDepth = ((chorusParam.depth?.min + chorusParam.depth?.max) / 2 / 100) * 0.7;
+  
+  const phaserSpeed = 0.1 + ((phaserParam.speed?.min + phaserParam.speed?.max) / 2 / 100) * 1.9;
+  const phaserDepth = ((phaserParam.depth?.min + phaserParam.depth?.max) / 2 / 100) * 0.8;
+  
+  const reverbMix = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 / 100;
+  const delayMix = (delayParam.depth?.min + delayParam.depth?.max) / 2 / 100;
+  const delayFeedback = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 / 100;
+  
+  // Update each active note
+  this.activeNotes.forEach(note => {
+    if (!note.isActive || now < note.startTime || now > note.endTime) {
+      return; // Skip notes that aren't currently playing
+    }
+    
+    try {
+      // Update Volume (respect ADSR but scale by current setting)
+      // We can't directly override ADSR, but we can scale the overall gain
+      // This is a compromise - volume changes will be relative to ADSR envelope
+      
+      // Update Pan (this works perfectly in real-time)
+      if (note.panNode && note.panNode.pan) {
+        note.panNode.pan.setValueAtTime(panValue, now);
+      }
+      
+      // Update Tremolo LFO frequency (if tremolo is active)
+      if (note.effectNodes && note.effectNodes.tremolo) {
+        const tremolo = note.effectNodes.tremolo;
+        if (tremolo.lfo && tremolo.lfo.frequency && tremoloDepth > 0.001) {
+          tremolo.lfo.frequency.setValueAtTime(tremoloSpeed, now);
+          
+          // Update depth
+          if (tremolo.depth && tremolo.depth.gain) {
+            tremolo.depth.gain.setValueAtTime(tremoloDepth * 0.5, now);
+          }
+        }
+      }
+      
+      // Update Chorus LFO frequencies (if chorus is active)
+      if (note.effectNodes && note.effectNodes.chorus) {
+        const chorus = note.effectNodes.chorus;
+        if (chorusDepth > 0.001) {
+          if (chorus.lfo1 && chorus.lfo1.frequency) {
+            chorus.lfo1.frequency.setValueAtTime(chorusSpeed * 0.8, now);
+          }
+          if (chorus.lfo2 && chorus.lfo2.frequency) {
+            chorus.lfo2.frequency.setValueAtTime(chorusSpeed * 1.1, now);
+          }
+          if (chorus.lfo3 && chorus.lfo3.frequency) {
+            chorus.lfo3.frequency.setValueAtTime(chorusSpeed * 1.3, now);
+          }
+          
+          // Update depth
+          const maxChorusDepth = chorusDepth * 0.008;
+          if (chorus.depth1 && chorus.depth1.gain) {
+            chorus.depth1.gain.setValueAtTime(maxChorusDepth, now);
+          }
+          if (chorus.depth2 && chorus.depth2.gain) {
+            chorus.depth2.gain.setValueAtTime(maxChorusDepth * 1.2, now);
+          }
+          if (chorus.depth3 && chorus.depth3.gain) {
+            chorus.depth3.gain.setValueAtTime(maxChorusDepth * 0.9, now);
+          }
+        }
+      }
+      
+      // Update Phaser LFO frequency (if phaser is active)
+      if (note.effectNodes && note.effectNodes.phaser) {
+        const phaser = note.effectNodes.phaser;
+        if (phaser.lfo && phaser.lfo.frequency && phaserDepth > 0.001) {
+          phaser.lfo.frequency.setValueAtTime(phaserSpeed, now);
+          
+          // Update depth
+          const maxPhaserDepth = phaserDepth * 800;
+          if (phaser.depth && phaser.depth.gain) {
+            phaser.depth.gain.setValueAtTime(maxPhaserDepth, now);
+          }
+          
+          // Update feedback
+          const feedbackAmount = Math.min(0.55, phaserDepth * 0.7);
+          if (phaser.feedback && phaser.feedback.gain) {
+            phaser.feedback.gain.setValueAtTime(feedbackAmount, now);
+          }
+        }
+      }
+      
+      // Update Reverb mix (if reverb is active)
+      if (note.effectNodes && note.effectNodes.reverb) {
+        const reverb = note.effectNodes.reverb;
+        if (reverbMix > 0.001) {
+          const reverbDryLevel = 1.0 - (reverbMix * 0.8);
+          const reverbWetLevel = reverbMix * 2.0;
+          
+          if (reverb.dry && reverb.dry.gain) {
+            reverb.dry.gain.setValueAtTime(reverbDryLevel, now);
+          }
+          if (reverb.wet && reverb.wet.gain) {
+            reverb.wet.gain.setValueAtTime(reverbWetLevel, now);
+          }
+        }
+      }
+      
+      // Update Delay mix and feedback (if delay is active)
+      if (note.effectNodes && note.effectNodes.delay) {
+        const delay = note.effectNodes.delay;
+        if (delayMix > 0.001) {
+          const delayDryLevel = 1.0 - (delayMix * 0.9);
+          const delayWetLevel = delayMix * 2.5;
+          
+          if (delay.dry && delay.dry.gain) {
+            delay.dry.gain.setValueAtTime(delayDryLevel, now);
+          }
+          if (delay.wet && delay.wet.gain) {
+            delay.wet.gain.setValueAtTime(delayWetLevel, now);
+          }
+          if (delay.feedback && delay.feedback.gain) {
+            delay.feedback.gain.setValueAtTime(delayFeedback, now);
+          }
+        }
+      }
+      
+    } catch (e) {
+      // Node might be disconnected, skip it
+    }
+  });
+}
+
 
 // NEW: Simplified effect setup methods (add these to VoiceClock class)
 
@@ -6070,8 +6325,21 @@ function connectAllSliders() {
             delete voiceData[currentVoice].parameters[paramName].currentTempo;
             delete voiceData[currentVoice].parameters[paramName].currentNote;
 
+            // NEW: If tempo changed, update immediately (but don't rebuild sliders during initial connection)
+            if (paramName === 'TEMPO (BPM)') {
+              // Only update the tempo value itself, don't rebuild UI during connection
+              if (voiceClockManager && voiceClockManager.isInitialized) {
+                const voiceClock = voiceClockManager.getVoiceClock(currentVoice);
+                if (voiceClock && voiceClock.isActive) {
+                  voiceClock.updateTempo();
+                  console.log(`⚡ Voice ${currentVoice + 1} tempo updated immediately to ${voiceClock.currentTempo} BPM`);
+                }
+              }
+            }
+
             console.log(`✅ ${paramName}: ${min}-${max}`);
           }
+
         }
       });
     }
@@ -6479,7 +6747,20 @@ if (beatUnitSelect) {
   console.log(`   ✅ ${dropdowns.length} dropdown controls`);
   console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
   console.log(`   ✅ ${lifeSpanContainers.length} Life Span controls`);
-} // <- This closes the connectAllSliders function
+} 
+
+function updateTempoImmediately(voiceIndex) {
+  if (!voiceClockManager || !voiceClockManager.isInitialized) return;
+  
+  const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+  if (voiceClock && voiceClock.isActive) {
+    voiceClock.updateTempo();
+    console.log(`⚡ Voice ${voiceIndex + 1} tempo updated immediately to ${voiceClock.currentTempo} BPM`);
+    
+    // NEW: Update Life Span sliders for new beat duration
+    updateLifeSpanSlidersForTempoChange(voiceIndex);
+  }
+}
 
 
 function createLifeSpanSlider(container, spanNumber) {
@@ -7812,3 +8093,28 @@ console.log('   - Beat unit dropdown for musical tooltips');
 console.log('   - Integration with voice clock timing system');
 
 
+// TESTING REALTIME UPDATES
+function testRealTimeUpdates() {
+  console.log('🧪 REAL-TIME PARAMETER UPDATE TEST');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('1. Start PREVIEW on Voice 1 with long notes (2-4 seconds)');
+  console.log('2. While notes are playing, move these sliders:');
+  console.log('   - Stereo Balance (should pan immediately)');
+  console.log('   - Tremolo Speed (should change wobble speed immediately)');
+  console.log('   - Chorus Depth (should change shimmer immediately)');
+  console.log('   - Phaser Speed (should change sweep speed immediately)');
+  console.log('   - Reverb Mix (should change spatial depth immediately)');
+  console.log('   - Delay Feedback (should change echo repeats immediately)');
+  console.log('');
+  console.log('Expected: ALL changes should be audible within 50ms');
+  console.log('═══════════════════════════════════════════════════════');
+  
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    const voiceClock = voiceClockManager.getVoiceClock(0);
+    if (voiceClock) {
+      console.log(`Voice 1 active notes: ${voiceClock.activeNotes.size}`);
+    }
+  }
+}
+
+window.testRealTime = testRealTimeUpdates;
