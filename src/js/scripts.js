@@ -1,4 +1,4 @@
-/ Parameter definitions
+// Parameter definitions
 const parameterDefinitions = [
   // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
   { name: "INSTRUMENT", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
@@ -3333,338 +3333,152 @@ scheduleNextNote() {
   return scheduledNotes;
 }
 
-  // createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
-  //   if (!audioManager || !audioManager.audioContext) return null;
-    
-  //   const actualStartTime = startTime + (offset * 0.001);
-    
-  //   console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
-  //   console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
-      
-  //   const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
-  //   const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
-  //   const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
-
-  //   const currentVelocity = this.getCurrentVelocity();
-  //   const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
-  //   const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
-    
-  //   const voiceParams = this.getAllCurrentVoiceParameters();
-
-  //   console.log(`🎛️ Effect Parameters:`);
-  //   console.log(`   Reverb: time=${voiceParams.reverbTime.toFixed(2)}s, depth=${(voiceParams.reverbDepth*100).toFixed(0)}%`);
-  //   console.log(`   Delay: time=${voiceParams.delayTime.toFixed(0)}ms, depth=${(voiceParams.delayDepth*100).toFixed(0)}%, feedback=${(voiceParams.delayFeedback*100).toFixed(0)}%`);
-
-  //   const oscillator = audioManager.audioContext.createOscillator();
-  //   const gainNode = audioManager.audioContext.createGain();
-  //   const panNode = audioManager.audioContext.createStereoPanner();
-  //   const filterNode = audioManager.audioContext.createBiquadFilter();
-    
-  //   const tremoloLFO = audioManager.audioContext.createOscillator();
-  //   const tremoloGain = audioManager.audioContext.createGain();
-  //   const tremoloDepth = audioManager.audioContext.createGain();
-  //   const tremoloWet = audioManager.audioContext.createGain();
-  //   const tremoloDry = audioManager.audioContext.createGain();
-
-  //   const chorusDelay1 = audioManager.audioContext.createDelay(0.1);
-  //   const chorusDelay2 = audioManager.audioContext.createDelay(0.1);
-  //   const chorusDelay3 = audioManager.audioContext.createDelay(0.1);
-  //   const chorusLFO1 = audioManager.audioContext.createOscillator();
-  //   const chorusLFO2 = audioManager.audioContext.createOscillator();
-  //   const chorusLFO3 = audioManager.audioContext.createOscillator();
-  //   const chorusGain1 = audioManager.audioContext.createGain();
-  //   const chorusGain2 = audioManager.audioContext.createGain();
-  //   const chorusGain3 = audioManager.audioContext.createGain();
-  //   const chorusDepth1 = audioManager.audioContext.createGain();
-  //   const chorusDepth2 = audioManager.audioContext.createGain();
-  //   const chorusDepth3 = audioManager.audioContext.createGain();
-  //   const chorusMix = audioManager.audioContext.createGain();
-  //   const dryGain = audioManager.audioContext.createGain();
-    
-  //   const phaserStage1 = audioManager.audioContext.createBiquadFilter();
-  //   const phaserStage2 = audioManager.audioContext.createBiquadFilter();
-  //   const phaserStage3 = audioManager.audioContext.createBiquadFilter();
-  //   const phaserStage4 = audioManager.audioContext.createBiquadFilter();
-  //   const phaserStages = [phaserStage1, phaserStage2, phaserStage3, phaserStage4];
-  //   const phaserLFO = audioManager.audioContext.createOscillator();
-  //   const phaserDepth = audioManager.audioContext.createGain();
-  //   const phaserFeedback = audioManager.audioContext.createGain();
-  //   const phaserMix = audioManager.audioContext.createGain();
-  //   const phaserDry = audioManager.audioContext.createGain();
-    
-  //   const reverbNode = audioManager.audioContext.createConvolver();
-  //   const reverbGain = audioManager.audioContext.createGain();
-  //   const reverbDry = audioManager.audioContext.createGain();
-  //   const reverbWet = audioManager.audioContext.createGain();
-    
-  //   const delayNode = audioManager.audioContext.createDelay(2.0);
-  //   const delayFeedback = audioManager.audioContext.createGain();
-  //   const delayWet = audioManager.audioContext.createGain();
-  //   const delayDry = audioManager.audioContext.createGain();
-
-  //   const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
-  //   const delayTimeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
-  //   const delayDepthValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
-
-  //   if (delayDepthValue > 0.001) {
-  //       const delayTimeSeconds = (100 + (delayTimeValue / 100) * 1900) / 1000;
-  //       const clampedDelayTime = Math.min(delayTimeSeconds, 2.0);
-        
-  //       delayNode.delayTime.cancelScheduledValues(audioManager.audioContext.currentTime);
-  //       delayNode.delayTime.value = clampedDelayTime;
-        
-  //       console.log(`🔧 DELAY TIME SET DIRECTLY: ${delayNode.delayTime.value.toFixed(3)}s`);
-  //   }
-
-  //     const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
-  //     oscillator.type = velocitySensitiveWaveform;
-
-  //     const portamentoTime = this.getCurrentPortamentoTime();
-  //     this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
-
-  //     this.applyDetuning(oscillator, actualStartTime, duration);
-
-  //   this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-  //   this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
-    
-  //   const tremoloIsActive = this.applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration);
-    
-  //   const chorusIsActive = this.applyChorusADSR(
-  //       chorusDelay1, chorusDelay2, chorusDelay3,
-  //       chorusLFO1, chorusLFO2, chorusLFO3,
-  //       chorusGain1, chorusGain2, chorusGain3,
-  //       chorusDepth1, chorusDepth2, chorusDepth3,
-  //       adsrEnvelope, voiceParams, actualStartTime, duration
-  //   );
-    
-  //   const phaserIsActive = this.applyPhaserADSR(
-  //       phaserStages, phaserLFO, phaserDepth, phaserFeedback,
-  //       adsrEnvelope, voiceParams, actualStartTime, duration
-  //   );
-    
-  //   const reverbIsActive = this.applyReverbADSR(
-  //       reverbNode, reverbDry, reverbWet,
-  //       adsrEnvelope, voiceParams, actualStartTime, duration
-  //   );
-
-  //   const delayIsActive = this.applyDelayADSR(
-  //       delayNode, delayFeedback, delayWet, delayDry,
-  //       adsrEnvelope, voiceParams, actualStartTime, duration
-  //   );
-    
-  //   this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
-
-  //   // Build audio chain
-  //   let audioChain = oscillator;
-  //   console.log(`🔗 Building audio chain...`);
-
-  //   oscillator.connect(filterNode);
-  //   console.log(`   ✓ oscillator → filter`);
-  //   audioChain = filterNode;
-
-  //   audioChain.connect(gainNode);
-  //   console.log(`   ✓ chain → gain (ADSR)`);
-  //   audioChain = gainNode;
-
-  //   if (reverbIsActive) {
-  //       console.log(`   🏛️ Connecting REVERB...`);
-  //       const reverbMixer = audioManager.audioContext.createGain();
-  //       reverbMixer.gain.value = 1.0;
-        
-  //       audioChain.connect(reverbDry);
-  //       audioChain.connect(reverbNode);
-  //       reverbNode.connect(reverbWet);
-        
-  //       reverbDry.connect(reverbMixer);
-  //       reverbWet.connect(reverbMixer);
-        
-  //       console.log(`      ✓ reverb connected`);
-  //       audioChain = reverbMixer;
-  //   }
-
-  //   if (delayIsActive) {
-  //       console.log(`   🔄 Connecting DELAY...`);
-  //       const delayMixer = audioManager.audioContext.createGain();
-  //       delayMixer.gain.value = 1.0;
-        
-  //       audioChain.connect(delayDry);
-  //       audioChain.connect(delayNode);
-        
-  //       delayNode.connect(delayWet);
-  //       delayNode.connect(delayFeedback);
-  //       delayFeedback.connect(delayNode);
-        
-  //       delayDry.connect(delayMixer);
-  //       delayWet.connect(delayMixer);
-        
-  //       console.log(`      ✓ delay connected`);
-  //       audioChain = delayMixer;
-  //   }
-
-  //   audioChain.connect(panNode);
-  //   console.log(`   ✓ chain → pan → master`);
-  //   panNode.connect(audioManager.masterGainNode);
-  //   console.log(`🔗 Audio chain complete!\n`);
-
-  //   if (audioManager.isPlaying) {
-  //       audioManager.previewGainNodes.add(gainNode);
-  //       audioManager.previewPanNodes.add(panNode);
-        
-  //       if (tremoloIsActive && audioManager.previewEffectGainNodes) {
-  //           audioManager.previewEffectGainNodes.add(tremoloGain);
-  //       }
-  //       if (chorusIsActive && audioManager.previewEffectGainNodes) {
-  //           audioManager.previewEffectGainNodes.add(chorusGain1);
-  //           audioManager.previewEffectGainNodes.add(chorusGain2);
-  //           audioManager.previewEffectGainNodes.add(chorusGain3);
-  //       }
-        
-  //       const userVolumeMultiplier = audioManager.currentUserVolume / 100;
-  //       const userPanValue = Math.max(-1, Math.min(1, audioManager.currentUserBalance / 100));
-        
-  //       panNode.pan.setValueAtTime(userPanValue, actualStartTime);
-  //   }
-
-  //   oscillator.start(actualStartTime);
-  //   oscillator.stop(actualStartTime + duration);
-
-  //   oscillator.onended = () => {
-  //     try {
-  //       oscillator.disconnect();
-  //       filterNode.disconnect();
-        
-  //       if (tremoloIsActive) {
-  //         tremoloLFO.disconnect();
-  //         tremoloGain.disconnect();
-  //         tremoloDepth.disconnect();
-  //       }
-        
-  //       if (chorusIsActive) {
-  //         chorusDelay1.disconnect();
-  //         chorusDelay2.disconnect();
-  //         chorusDelay3.disconnect();
-  //         chorusLFO1.disconnect();
-  //         chorusLFO2.disconnect();
-  //         chorusLFO3.disconnect();
-  //         chorusGain1.disconnect();
-  //         chorusGain2.disconnect();
-  //         chorusGain3.disconnect();
-  //         chorusDepth1.disconnect();
-  //         chorusDepth2.disconnect();
-  //         chorusDepth3.disconnect();
-  //         chorusMix.disconnect();
-  //         dryGain.disconnect();
-  //       }
-        
-  //       if (phaserIsActive) {
-  //         phaserStages.forEach(stage => stage.disconnect());
-  //         phaserLFO.disconnect();
-  //         phaserDepth.disconnect();
-  //         phaserFeedback.disconnect();
-  //         phaserMix.disconnect();
-  //         phaserDry.disconnect();
-  //       }
-        
-  //       if (reverbIsActive || delayIsActive) {
-  //         let maxTailTime = 1000;
-          
-  //         if (reverbIsActive) {
-  //           const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
-  //           const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
-  //           const reverbTime = 0.5 + (timeValue / 100) * 5.5;
-            
-  //           const reverbTail = reverbTime * 15000;
-  //           maxTailTime = Math.max(maxTailTime, reverbTail);
-            
-  //           console.log(`🏛️ Extended reverb tail: ${(reverbTail/1000).toFixed(1)}s for ${reverbTime.toFixed(1)}s reverb time`);
-  //         }
-
-  //         if (delayIsActive) {
-  //           const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
-  //           const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
-  //           const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
-            
-  //           const delayTimeSeconds = (100 + (timeValue / 100) * 1900) / 1000;
-  //           const feedbackAmount = feedbackValue / 100;
-            
-  //           const delayTail = this.calculateDelayTailTime(delayTimeSeconds, feedbackAmount);
-  //           maxTailTime = Math.max(maxTailTime, delayTail);
-            
-  //           console.log(`🧹 Delay tail calculated: ${(delayTail/1000).toFixed(2)}s (feedback=${(feedbackAmount*100).toFixed(0)}%)`);
-  //         }
-          
-  //         console.log(`🧹 Scheduling cleanup in ${(maxTailTime/1000).toFixed(2)}s`);
-          
-  //         setTimeout(() => {
-  //           try {
-  //             if (reverbIsActive) {
-  //               reverbNode.disconnect();
-  //               reverbDry.disconnect();
-  //               reverbWet.disconnect();
-  //             }
-              
-  //             if (delayIsActive) {
-  //               delayNode.disconnect();
-  //               delayFeedback.disconnect();
-  //               delayWet.disconnect();
-  //               delayDry.disconnect();
-  //             }
-              
-  //             gainNode.disconnect();
-  //             panNode.disconnect();
-              
-  //             console.log('🧹 Cleanup completed after tail');
-  //           } catch (e) {
-  //             console.warn('Cleanup warning:', e);
-  //           }
-  //         }, maxTailTime);
-  //       } else {
-  //         gainNode.disconnect();
-  //         panNode.disconnect();
-  //       }
-        
-  //       if (audioManager.previewGainNodes) {
-  //         audioManager.previewGainNodes.delete(gainNode);
-  //       }
-  //       if (audioManager.previewPanNodes) {
-  //         audioManager.previewPanNodes.delete(panNode);
-  //       }
-        
-  //     } catch (e) {
-  //       console.warn('Cleanup warning:', e);
-  //     }
-  //   };
-
-  //   return {
-  //       oscillator,
-  //       filterNode,
-  //       gainNode,
-  //       panNode,
-  //       tremoloActive: tremoloIsActive,
-  //       chorusActive: chorusIsActive,
-  //       phaserActive: phaserIsActive,
-  //       reverbActive: reverbIsActive,
-  //       delayActive: delayIsActive,
-  //       startTime: actualStartTime,
-  //       duration,
-  //       frequency,
-  //       voiceIndex: this.voiceIndex,
-  //       velocity: currentVelocity
-  //   };
-  // }
-
-  // Add all the ADSR application methods here
+  
   
   // REPLACE the entire createScheduledAudioNote method in VoiceClock class
+// createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
+//   if (!audioManager || !audioManager.audioContext) return null;
+  
+//   const actualStartTime = startTime + (offset * 0.001);
+  
+//   console.log(`🔍 === CREATING NOTE WITH POOL: Voice ${this.voiceIndex + 1} ===`);
+//   console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
+  
+//   // ACQUIRE NODE SET FROM POOL
+//   let nodeSet = null;
+//   let usingPool = false;
+  
+//   if (audioManager.oscillatorPool) {
+//     nodeSet = audioManager.oscillatorPool.acquire();
+//     usingPool = true;
+//     console.log(`🎛️ Using pooled node set: ${nodeSet.id}`);
+//   } else {
+//     // Fallback: create nodes directly
+//     nodeSet = {
+//       oscillator: audioManager.audioContext.createOscillator(),
+//       gainNode: audioManager.audioContext.createGain(),
+//       filterNode: audioManager.audioContext.createBiquadFilter(),
+//       panNode: audioManager.audioContext.createStereoPanner(),
+//       inUse: true,
+//       id: 'direct-' + Math.random().toString(36).substr(2, 6)
+//     };
+//     console.log(`⚠️ Using direct node creation: ${nodeSet.id}`);
+//   }
+  
+//   const { oscillator, gainNode, filterNode, panNode } = nodeSet;
+  
+//   // Get voice parameters and setup
+//   const selectedInstrumentIndex = voiceData[this.voiceIndex].parameters['INSTRUMENT'] || 0;
+//   const selectedInstrumentName = gmSounds[selectedInstrumentIndex] || 'Acoustic Grand Piano';
+//   const baseOscillatorType = getOscillatorTypeForGMSound(selectedInstrumentName);
+  
+//   const currentVelocity = this.getCurrentVelocity();
+//   const velocityNormalized = Math.max(0, Math.min(1, currentVelocity / 127));
+//   const adsrEnvelope = this.getComprehensiveADSR(duration, velocityNormalized, selectedInstrumentName);
+//   const voiceParams = this.getAllCurrentVoiceParameters();
+  
+//   // Configure oscillator
+//   const velocitySensitiveWaveform = this.getVelocitySensitiveWaveform(baseOscillatorType, velocityNormalized, selectedInstrumentName);
+//   oscillator.type = velocitySensitiveWaveform;
+  
+//   // Apply frequency, portamento, and detuning
+//   const portamentoTime = this.getCurrentPortamentoTime();
+//   this.applyPortamento(oscillator, frequency, actualStartTime, portamentoTime);
+//   this.applyDetuning(oscillator, actualStartTime, duration);
+  
+//   // Apply ADSR envelopes
+//   this.applyVolumeADSR(gainNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+//   this.applyFilterADSR(filterNode, adsrEnvelope, frequency, velocityNormalized, selectedInstrumentName, actualStartTime, duration);
+//   this.applyPanADSR(panNode, adsrEnvelope, voiceParams, actualStartTime, duration);
+  
+//   // Create effects nodes (NOT pooled - these are per-note)
+//   const effectNodes = this.createEffectNodes();
+  
+//   // Build audio chain with effects
+//   this.buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration);
+  
+//   // Start and schedule stop
+//   oscillator.start(actualStartTime);
+//   oscillator.stop(actualStartTime + duration);
+  
+//   // Enhanced cleanup with pool return
+//   const cleanup = () => {
+//     try {
+//       // Disconnect effect nodes
+//       if (effectNodes) {
+//         this.cleanupEffectNodes(effectNodes);
+//       }
+      
+//       // Return to pool or cleanup directly
+//       if (usingPool && audioManager.oscillatorPool) {
+//         audioManager.oscillatorPool.release(nodeSet);
+//         console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
+//       } else {
+//         // Direct cleanup
+//         oscillator.disconnect();
+//         gainNode.disconnect();  
+//         filterNode.disconnect();
+//         panNode.disconnect();
+//         console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
+//       }
+      
+//       // Remove from tracking
+//       if (audioManager.previewGainNodes) {
+//         audioManager.previewGainNodes.delete(gainNode);
+//       }
+//       if (audioManager.previewPanNodes) {
+//         audioManager.previewPanNodes.delete(panNode);
+//       }
+      
+//     } catch (e) {
+//       console.warn('Cleanup warning:', e);
+//     }
+//   };
+  
+//   // Schedule cleanup after note + effect tails (using audio context time, not wall clock)
+//   const noteEndTime = actualStartTime + duration;
+//   const tailDuration = this.calculateMaxTailTime(voiceParams, duration);
+//   const cleanupTime = noteEndTime + (tailDuration / 1000); // Convert ms to seconds
+  
+//   // Create silent "timer oscillator" that triggers cleanup at the correct audio time
+//   const cleanupOscillator = audioManager.audioContext.createOscillator();
+//   const silentGain = audioManager.audioContext.createGain();
+//   silentGain.gain.value = 0; // Completely silent
+  
+//   cleanupOscillator.connect(silentGain);
+//   silentGain.connect(audioManager.audioContext.destination);
+  
+//   cleanupOscillator.onended = cleanup;
+//   cleanupOscillator.start(cleanupTime);
+//   cleanupOscillator.stop(cleanupTime + 0.001); // Stop immediately after starting
+  
+//   console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
+  
+//   return {
+//     oscillator,
+//     filterNode, 
+//     gainNode,
+//     panNode,
+//     effectNodes,
+//     nodeSet,
+//     usingPool,
+//     startTime: actualStartTime,
+//     duration,
+//     frequency,
+//     voiceIndex: this.voiceIndex,
+//     velocity: currentVelocity
+//   };
+// }
+
 createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   if (!audioManager || !audioManager.audioContext) return null;
   
   const actualStartTime = startTime + (offset * 0.001);
   
-  console.log(`🔍 === CREATING NOTE WITH POOL: Voice ${this.voiceIndex + 1} ===`);
+  console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
   console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
   
-  // ACQUIRE NODE SET FROM POOL
+  // Acquire node set from pool
   let nodeSet = null;
   let usingPool = false;
   
@@ -3673,7 +3487,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     usingPool = true;
     console.log(`🎛️ Using pooled node set: ${nodeSet.id}`);
   } else {
-    // Fallback: create nodes directly
     nodeSet = {
       oscillator: audioManager.audioContext.createOscillator(),
       gainNode: audioManager.audioContext.createGain(),
@@ -3714,8 +3527,94 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   // Create effects nodes (NOT pooled - these are per-note)
   const effectNodes = this.createEffectNodes();
   
-  // Build audio chain with effects
-  this.buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration);
+  // ===== CORRECTED: Build audio chain with PROPER effects routing =====
+  console.log(`🔗 Building audio chain with corrected effects routing...`);
+  
+  // Basic chain: oscillator → filter → gain (ADSR applied here)
+  oscillator.connect(filterNode);
+  filterNode.connect(gainNode);
+  console.log(`   ✓ oscillator → filter → gain (ADSR)`);
+  
+  // Now connect effects AFTER the ADSR-controlled gain
+  let audioChain = gainNode;
+  
+  // Apply each effect if active
+  const tremoloIsActive = voiceParams.tremoloDepth > 0.001;
+  const chorusIsActive = voiceParams.chorusDepth > 0.001;
+  const phaserIsActive = voiceParams.phaserDepth > 0.001;
+  const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+  const reverbMixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+  const reverbIsActive = reverbMixValue > 0.001;
+  const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  const delayMixValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+  const delayIsActive = delayMixValue > 0.001;
+  
+  // Tremolo (if active)
+  if (tremoloIsActive) {
+    this.setupTremolo(audioChain, effectNodes.tremolo, voiceParams, actualStartTime, duration);
+    audioChain = effectNodes.tremolo.wet;
+    console.log(`   ✓ tremolo connected`);
+  }
+  
+  // Chorus (if active)
+  if (chorusIsActive) {
+    this.setupChorus(audioChain, effectNodes.chorus, voiceParams, actualStartTime, duration);
+    audioChain = effectNodes.chorus.mix;
+    console.log(`   ✓ chorus connected`);
+  }
+  
+  // Phaser (if active)
+  if (phaserIsActive) {
+    this.setupPhaser(audioChain, effectNodes.phaser, voiceParams, actualStartTime, duration);
+    audioChain = effectNodes.phaser.mix;
+    console.log(`   ✓ phaser connected`);
+  }
+  
+  // Reverb (if active) - parallel mix
+  if (reverbIsActive) {
+    const reverbMixer = audioManager.audioContext.createGain();
+    reverbMixer.gain.value = 1.0;
+    
+    this.setupReverb(audioChain, effectNodes.reverb, voiceParams, actualStartTime, duration);
+    
+    effectNodes.reverb.dry.connect(reverbMixer);
+    effectNodes.reverb.wet.connect(reverbMixer);
+    
+    audioChain = reverbMixer;
+    effectNodes.reverbMixer = reverbMixer; // Store for cleanup
+    console.log(`   ✓ reverb connected`);
+  }
+  
+  // Delay (if active) - parallel mix with feedback
+  if (delayIsActive) {
+    const delayMixer = audioManager.audioContext.createGain();
+    delayMixer.gain.value = 1.0;
+    
+    this.setupDelay(audioChain, effectNodes.delay, voiceParams, actualStartTime, duration);
+    
+    effectNodes.delay.dry.connect(delayMixer);
+    effectNodes.delay.wet.connect(delayMixer);
+    
+    audioChain = delayMixer;
+    effectNodes.delayMixer = delayMixer; // Store for cleanup
+    console.log(`   ✓ delay connected`);
+  }
+  
+  // Final connection to pan and master
+  audioChain.connect(panNode);
+  panNode.connect(audioManager.masterGainNode);
+  console.log(`🔗 Audio chain complete!\n`);
+  
+  // Track nodes for real-time control
+  if (audioManager.isPlaying) {
+    audioManager.previewGainNodes.add(gainNode);
+    audioManager.previewPanNodes.add(panNode);
+    
+    const userVolumeMultiplier = audioManager.currentUserVolume / 100;
+    const userPanValue = Math.max(-1, Math.min(1, audioManager.currentUserBalance / 100));
+    
+    panNode.pan.setValueAtTime(userPanValue, actualStartTime);
+  }
   
   // Start and schedule stop
   oscillator.start(actualStartTime);
@@ -3734,9 +3633,8 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
         audioManager.oscillatorPool.release(nodeSet);
         console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
       } else {
-        // Direct cleanup
         oscillator.disconnect();
-        gainNode.disconnect();  
+        gainNode.disconnect();
         filterNode.disconnect();
         panNode.disconnect();
         console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
@@ -3755,28 +3653,27 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     }
   };
   
-  // Schedule cleanup after note + effect tails (using audio context time, not wall clock)
+  // Schedule cleanup after note + effect tails
   const noteEndTime = actualStartTime + duration;
   const tailDuration = this.calculateMaxTailTime(voiceParams, duration);
-  const cleanupTime = noteEndTime + (tailDuration / 1000); // Convert ms to seconds
+  const cleanupTime = noteEndTime + (tailDuration / 1000);
   
-  // Create silent "timer oscillator" that triggers cleanup at the correct audio time
   const cleanupOscillator = audioManager.audioContext.createOscillator();
   const silentGain = audioManager.audioContext.createGain();
-  silentGain.gain.value = 0; // Completely silent
+  silentGain.gain.value = 0;
   
   cleanupOscillator.connect(silentGain);
   silentGain.connect(audioManager.audioContext.destination);
   
   cleanupOscillator.onended = cleanup;
   cleanupOscillator.start(cleanupTime);
-  cleanupOscillator.stop(cleanupTime + 0.001); // Stop immediately after starting
+  cleanupOscillator.stop(cleanupTime + 0.001);
   
   console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
   
   return {
     oscillator,
-    filterNode, 
+    filterNode,
     gainNode,
     panNode,
     effectNodes,
@@ -3788,6 +3685,203 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     voiceIndex: this.voiceIndex,
     velocity: currentVelocity
   };
+}
+
+// NEW: Simplified effect setup methods (add these to VoiceClock class)
+
+setupTremolo(inputNode, tremoloNodes, voiceParams, actualStartTime, duration) {
+  tremoloNodes.lfo.type = 'sine';
+  tremoloNodes.lfo.frequency.setValueAtTime(voiceParams.tremoloSpeed, actualStartTime);
+  
+  const modulationDepth = voiceParams.tremoloDepth * 0.5;
+  
+  tremoloNodes.gain.gain.setValueAtTime(1.0, actualStartTime);
+  tremoloNodes.depth.gain.setValueAtTime(modulationDepth, actualStartTime);
+  
+  inputNode.connect(tremoloNodes.gain);
+  tremoloNodes.lfo.connect(tremoloNodes.depth);
+  tremoloNodes.depth.connect(tremoloNodes.gain.gain);
+  tremoloNodes.gain.connect(tremoloNodes.wet);
+  
+  tremoloNodes.lfo.start(actualStartTime);
+  tremoloNodes.lfo.stop(actualStartTime + duration);
+}
+
+setupChorus(inputNode, chorusNodes, voiceParams, actualStartTime, duration) {
+  const baseDelayTime = 0.020;
+  const maxChorusDepth = voiceParams.chorusDepth * 0.008;
+  const chorusSpeed = voiceParams.chorusSpeed;
+  
+  // Voice 1
+  chorusNodes.delay1.delayTime.setValueAtTime(baseDelayTime, actualStartTime);
+  chorusNodes.lfo1.type = 'sine';
+  chorusNodes.lfo1.frequency.setValueAtTime(chorusSpeed * 0.8, actualStartTime);
+  chorusNodes.depth1.gain.setValueAtTime(maxChorusDepth, actualStartTime);
+  chorusNodes.gain1.gain.setValueAtTime(0.35, actualStartTime);
+  
+  inputNode.connect(chorusNodes.delay1);
+  chorusNodes.lfo1.connect(chorusNodes.depth1);
+  chorusNodes.depth1.connect(chorusNodes.delay1.delayTime);
+  chorusNodes.delay1.connect(chorusNodes.gain1);
+  chorusNodes.gain1.connect(chorusNodes.mix);
+  
+  chorusNodes.lfo1.start(actualStartTime);
+  chorusNodes.lfo1.stop(actualStartTime + duration);
+  
+  // Voice 2
+  chorusNodes.delay2.delayTime.setValueAtTime(baseDelayTime * 1.6, actualStartTime);
+  chorusNodes.lfo2.type = 'sine';
+  chorusNodes.lfo2.frequency.setValueAtTime(chorusSpeed * 1.1, actualStartTime);
+  chorusNodes.depth2.gain.setValueAtTime(maxChorusDepth * 1.2, actualStartTime);
+  chorusNodes.gain2.gain.setValueAtTime(0.30, actualStartTime);
+  
+  inputNode.connect(chorusNodes.delay2);
+  chorusNodes.lfo2.connect(chorusNodes.depth2);
+  chorusNodes.depth2.connect(chorusNodes.delay2.delayTime);
+  chorusNodes.delay2.connect(chorusNodes.gain2);
+  chorusNodes.gain2.connect(chorusNodes.mix);
+  
+  chorusNodes.lfo2.start(actualStartTime);
+  chorusNodes.lfo2.stop(actualStartTime + duration);
+  
+  // Voice 3
+  chorusNodes.delay3.delayTime.setValueAtTime(baseDelayTime * 2.4, actualStartTime);
+  chorusNodes.lfo3.type = 'sine';
+  chorusNodes.lfo3.frequency.setValueAtTime(chorusSpeed * 1.3, actualStartTime);
+  chorusNodes.depth3.gain.setValueAtTime(maxChorusDepth * 0.9, actualStartTime);
+  chorusNodes.gain3.gain.setValueAtTime(0.35, actualStartTime);
+  
+  inputNode.connect(chorusNodes.delay3);
+  chorusNodes.lfo3.connect(chorusNodes.depth3);
+  chorusNodes.depth3.connect(chorusNodes.delay3.delayTime);
+  chorusNodes.delay3.connect(chorusNodes.gain3);
+  chorusNodes.gain3.connect(chorusNodes.mix);
+  
+  chorusNodes.lfo3.start(actualStartTime);
+  chorusNodes.lfo3.stop(actualStartTime + duration);
+  
+  // Dry signal
+  inputNode.connect(chorusNodes.dry);
+  chorusNodes.dry.connect(chorusNodes.mix);
+}
+
+setupPhaser(inputNode, phaserNodes, voiceParams, actualStartTime, duration) {
+  const phaserStages = [phaserNodes.stage1, phaserNodes.stage2, phaserNodes.stage3, phaserNodes.stage4];
+  const maxPhaserDepth = voiceParams.phaserDepth * 800;
+  const phaserSpeed = voiceParams.phaserSpeed;
+  const baseFrequency = 300;
+  
+  phaserNodes.lfo.type = 'sine';
+  phaserNodes.lfo.frequency.setValueAtTime(phaserSpeed, actualStartTime);
+  phaserNodes.depth.gain.setValueAtTime(maxPhaserDepth, actualStartTime);
+  
+  phaserStages.forEach((stage, index) => {
+    stage.type = 'allpass';
+    const stageQ = 3 + (voiceParams.phaserDepth * 6);
+    stage.Q.setValueAtTime(stageQ, actualStartTime);
+    
+    const frequencyMultiplier = Math.pow(2.2, index);
+    const stageFreq = baseFrequency * frequencyMultiplier;
+    stage.frequency.setValueAtTime(stageFreq, actualStartTime);
+  });
+  
+  const feedbackAmount = Math.min(0.55, voiceParams.phaserDepth * 0.7);
+  phaserNodes.feedback.gain.setValueAtTime(feedbackAmount, actualStartTime);
+  
+  // Connect chain
+  inputNode.connect(phaserStages[0]);
+  for (let i = 0; i < phaserStages.length - 1; i++) {
+    phaserStages[i].connect(phaserStages[i + 1]);
+  }
+  phaserStages[phaserStages.length - 1].connect(phaserNodes.feedback);
+  phaserNodes.feedback.connect(phaserStages[0]);
+  phaserStages[phaserStages.length - 1].connect(phaserNodes.mix);
+  
+  // Dry signal
+  inputNode.connect(phaserNodes.dry);
+  phaserNodes.dry.connect(phaserNodes.mix);
+  
+  // LFO modulation
+  phaserNodes.lfo.connect(phaserNodes.depth);
+  phaserStages.forEach(stage => {
+    phaserNodes.depth.connect(stage.frequency);
+  });
+  
+  phaserNodes.lfo.start(actualStartTime);
+  phaserNodes.lfo.stop(actualStartTime + duration);
+}
+
+setupReverb(inputNode, reverbNodes, voiceParams, actualStartTime, duration) {
+  const reverbParam = voiceData[this.voiceIndex].parameters['REVERB'];
+  const timeValue = (reverbParam.speed?.min + reverbParam.speed?.max) / 2 || 0;
+  const mixValue = (reverbParam.depth?.min + reverbParam.depth?.max) / 2 || 0;
+  
+  const reverbDepth = mixValue / 100;
+  const reverbTime = 0.5 + (timeValue / 100) * 5.5;
+  const sampleRate = audioManager.audioContext.sampleRate;
+  const length = Math.floor(sampleRate * reverbTime);
+  
+  const impulse = audioManager.audioContext.createBuffer(2, length, sampleRate);
+  
+  for (let channel = 0; channel < 2; channel++) {
+    const channelData = impulse.getChannelData(channel);
+    const earlyReflectionTime = Math.min(Math.floor(sampleRate * 0.05), length);
+    
+    for (let i = 0; i < earlyReflectionTime; i++) {
+      const earlyBoost = 3.0;
+      channelData[i] = earlyBoost * (Math.random() * 2 - 1);
+    }
+    
+    for (let i = earlyReflectionTime; i < length; i++) {
+      const n = length - i;
+      const amplitude = 5.0 * (Math.random() * 2 - 1) * Math.pow(n / length, 0.9);
+      channelData[i] = amplitude;
+    }
+  }
+  
+  reverbNodes.convolver.buffer = impulse;
+  
+  const reverbDryLevel = 1.0 - (reverbDepth * 0.8);
+  const reverbWetLevel = reverbDepth * 2.0;
+  
+  reverbNodes.dry.gain.value = reverbDryLevel;
+  reverbNodes.wet.gain.value = reverbWetLevel;
+  
+  // Connect
+  inputNode.connect(reverbNodes.dry);
+  inputNode.connect(reverbNodes.convolver);
+  reverbNodes.convolver.connect(reverbNodes.wet);
+}
+
+setupDelay(inputNode, delayNodes, voiceParams, actualStartTime, duration) {
+  const delayParam = voiceData[this.voiceIndex].parameters['DELAY'];
+  const timeValue = (delayParam.speed?.min + delayParam.speed?.max) / 2 || 0;
+  const mixValue = (delayParam.depth?.min + delayParam.depth?.max) / 2 || 0;
+  const feedbackValue = (delayParam.feedback?.min + delayParam.feedback?.max) / 2 || 0;
+  
+  const delayDepth = mixValue / 100;
+  const delayTimeMs = 100 + (timeValue / 100) * 1900;
+  const delayTimeSeconds = delayTimeMs / 1000;
+  
+  let feedbackLevel = feedbackValue / 100;
+  if (delayTimeMs > 1800) {
+    feedbackLevel = Math.min(feedbackLevel, 0.85);
+  }
+  
+  const delayDryLevel = 1.0 - (delayDepth * 0.9);
+  const delayWetLevel = delayDepth * 2.5;
+  
+  delayNodes.delay.delayTime.setValueAtTime(delayTimeSeconds, actualStartTime);
+  delayNodes.dry.gain.value = delayDryLevel;
+  delayNodes.wet.gain.value = delayWetLevel;
+  delayNodes.feedback.gain.value = feedbackLevel;
+  
+  // Connect
+  inputNode.connect(delayNodes.dry);
+  inputNode.connect(delayNodes.delay);
+  delayNodes.delay.connect(delayNodes.wet);
+  delayNodes.delay.connect(delayNodes.feedback);
+  delayNodes.feedback.connect(delayNodes.delay);
 }
 
 // ADD these helper methods after createScheduledAudioNote in VoiceClock class
