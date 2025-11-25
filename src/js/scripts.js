@@ -54,7 +54,6 @@ function parseMMSSToMs(timeString) {
   return totalMs;
 }
 
-
 function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
   const timeSeconds = timeMs / 1000;
   const beatDuration = 60 / currentTempo;
@@ -63,31 +62,6 @@ function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
   return Math.round(timeSeconds / unitDuration);
 }
 
-// function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
-//   return {
-//     to: function(timeMs) {
-//       const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
-//       const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
-      
-//       if (timeMs >= 999999999) return '∞ (∞)'; // Handle infinity
-//       if (timeMs <= 0) return '0 beats (0:00)';
-      
-//       const beats = calculateBeatsFromTime(timeMs, beatUnit, currentTempo);
-//       const timeStr = formatMsToMMSS(timeMs);
-//       return `${beats} beats (${timeStr})`;
-//     },
-//     from: function(value) {
-//       if (value === '∞ (∞)') return 999999999;
-//       const match = value.match(/\((\d+:\d+)\)/);
-//       if (match) {
-//         return parseMMSSToMs(match[1]) || 0;
-//       }
-//       return parseFloat(value) || 0;
-//     }
-//   };
-// }
-
-// GM Sounds list
 function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
   return {
     to: function(timeMs) {
@@ -139,17 +113,10 @@ function calculateBeatDurationMs(voiceIndex, beatUnit) {
   
   const durationMs = Math.round(unitDuration * 1000);
   
-  console.log(`🎵 Beat duration for Voice ${voiceIndex + 1}:`);
-  console.log(`   Tempo: ${currentTempo} BPM`);
-  console.log(`   Beat unit: ${rhythmInfo.name}`);
-  console.log(`   Duration: ${durationMs}ms (${rhythmInfo.beats} beats)`);
-  
   return durationMs;
 }
 
-
-
-
+// GM Sounds list
 const gmSounds = [
   "Acoustic Grand Piano",
   "Electric Piano 1", 
@@ -185,7 +152,6 @@ const gmSounds = [
   "Drum Kit"
 ];
 
-// Rhythms and Rests options
 const rhythmOptions = [
   "Thirty-second Notes",
   "Thirty-second Note Triplets",
@@ -234,7 +200,7 @@ const midiNoteNames = {
   105: "A7", 106: "A♯7", 107: "B7", 108: "C8"
 };
 
-// NEW MASTER CLOCK SYSTEM
+
 class MasterClock {
   constructor() {
     this.resolution = 1;
@@ -248,7 +214,6 @@ class MasterClock {
     this.masterStartTime = 0;
     this.elapsedTime = 0;
     
-    console.log('Enhanced Master Clock initialized - 1ms resolution for voice coordination');
   }
   
   start() {
@@ -267,7 +232,6 @@ class MasterClock {
       this.update();
     }, this.resolution);
     
-    console.log('🕐 Enhanced Master Clock started - 1ms precision active');
   }
   
   stop() {
@@ -277,7 +241,7 @@ class MasterClock {
     }
     this.isRunning = false;
     
-    console.log('🕐 Master Clock stopped');
+
   }
 
   update() {
@@ -432,13 +396,11 @@ let masterTempo = 120;
 let tempoScrollInterval = null;
 let tempoScrollDirection = 0;
 
-console.log('Master Clock System initialized at', masterTempo, 'BPM');
-
 // Global state
 let currentVoice = 0;
 let voiceData = [];
 
-// Initialize voice data structure - WITH SENSIBLE DEFAULTS
+
 function initializeVoices() {
   voiceData = [];
   for (let i = 0; i < 16; i++) {
@@ -493,13 +455,13 @@ function initializeVoices() {
       selectedValues: [7],  // Default: Quarter notes only
       behavior: 50
     };
-    console.log(`🎵 Voice ${i + 1} RHYTHMS initialized: Quarter Notes`);
+
   } else if (param.name === 'RESTS') {
     voice.parameters[param.name] = {
       selectedValues: [0],  // Default: No rests
       behavior: 50
     };
-    console.log(`🎵 Voice ${i + 1} RESTS initialized: No Rests`);
+
   } else {
     voice.parameters[param.name] = {
       selectedValues: [],
@@ -601,20 +563,10 @@ function initializeVoices() {
     
     voiceData.push(voice);
   }
-  
-  console.log('Voices initialized with sensible defaults:');
-  console.log('- Sound: Acoustic Grand Piano');
-  console.log('- Melodic Range: Middle C (C4) selected in piano');
-  console.log('- Rhythms: Quarter Notes');
-  console.log('- Rests: No Rests (continuous playing)');
-  console.log('- Life Span: Span 1 active (0 to ∞), Spans 2&3 disabled, no repeat');
-  console.log('- Effects: ALL OFF by default (Tremolo, Chorus, Phaser, Reverb, Delay)');
-  console.log('- Other parameters: 25%-75% of their ranges');
 }
 
-// Life Span UI Creation Functions
 function createLifeSpanControl(param, voiceIndex) {
-  console.log(`🕐 Creating Life Span control for Voice ${voiceIndex + 1}`);
+
   
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-slider'; // Use standard class
@@ -624,7 +576,6 @@ function createLifeSpanControl(param, voiceIndex) {
   const storedMaxTimeMs = lifeSpanParam.maxTimeMs || 300000; // Default to 5 minutes if not set
   const storedMaxTimeFormatted = formatMsToMMSS(storedMaxTimeMs);
   
-  console.log(`📖 Loading stored Max Time for Voice ${voiceIndex + 1}: ${storedMaxTimeFormatted} (${storedMaxTimeMs}ms)`);
   
   // Max Time and Beat Unit Controls
   const settingsRow = document.createElement('div');
@@ -684,8 +635,6 @@ function createLifeSpanControl(param, voiceIndex) {
     const startEnter = lifeSpanData.enter || 0;
     const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : (lifeSpanData.exit || 0);
     
-    console.log(`🕐 Creating Life Span ${i} slider with range 0-${formatMsToMMSS(maxTimeMs)}`);
-    console.log(`   Start values: enter=${formatMsToMMSS(startEnter)}, exit=${startExit >= 999999999 ? '∞' : formatMsToMMSS(startExit)}`);
     
     // try {
     //   noUiSlider.create(sliderDiv, {
@@ -700,7 +649,6 @@ function createLifeSpanControl(param, voiceIndex) {
       // Calculate beat-based step size
       const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
       
-      console.log(`🎵 Creating Life Span ${i} slider with beat-based steps: ${beatStepMs}ms`);
       
       noUiSlider.create(sliderDiv, {
         start: [startEnter, Math.min(startExit, maxTimeMs)],
@@ -710,9 +658,7 @@ function createLifeSpanControl(param, voiceIndex) {
         tooltips: [true, true],
         format: formatter
       });
-
       
-      console.log(`✅ Life Span ${i} slider created successfully`);
     } catch (error) {
       console.error(`❌ Error creating Life Span ${i} slider:`, error);
     }
@@ -723,7 +669,6 @@ function createLifeSpanControl(param, voiceIndex) {
   
   return wrapper;
 }
-
 
 function createLifeSpanBehaviorContainer(param, voiceIndex) {
   const wrapper = document.createElement('div');
@@ -757,8 +702,6 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   const storedRepeatValue = lifeSpanParam ? lifeSpanParam.repeat : false;
   repeatCheckbox.checked = storedRepeatValue;
   
-  console.log(`📖 Loading stored Repeat value for Voice ${voiceIndex + 1}: ${storedRepeatValue}`);
-  
   repeatContainer.appendChild(repeatCheckbox);
   controlsWrapper.appendChild(repeatContainer);
   wrapper.appendChild(controlsWrapper);
@@ -767,13 +710,11 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
 }
 
 function rebuildLifeSpanSliders(container, voiceIndex) {
-  console.log('🔄 Rebuilding Life Span sliders with new max time...');
   
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
   const maxTimeMs = lifeSpanParam.maxTimeMs;
   const beatUnit = lifeSpanParam.beatUnit;
   
-  console.log(`New max time: ${formatMsToMMSS(maxTimeMs)} (${maxTimeMs}ms)`);
   
   // Find all Life Span sliders in this container
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
@@ -798,7 +739,6 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
           currentEnter = parseLifeSpanValue(values[0]);
           currentExit = parseLifeSpanValue(values[1]);
           
-          console.log(`📖 Read values from Life Span ${spanNumber}: enter=${formatMsToMMSS(currentEnter)}, exit=${currentExit >= 999999999 ? '∞' : formatMsToMMSS(currentExit)}`);
         } catch (e) {
           console.warn(`Warning reading Life Span ${spanNumber} values:`, e);
         }
@@ -811,7 +751,6 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
             slider.noUiSlider.destroy();
           }
           slider.remove();
-          console.log(`🗑️ Removed duplicate slider ${index + 1} from Life Span ${spanNumber}`);
         } catch (e) {
           console.warn(`Warning removing slider:`, e);
         }
@@ -821,7 +760,6 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
       const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
       currentEnter = spanData.enter || 0;
       currentExit = spanData.exit || 0;
-      console.log(`📖 Using stored values for Life Span ${spanNumber}`);
     }
     
     // Clamp existing values to new range
@@ -848,7 +786,6 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
     const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
     
     try {
-      console.log(`🎵 Creating Life Span ${spanNumber} with beat steps: ${beatStepMs}ms`);
       
       noUiSlider.create(newSliderDiv, {
         start: [currentEnter, currentExit],
@@ -873,26 +810,18 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
         voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
         voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
         
-        console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
-      });
-      
-      console.log(`✅ Created new Life Span ${spanNumber} slider with range 0-${formatMsToMMSS(maxTimeMs)}`);
-      
+      });      
     } catch (error) {
       console.error(`❌ Error creating Life Span ${spanNumber} slider:`, error);
     }
   });
   
-  console.log(`🎯 All Life Span sliders rebuilt - each span now has exactly ONE slider`);
 }
 
-
 function updateLifeSpanSlidersForTempoChange(voiceIndex) {
-  console.log(`🔄 Updating Life Span sliders for Voice ${voiceIndex + 1} due to tempo change`);
   
   // Find the Life Span parameter container for this voice
   if (voiceIndex !== currentVoice) {
-    console.log(`   Skipping: Voice ${voiceIndex + 1} is not currently displayed`);
     return;
   }
   
@@ -904,19 +833,15 @@ function updateLifeSpanSlidersForTempoChange(voiceIndex) {
     });
   
   if (!lifeSpanRollup) {
-    console.log(`   Life Span rollup not found`);
     return;
   }
   
   const lifeSpanContainer = lifeSpanRollup.querySelector('.dual-slider');
   if (lifeSpanContainer) {
     rebuildLifeSpanSliders(lifeSpanContainer, voiceIndex);
-    console.log(`✅ Life Span sliders rebuilt with new tempo-based beat duration`);
   }
 }
 
-
-// Create voice tabs
 function createVoiceTabs() {
   const voiceTabs = document.getElementById('voice-tabs');
   voiceTabs.innerHTML = '';
@@ -957,7 +882,6 @@ function updateVoiceTabs() {
   });
 }
 
-// Parameter creation functions
 function createDropdown(optionsType, paramName, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'dropdown-container';
@@ -1052,7 +976,6 @@ function createDualDropdown(optionsType, paramName, voiceIndex) {
 }
 
 function createCheckboxGroup(optionsType, paramName, voiceIndex) {
-  console.log(`🎵 Creating checkbox group for ${paramName}, voice ${voiceIndex + 1}`);
   
   const wrapper = document.createElement('div');
   wrapper.className = 'checkbox-group-container';
@@ -1095,7 +1018,6 @@ function createCheckboxGroup(optionsType, paramName, voiceIndex) {
   
   wrapper.appendChild(checkboxesWrapper);
   
-  console.log(`✅ Created ${options.length} checkboxes for ${paramName}`);
   return wrapper;
 }
 
@@ -1110,7 +1032,6 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
   if (paramName === 'RESTS') {
     if (index === 0 && isChecked) {
       // "No Rests" was just checked - clear all other rests
-      console.log('🎵 "No Rests" checked - clearing all other rest selections');
       param.selectedValues = [0];
       
       // Uncheck all other checkboxes in the UI
@@ -1123,7 +1044,6 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
       
     } else if (index !== 0 && isChecked) {
       // Another rest was checked - uncheck "No Rests"
-      console.log('🎵 Rest value checked - unchecking "No Rests"');
       param.selectedValues = param.selectedValues.filter(v => v !== 0);
       
       // Uncheck "No Rests" in the UI
@@ -1158,14 +1078,12 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
     
     // FALLBACK: If all rhythms are now unchecked, auto-check Quarter Notes (index 7)
     if (param.selectedValues.length === 0) {
-      console.log('⚠️ All rhythms unchecked - auto-selecting Quarter Notes (index 7)');
       param.selectedValues = [7];
       
       // Check the Quarter Notes checkbox in the UI
       const quarterNotesCheckbox = document.querySelector(`input[id="RHYTHMS-${voiceIndex}-7"]`);
       if (quarterNotesCheckbox) {
         quarterNotesCheckbox.checked = true;
-        console.log('✅ Quarter Notes checkbox auto-checked in UI');
       }
     }
   }
@@ -1175,7 +1093,6 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
   const optionsList = paramName === 'RHYTHMS' ? rhythmOptions : restOptions;
   const selectedNames = param.selectedValues.map(i => optionsList[i]);
   
-  console.log(`✅ ${paramName} Voice ${voiceIndex + 1} selection (${param.selectedValues.length}):`, selectedNames);
 }
 
 
@@ -1185,7 +1102,6 @@ function createDualSlider(param, voiceIndex) {
     
     // Special case for MELODIC RANGE - ALWAYS use piano keyboard
     if (param.name === 'MELODIC RANGE') {
-        console.log('🎹 Creating piano keyboard for melodic range (all screen sizes)');
         
         const pianoContainer = document.createElement('div');
         pianoContainer.className = 'piano-container';
@@ -1248,11 +1164,9 @@ function createDualSlider(param, voiceIndex) {
                 if (param.name === 'VOLUME') {
                     const currentVolume = (min + max) / 2;
                     audioManager.setVolumeRealTime(currentVolume);
-                    console.log(`🔊 Real-time volume update: ${currentVolume}%`);
                 } else if (param.name === 'STEREO BALANCE') {
                     const currentBalance = (min + max) / 2;
                     audioManager.setBalanceRealTime(currentBalance);
-                    console.log(`🎛️ Real-time balance update: ${currentBalance}%`);
                 }
             }
         }
@@ -1272,7 +1186,6 @@ function createDualSlider(param, voiceIndex) {
 }
 
 function createMultiDualSlider(param, voiceIndex) {
-  console.log(`🔧 createMultiDualSlider called for ${param.name}, voiceIndex=${voiceIndex}`);
   
   const wrapper = document.createElement('div');
   wrapper.className = 'dual-slider';
@@ -1284,7 +1197,6 @@ function createMultiDualSlider(param, voiceIndex) {
     return wrapper;
   }
   
-  console.log(`   voiceParam for ${param.name}:`, voiceParam);
   
   // SPEED/TIME SLIDER
   const speedWrapper = document.createElement('div');
@@ -1342,8 +1254,7 @@ if (param.name === 'REVERB') {
   const speedMin = Number(voiceParam.speed?.min) || 0;
   const speedMax = Number(voiceParam.speed?.max) || 0;
   
-  console.log(`📊 Creating ${param.name} speed slider: start=[${speedMin}, ${speedMax}]`);
-  
+ 
   if (speedDiv.noUiSlider) {
     speedDiv.noUiSlider.destroy();
   }
@@ -1368,7 +1279,6 @@ if (param.name === 'REVERB') {
       voiceData[voiceIndex].parameters[param.name].speed.min = min;
       voiceData[voiceIndex].parameters[param.name].speed.max = max;
       
-      console.log(`✅ ${param.name} speed updated: ${min}-${max}`);
     } catch (error) {
       console.warn(`Error updating ${param.name} speed:`, error);
     }
@@ -1399,7 +1309,6 @@ if (param.name === 'REVERB') {
   const depthMin = Number(voiceParam.depth?.min) || 0;
   const depthMax = Number(voiceParam.depth?.max) || 0;
   
-  console.log(`📊 Creating ${param.name} depth slider: start=[${depthMin}, ${depthMax}]`);
   
   if (depthDiv.noUiSlider) {
     depthDiv.noUiSlider.destroy();
@@ -1428,7 +1337,6 @@ if (param.name === 'REVERB') {
       voiceData[voiceIndex].parameters[param.name].depth.min = min;
       voiceData[voiceIndex].parameters[param.name].depth.max = max;
       
-      console.log(`✅ ${param.name} depth updated: ${min}-${max}%`);
     } catch (error) {
       console.warn(`Error updating ${param.name} depth:`, error);
     }
@@ -1461,7 +1369,6 @@ if (param.name === 'REVERB') {
     const feedbackMin = Number(voiceParam.feedback?.min) || 0;
     const feedbackMax = Number(voiceParam.feedback?.max) || 0;
     
-    console.log(`📊 Creating ${param.name} feedback slider: start=[${feedbackMin}, ${feedbackMax}]`);
     
     if (feedbackDiv.noUiSlider) {
       feedbackDiv.noUiSlider.destroy();
@@ -1490,7 +1397,6 @@ if (param.name === 'REVERB') {
         voiceData[voiceIndex].parameters[param.name].feedback.min = min;
         voiceData[voiceIndex].parameters[param.name].feedback.max = max;
         
-        console.log(`✅ ${param.name} feedback updated: ${min}-${max}%`);
       } catch (error) {
         console.warn(`Error updating ${param.name} feedback:`, error);
       }
@@ -1608,7 +1514,6 @@ function initializeParameterRollupState() {
     parameterRollupState[param.name] = false;
   });
   
-  console.log('📕 All parameter rollups initialized as collapsed');
 }
 
 function renderParameters() {
@@ -1654,8 +1559,7 @@ function renderParameters() {
 }
 
 function syncVoiceToOthers(sourceVoiceIndex) {
-  console.log(`=== SYNCING ALL VOICES TO VOICE ${sourceVoiceIndex + 1} TEMPO ===`);
-  
+ 
   const sourceTempo = voiceData[sourceVoiceIndex].parameters['TEMPO (BPM)'];
   
   if (!sourceTempo) {
@@ -1664,8 +1568,7 @@ function syncVoiceToOthers(sourceVoiceIndex) {
     return;
   }
   
-  console.log(`Source tempo: ${sourceTempo.min}-${sourceTempo.max} BPM (behavior: ${sourceTempo.behavior}%)`);
-  
+ 
   let syncedCount = 0;
   for (let i = 0; i < 16; i++) {
     if (i !== sourceVoiceIndex && voiceData[i].parameters['TEMPO (BPM)']) {
@@ -1680,7 +1583,6 @@ function syncVoiceToOthers(sourceVoiceIndex) {
     }
   }
   
-  console.log(`✅ Synced ${syncedCount} voices to Voice ${sourceVoiceIndex + 1} tempo settings`);
   
   if (currentVoice !== sourceVoiceIndex) {
     renderParameters();
@@ -1714,14 +1616,10 @@ function toggleLockVoice(voiceIndex) {
 }
 
 async function toggleMasterPlayback() {
-  console.log('🎯 MASTER PLAY clicked (Fixed Version)');
 
-  console.trace('toggleMasterPlayback called from:'); // WHO CALLED THIS?
-  
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
   
   if (playButton && playButton.textContent === 'STOP') {
-    console.log('=== STOPPING MASTER PLAYBACK (New System) ===');
     
     if (voiceClockManager) {
       voiceClockManager.stopAllVoices();
@@ -1739,13 +1637,10 @@ async function toggleMasterPlayback() {
     playButton.style.backgroundColor = '';
     playButton.style.color = '';
     
-    console.log('✅ Master playback stopped (New System)');
     
   } else {
-    console.log('=== STARTING MASTER PLAYBACK (New System) ===');
     
     if (!audioManager || !audioManager.isInitialized) {
-      console.log('Initializing audio system...');
       if (!audioManager) {
         audioManager = new AudioManager();
       }
@@ -1779,15 +1674,11 @@ async function toggleMasterPlayback() {
       return;
     }
     
-    console.log(`Starting playback with voices: ${enabledVoices.join(', ')}`);
     
-    console.log('🕐 Starting master clock...');
     masterClock.start();
     
-    console.log('⏳ Waiting for master clock to stabilize...');
     await new Promise(resolve => setTimeout(resolve, 50));
     
-    console.log('🎵 Starting voice clocks...');
     voiceClockManager.startAllVoices();
     
     // In the START section (around line 1647), add:
@@ -1798,12 +1689,10 @@ async function toggleMasterPlayback() {
     playButton.style.backgroundColor = '#dc3545';
     playButton.style.color = 'white';
     
-    console.log(`🎉 Master playback started with ${enabledVoices.length} voices!`);
   }
 }
 
 function stopMasterPlayback() {
-  console.log('=== STOPPING MASTER MULTI-VOICE PLAYBACK ===');
   
   if (voiceClockManager) {
     voiceClockManager.stopAllVoices();
@@ -1820,12 +1709,9 @@ function stopMasterPlayback() {
     playButton.style.color = '';
   }
   
-  console.log('✅ Multi-voice playback stopped');
 }
 
-// SCHEDULE NOTE FUNCTION  
 function scheduleNote(frequency, duration, startTime, voiceIndex) {
-  recordNoteForTempoTest();
 
   if (!audioManager || !audioManager.isInitialized) {
     return null;
@@ -1897,7 +1783,6 @@ function scheduleNote(frequency, duration, startTime, voiceIndex) {
 }
 
 async function previewVoice(voiceIndex) {
-  console.log(`=== PREVIEW VOICE ${voiceIndex + 1} (New Clock System) ===`);
   
   if (!audioManager || !audioManager.isInitialized) {
     if (!audioManager) {
@@ -1929,7 +1814,6 @@ async function previewVoice(voiceIndex) {
   }
   
   if (previewButton.textContent === 'STOP') {
-    console.log(`Stopping preview for Voice ${voiceIndex + 1}...`);
     
     const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
     if (voiceClock) {
@@ -1946,10 +1830,8 @@ async function previewVoice(voiceIndex) {
     previewButton.style.backgroundColor = '';
     previewButton.style.color = '';
     
-    console.log(`✅ Voice ${voiceIndex + 1} preview stopped`);
     
   } else {
-    console.log(`Starting preview for Voice ${voiceIndex + 1}...`);
     
     if (voiceClockManager.getActiveVoiceCount() > 0) {
       voiceClockManager.stopAllVoices();
@@ -1973,7 +1855,6 @@ async function previewVoice(voiceIndex) {
     previewButton.style.backgroundColor = '#ffcccc';
     previewButton.style.color = '#333';
     
-    console.log(`✅ Voice ${voiceIndex + 1} preview started with new clock system`);
   }
 
 
@@ -2173,7 +2054,6 @@ function getRhythmDuration(rhythmIndex, currentTempo = null) {
   const beatDuration = 60 / tempo;
   const noteDuration = rhythmInfo.beats * beatDuration;
   
-  console.log(`Rhythm: ${rhythmInfo.name} = ${rhythmInfo.beats} beats = ${noteDuration.toFixed(3)}s at ${tempo} BPM`);
   return noteDuration;
 }
 
@@ -2181,7 +2061,6 @@ function getRestDuration(restIndex, currentTempo = null) {
   const tempo = currentTempo || getCurrentTempo(voiceIndex);
   
   if (restIndex === 0) {
-    console.log('No Rests selected = 0s rest');
     return 0;
   }
   
@@ -2194,7 +2073,6 @@ function getRestDuration(restIndex, currentTempo = null) {
   const beatDuration = 60 / tempo;
   const restDuration = restInfo.beats * beatDuration;
   
-  console.log(`Rest: ${restInfo.name} = ${restInfo.beats} beats = ${restDuration.toFixed(3)}s at ${tempo} BPM`);
   return restDuration;
 }
 
@@ -2203,12 +2081,10 @@ function midiToFrequency(midiNote) {
 }
 
 window.selectMidiNote = function(voiceIndex) {
-    console.log(`🎼 ENHANCED selectMidiNote called for Voice ${voiceIndex + 1} (Musical Chord System)`);
     
     const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
     const polyphonyParam = voiceData[voiceIndex].parameters['POLYPHONY'];
     
-    console.log('Polyphony param:', polyphonyParam);
     
     let noteCount = 1;
     
@@ -2227,12 +2103,10 @@ window.selectMidiNote = function(voiceIndex) {
         }
     }
     
-    console.log(`Calculated noteCount: ${noteCount}`);
     
     const selectedNotes = [];
     
     if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
-        console.log('Using piano selection');
         const availableNotes = [...melodicParam.selectedNotes];
         
         for (let i = 0; i < noteCount && availableNotes.length > 0; i++) {
@@ -2245,10 +2119,8 @@ window.selectMidiNote = function(voiceIndex) {
             selectedNotes.push({ midiNote: selectedMidi, frequency, noteName });
         }
         
-        console.log(`Returning ${selectedNotes.length} piano notes:`, selectedNotes.map(n => n.noteName));
         return selectedNotes;
     } else {
-        console.log('Using MUSICAL CHORD SYSTEM for range-based selection');
         
         const currentMin = Math.round(melodicParam.min);
         const currentMax = Math.round(melodicParam.max);
@@ -2292,7 +2164,6 @@ window.selectMidiNote = function(voiceIndex) {
         const behaviorSetting = melodicParam.behavior || 50;
         const musicalChord = generateMusicalChord(baseNote, noteCount, currentMin, currentMax, behaviorSetting);
         
-        console.log(`Returning ${musicalChord.length} musical chord notes:`, musicalChord.map(n => n.noteName));
         return musicalChord;
     }
 };
@@ -2356,7 +2227,6 @@ class Voice {
     
     this.voiceGainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     
-    console.log(`Voice ${voiceIndex + 1} initialized with continuous oscillator`);
   }
   
   initializeContinuousOscillator() {
@@ -2380,7 +2250,6 @@ class Voice {
     this.noteGainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
     this.continuousOscillator.start();
     
-    console.log(`Voice ${this.voiceIndex + 1} continuous oscillator started`);
   }
   
   stopContinuousOscillator() {
@@ -2407,7 +2276,6 @@ class Voice {
     
     this.scheduleVoiceNotes();
     
-    console.log(`Voice ${this.voiceIndex + 1} started playing`);
   }
   
   stopPlaying() {
@@ -2421,7 +2289,6 @@ class Voice {
     
     this.stopContinuousOscillator();
     
-    console.log(`Voice ${this.voiceIndex + 1} stopped`);
   }
   
   startPreview() {
@@ -2435,14 +2302,12 @@ class Voice {
     this.scheduleVoiceNotes();
     this.startParameterEvolution();
     
-    console.log(`Voice ${this.voiceIndex + 1} preview started`);
   }
   
   stopPreview() {
     this.isPreviewPlaying = false;
     this.stopPlaying();
     
-    console.log(`Voice ${this.voiceIndex + 1} preview stopped`);
   }
   
   scheduleVoiceNotes() {
@@ -2464,7 +2329,6 @@ class Voice {
   }
 
   scheduleNextNote(startTime) {
-    console.log(`=== VOICE MANAGER: SCHEDULING NOTE FOR VOICE ${this.voiceIndex + 1} ===`);
     
     const voiceParams = voiceData[this.voiceIndex].parameters;
     
@@ -2475,12 +2339,10 @@ class Voice {
     const restIndex = this.selectValueInRange(restParam);
     
     const voiceTempo = getVoiceTempo(this.voiceIndex);
-    console.log(`VoiceClock Voice ${this.voiceIndex + 1} tempo: ${voiceTempo} BPM`);
     
     const noteDuration = getRhythmDuration(rhythmIndex, voiceTempo);
     const restDuration = getRestDuration(restIndex, voiceTempo);
     
-    console.log(`VoiceClock Note: ${noteDuration.toFixed(3)}s, Rest: ${restDuration.toFixed(3)}s`);
     
     const noteInfo = selectMidiNote(this.voiceIndex);
     
@@ -2552,12 +2414,9 @@ class Voice {
   }
   
   selectValueInRange(param) {
-    console.log('🔍 selectValueInRange called, param:', param);
 
     // NEW: Handle checkbox-based selection
     if (param.selectedValues && Array.isArray(param.selectedValues)) {
-      console.log('🎵 Using selectedValues:', param.selectedValues);
-      console.log('🎵 selectValueInRange called with:', param.selectedValues);  // DEBUG LINE
     
     if (param.selectedValues.length === 0) {
       console.warn('No rhythmic values selected, defaulting to Quarter Notes');
@@ -2597,7 +2456,6 @@ class Voice {
   
   startParameterEvolution() {
     if (this.isPreviewPlaying) {
-      console.log('DEBUG: this.voiceIndex =', this.voiceIndex);
       startTestClock(this.voiceIndex);
     }
   }
@@ -2662,11 +2520,9 @@ class InteractivePiano {
     if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
       this.selectedNotes.clear();
       melodicParam.selectedNotes.forEach(note => this.selectedNotes.add(note));
-      console.log('Loaded custom selections:', Array.from(this.selectedNotes).map(n => midiNoteNames[n]));
     } else {
       this.selectedNotes.clear();
       this.selectedNotes.add(60);
-      console.log('Starting with default: Middle C selected');
     }
     
     this.updateVisualSelection();
@@ -2706,7 +2562,6 @@ class InteractivePiano {
     
     if (!this.isDragging) {
       this.isDragging = true;
-      console.log(`Started drag ${this.dragMode} from ${midiNoteNames[this.dragStartNote]}`);
     }
     
     this.selectRange(this.dragStartNote, currentNote, this.dragMode === 'select');
@@ -2724,10 +2579,8 @@ class InteractivePiano {
   toggleNote(midiNote) {
     if (this.selectedNotes.has(midiNote)) {
       this.selectedNotes.delete(midiNote);
-      console.log(`Removed: ${midiNoteNames[midiNote]}`);
     } else {
       this.selectedNotes.add(midiNote);
-      console.log(`Added: ${midiNoteNames[midiNote]}`);
     }
     
     this.updateVisualSelection();
@@ -2767,7 +2620,6 @@ class InteractivePiano {
       melodicParam.min = 60;
       melodicParam.max = 72;
       delete melodicParam.selectedNotes;
-      console.log('🎹 Piano cleared - reverting to slider control');
       return;
     }
     
@@ -2781,7 +2633,6 @@ class InteractivePiano {
     
     delete melodicParam.currentNote;
     
-    console.log(`🎹 Piano controls range: ${midiNoteNames[min]} to ${midiNoteNames[max]} (${selectedArray.length} notes)`);
   }
   
   updateInfoDisplay() {
@@ -2809,7 +2660,6 @@ class InteractivePiano {
   }
   
   syncWithSliderRange(minMidi, maxMidi) {
-    console.log(`🎹 Piano syncing with slider range: MIDI ${minMidi}-${maxMidi}`);
     
     this.selectedNotes.clear();
     
@@ -2821,7 +2671,6 @@ class InteractivePiano {
     this.updateVoiceData();
     this.updateInfoDisplay();
     
-    console.log(`🎹 Piano now shows ${this.selectedNotes.size} selected notes`);
   }
   
   updateForVoice(newVoiceIndex) {
@@ -2862,11 +2711,9 @@ function getVoiceTempo(voiceIndex) {
 }
 
 async function initializeAudioOnFirstClick() {
-  console.log('🎵 Initializing audio on first click...');
   await audioManager.initialize();
   
   if (audioManager.isInitialized) {
-    console.log('✅ Audio manager initialized successfully');
   } else {
     console.log('❌ Audio manager initialization failed');
   }
@@ -2879,16 +2726,12 @@ let lastUpdateTime = Date.now();
 
 // Enhanced generateHarmonicNotes
 window.generateHarmonicNotes = function(baseNote, additionalCount, minNote, maxNote) {
-    console.log(`Generating ${additionalCount} harmonic notes from range ${midiNoteNames[minNote]}-${midiNoteNames[maxNote]}`);
     
     const harmonicNotes = [];
     const baseMidi = baseNote.midiNote;
     const availableRange = maxNote - minNote + 1;
     
-    console.log(`Available range: ${availableRange} semitones`);
-    
     if (availableRange <= 12) {
-        console.log('Using chromatic approach for limited range');
         
         const usedNotes = new Set([baseMidi]);
         
@@ -2900,11 +2743,9 @@ window.generateHarmonicNotes = function(baseNote, additionalCount, minNote, maxN
                     noteName: midiNoteNames[midi] || `MIDI${midi}`
                 });
                 usedNotes.add(midi);
-                console.log(`Added available note: ${midiNoteNames[midi]}`);
             }
         }
     } else {
-        console.log('Using harmonic intervals for wide range');
         const intervals = [3, 4, 7, 10, 12, 15, 16, 19];
         const usedNotes = new Set([baseMidi]);
         
@@ -2926,23 +2767,18 @@ window.generateHarmonicNotes = function(baseNote, additionalCount, minNote, maxN
                     });
                     usedNotes.add(newMidi);
                     noteFound = true;
-                    console.log(`Added harmonic note: ${midiNoteNames[newMidi]} (interval: ${interval})`);
                 }
                 attempts++;
             }
             
             if (!noteFound) {
-                console.log(`Could not find valid harmonic note ${i + 1}`);
                 break;
             }
         }
     }
     
-    console.log(`Generated ${harmonicNotes.length}/${additionalCount} requested notes`);
     return harmonicNotes;
 };
-
-console.log('✅ Enhanced generateHarmonicNotes loaded');
 
 function selectBaseNote(voiceIndex, minNote, maxNote) {
     const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
@@ -3019,10 +2855,6 @@ const chordCategories = {
     all: Object.keys(chordQualities)
 };
 
-console.log('✅ Master Chord Compendium loaded');
-console.log(`📊 Available chord types: ${Object.keys(chordQualities).length}`);
-console.log(`🎼 Categories: ${Object.keys(chordCategories).length}`);
-
 function selectChordQuality(polyphonyCount, behaviorSetting = 50, musicalStyle = 'jazz') {
     let availableChords = [];
     
@@ -3062,12 +2894,10 @@ function selectChordQuality(polyphonyCount, behaviorSetting = 50, musicalStyle =
 }
 
 function generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting = 50) {
-    console.log(`🎼 Generating chord: baseNote=${midiNoteNames[baseNote.midiNote]}, polyphony=${polyphonyCount}`);
     
     const chordType = selectChordQuality(polyphonyCount, behaviorSetting);
     const intervals = chordQualities[chordType];
     
-    console.log(`Selected chord type: ${chordType} with intervals [${intervals}]`);
     
     const chordNotes = [];
     const baseMidi = baseNote.midiNote;
@@ -3092,29 +2922,10 @@ function generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behavi
         }
     }
     
-    console.log(`Generated chord: [${chordNotes.map(n => n.noteName).join(', ')}]`);
     return chordNotes;
 }
 
-console.log('✅ Chord quality selection system loaded');
-
-// Individual Voice Clock - Synced to Master Clock WITH LIFE SPAN INTEGRATION
 class VoiceClock {
-  // constructor(voiceIndex, masterClock) {
-  //   this.voiceIndex = voiceIndex;
-  //   this.masterClock = masterClock;
-    
-  //   this.isActive = false;
-  //   this.lastNoteTime = 0;
-  //   this.nextNoteTime = 0;
-  //   this.currentTempo = 120;
-  //   this.lastTempoUpdate = 0;
-    
-  //   console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
-
-  // // NEW: Lookahead scheduler
-  // this.lookaheadScheduler = null; // Will initialize when audioManager is ready
-  // }
   constructor(voiceIndex, masterClock) {
     this.voiceIndex = voiceIndex;
     this.masterClock = masterClock;
@@ -3128,7 +2939,6 @@ class VoiceClock {
     // NEW: Track active notes for real-time parameter updates
     this.activeNotes = new Set();
     
-    console.log(`VoiceClock ${this.voiceIndex + 1} initialized and synced to master`);
 
     this.lookaheadScheduler = null;
   }
@@ -3151,15 +2961,11 @@ class VoiceClock {
     // Schedule first note 100ms from now
     this.nextNoteTime = masterTime + 100;
     
-    // console.log(`🎵 Voice ${this.voiceIndex + 1} clock started with Life Span integration`);
-    // console.log(`Voice ${this.voiceIndex + 1} settings: tempo ${this.currentTempo} BPM`);
 
 // NEW: Initialize lookahead scheduler if audioManager available
 if (audioManager && audioManager.audioContext) {
-  console.log(`🔍 Voice ${this.voiceIndex + 1}: audioManager check passed`);
   
   if (!this.lookaheadScheduler) {
-    console.log(`🔍 Voice ${this.voiceIndex + 1}: Creating new LookaheadScheduler`);
     this.lookaheadScheduler = new LookaheadScheduler(
       this.voiceIndex,
       audioManager.audioContext,
@@ -3168,14 +2974,7 @@ if (audioManager && audioManager.audioContext) {
   }
   
   // Start lookahead scheduling
-  console.log(`🔍 Voice ${this.voiceIndex + 1}: Calling lookaheadScheduler.start()`);
   this.lookaheadScheduler.start();
-  
-  // Verify it started
-  console.log(`🔍 Voice ${this.voiceIndex + 1}: Scheduler active? ${this.lookaheadScheduler.isActive}`);
-  console.log(`🔍 Voice ${this.voiceIndex + 1}: Interval set? ${!!this.lookaheadScheduler.schedulerInterval}`);
-  
-  console.log(`▶ Voice ${this.voiceIndex + 1} started with lookahead scheduling`);
 } else {
   console.warn(`Voice ${this.voiceIndex + 1}: Starting without lookahead (audioManager not ready)`);
 }
@@ -3191,7 +2990,6 @@ if (this.lookaheadScheduler) {
   this.lookaheadScheduler.stop();
 }
 
-console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
 
     
     if (voiceClockManager) {
@@ -3273,7 +3071,6 @@ console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
     
     // If any span is infinite, always play
     if (hasInfiniteSpan) {
-      console.log(`🔄 Voice ${this.voiceIndex + 1}: Infinite repeat - always playing`);
       return true;
     }
     
@@ -3284,24 +3081,20 @@ console.log(`⏹️ Voice ${this.voiceIndex + 1} clock stopped`);
     // Check if we're in any active span at this cycle position
     for (const span of activeSpans) {
       if (cyclePosition >= span.enter && cyclePosition < span.exit) {
-        console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - in span ${span.number} at ${formatMsToMMSS(cyclePosition)} of ${formatMsToMMSS(cycleLength)} cycle`);
         return true;
       }
     }
     
-    console.log(`🔄 Voice ${this.voiceIndex + 1}: Cycle ${cycleNumber} - outside spans at ${formatMsToMMSS(cyclePosition)} of ${formatMsToMMSS(cycleLength)} cycle`);
     return false;
   }
   
   // NON-REPEAT: Check spans once
   for (const span of activeSpans) {
     if (elapsedMs >= span.enter && (elapsedMs < span.exit || span.exit === Infinity)) {
-      console.log(`🕐 Voice ${this.voiceIndex + 1}: In Life Span ${span.number} at ${formatMsToMMSS(elapsedMs)}`);
       return true;
     }
   }
   
-  console.log(`🔇 Voice ${this.voiceIndex + 1}: Outside all Life Spans at ${formatMsToMMSS(elapsedMs)}`);
   return false;
 }
 
@@ -3323,7 +3116,6 @@ scheduleNextNote() {
   const repeatEnabled = lifeSpanParam ? lifeSpanParam.repeat : false;
   
   if (!shouldPlay) {
-    console.log(`🔇 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: shouldPlay=false, repeat=${repeatEnabled}`);
     
     // If repeat is enabled, this should NEVER happen after the first cycle starts
     if (repeatEnabled && elapsedMs > 1000) {
@@ -3336,7 +3128,6 @@ scheduleNextNote() {
   }
 
   // Rest of the function continues...
-  console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Playing (repeat=${repeatEnabled})`);
   
   this.updateTempo();
   
@@ -3348,14 +3139,9 @@ scheduleNextNote() {
   const rhythmIndex = this.selectValueInRange(rhythmParam);
   const restIndex = this.selectValueInRange(restParam);
 
-  console.log('🔍 DEBUG rhythmParam:', rhythmParam);  // ADD THIS
-  console.log('🔍 DEBUG restParam:', restParam);      // ADD THIS
   
   const noteDurationMs = this.getRhythmDurationMs(rhythmIndex);
   const restDurationMs = this.getRestDurationMs(restIndex);
-
-  console.log('🔍 DEBUG rhythmIndex:', rhythmIndex);  // ADD THIS
-  console.log('🔍 DEBUG restIndex:', restIndex);      // ADD THIS
   
   const noteInfoArray = selectMidiNote(this.voiceIndex);
   
@@ -3365,16 +3151,13 @@ scheduleNextNote() {
   this.nextNoteTime = this.lastNoteTime + noteDurationMs + restDurationMs;
   
   const noteCount = noteInfoArray.length;
-  console.log(`🎵 Voice ${this.voiceIndex + 1} @ ${formatMsToMMSS(elapsedMs)}: Scheduled ${noteCount} note${noteCount > 1 ? 's' : ''}, next in ${(noteDurationMs + restDurationMs)}ms`);
 }
 
   
   selectValueInRange(param) {
-    console.log('🔍 selectValueInRange called with param:', param);
     
     // NEW: Handle checkbox-based selection
     if (param.selectedValues && Array.isArray(param.selectedValues)) {
-      console.log('🎵 selectedValues array:', param.selectedValues);
       
       if (param.selectedValues.length === 0) {
         console.warn('⚠️ No rhythmic values selected, defaulting to Quarter Notes (7)');
@@ -3387,16 +3170,13 @@ scheduleNextNote() {
         // Random selection from checked values
         const randomIndex = Math.floor(Math.random() * param.selectedValues.length);
         selectedValue = param.selectedValues[randomIndex];
-        console.log(`🎲 Behavior ${param.behavior}%: randomly selected index ${randomIndex} = value ${selectedValue}`);
       } else {
         // Always use first selected value
         selectedValue = param.selectedValues[0];
-        console.log(`📌 Behavior 0%: using first value ${selectedValue}`);
       }
       
       // Make sure we return a number
       const result = parseInt(selectedValue);
-      console.log(`✅ Returning: ${result} (type: ${typeof result})`);
       return result;
     }
     
@@ -3445,7 +3225,6 @@ scheduleNextNote() {
     param.min = 7;
     param.max = 7;
     
-    console.log('🎵 Dropdowns updated to Quarter Notes fallback due to invalid range');
   }
   
   getRhythmDurationMs(rhythmIndex) {
@@ -3473,8 +3252,6 @@ scheduleNextNote() {
   const durationSeconds = durationMs / 1000;
   const scheduledNotes = [];
   
-  console.log(`🎯 triggerNote: scheduling at ${startTime.toFixed(3)}s (${scheduleTime !== null ? 'LOOKAHEAD' : 'immediate'})`);
-  
   noteInfoArray.forEach((noteInfo, index) => {
     const scheduledNote = this.createScheduledAudioNote(
       noteInfo.frequency,
@@ -3490,7 +3267,6 @@ scheduleNextNote() {
   
   if (scheduledNotes.length > 0) {
     const noteNames = noteInfoArray.map(n => n.noteName).join(', ');
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: [${noteNames}] (${scheduledNotes.length} notes) for ${durationMs.toFixed(0)}ms at ${this.currentTempo} BPM`);
   }
   
   return scheduledNotes;
@@ -3502,9 +3278,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   
   const actualStartTime = startTime + (offset * 0.001);
   
-  console.log(`🔍 === CREATING NOTE: Voice ${this.voiceIndex + 1} ===`);
-  console.log(`   Frequency: ${frequency}Hz, Duration: ${duration.toFixed(3)}s`);
-  
   // Acquire node set from pool
   let nodeSet = null;
   let usingPool = false;
@@ -3512,7 +3285,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   if (audioManager.oscillatorPool) {
     nodeSet = audioManager.oscillatorPool.acquire();
     usingPool = true;
-    console.log(`🎛️ Using pooled node set: ${nodeSet.id}`);
   } else {
     nodeSet = {
       oscillator: audioManager.audioContext.createOscillator(),
@@ -3555,12 +3327,10 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   const effectNodes = this.createEffectNodes();
   
   // ===== CORRECTED: Build audio chain with PROPER effects routing =====
-  console.log(`🔗 Building audio chain with corrected effects routing...`);
   
   // Basic chain: oscillator → filter → gain (ADSR applied here)
   oscillator.connect(filterNode);
   filterNode.connect(gainNode);
-  console.log(`   ✓ oscillator → filter → gain (ADSR)`);
   
   // Now connect effects AFTER the ADSR-controlled gain
   let audioChain = gainNode;
@@ -3580,21 +3350,18 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   if (tremoloIsActive) {
     this.setupTremolo(audioChain, effectNodes.tremolo, voiceParams, actualStartTime, duration);
     audioChain = effectNodes.tremolo.wet;
-    console.log(`   ✓ tremolo connected`);
   }
   
   // Chorus (if active)
   if (chorusIsActive) {
     this.setupChorus(audioChain, effectNodes.chorus, voiceParams, actualStartTime, duration);
     audioChain = effectNodes.chorus.mix;
-    console.log(`   ✓ chorus connected`);
   }
   
   // Phaser (if active)
   if (phaserIsActive) {
     this.setupPhaser(audioChain, effectNodes.phaser, voiceParams, actualStartTime, duration);
     audioChain = effectNodes.phaser.mix;
-    console.log(`   ✓ phaser connected`);
   }
   
   // Reverb (if active) - parallel mix
@@ -3609,7 +3376,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     
     audioChain = reverbMixer;
     effectNodes.reverbMixer = reverbMixer; // Store for cleanup
-    console.log(`   ✓ reverb connected`);
   }
   
   // Delay (if active) - parallel mix with feedback
@@ -3624,13 +3390,11 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
     
     audioChain = delayMixer;
     effectNodes.delayMixer = delayMixer; // Store for cleanup
-    console.log(`   ✓ delay connected`);
   }
   
   // Final connection to pan and master
   audioChain.connect(panNode);
   panNode.connect(audioManager.masterGainNode);
-  console.log(`🔗 Audio chain complete!\n`);
   
   // Track nodes for real-time control
   if (audioManager.isPlaying) {
@@ -3647,40 +3411,7 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   oscillator.start(actualStartTime);
   oscillator.stop(actualStartTime + duration);
   
-  // // Enhanced cleanup with pool return
-  // const cleanup = () => {
-  //   try {
-  //     // Disconnect effect nodes
-  //     if (effectNodes) {
-  //       this.cleanupEffectNodes(effectNodes);
-  //     }
-      
-  //     // Return to pool or cleanup directly
-  //     if (usingPool && audioManager.oscillatorPool) {
-  //       audioManager.oscillatorPool.release(nodeSet);
-  //       console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
-  //     } else {
-  //       oscillator.disconnect();
-  //       gainNode.disconnect();
-  //       filterNode.disconnect();
-  //       panNode.disconnect();
-  //       console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
-  //     }
-      
-  //     // Remove from tracking
-  //     if (audioManager.previewGainNodes) {
-  //       audioManager.previewGainNodes.delete(gainNode);
-  //     }
-  //     if (audioManager.previewPanNodes) {
-  //       audioManager.previewPanNodes.delete(panNode);
-  //     }
-      
-  //   } catch (e) {
-  //     console.warn('Cleanup warning:', e);
-  //   }
-  // };
-  
-    // Enhanced cleanup with pool return
+      // Enhanced cleanup with pool return
   const cleanup = () => {
     try {
       // NEW: Mark note as inactive and remove from tracking
@@ -3697,13 +3428,11 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
       // Return to pool or cleanup directly
       if (usingPool && audioManager.oscillatorPool) {
         audioManager.oscillatorPool.release(nodeSet);
-        console.log(`🔄 Node set ${nodeSet.id} returned to pool`);
       } else {
         oscillator.disconnect();
         gainNode.disconnect();
         filterNode.disconnect();
         panNode.disconnect();
-        console.log(`🧹 Direct cleanup for node ${nodeSet.id}`);
       }
       
       // Remove from tracking
@@ -3735,7 +3464,6 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   cleanupOscillator.start(cleanupTime);
   cleanupOscillator.stop(cleanupTime + 0.001);
   
-  console.log(`🎵 Voice ${this.voiceIndex + 1}: Note at ${actualStartTime.toFixed(3)}s, cleanup at ${cleanupTime.toFixed(3)}s`);
   
 // NEW: Create note reference object for real-time updates
   const noteReference = {
@@ -3760,27 +3488,8 @@ createScheduledAudioNote(frequency, duration, startTime, offset = 0) {
   
   return noteReference;
 
-  // return {
-  //   oscillator,
-  //   filterNode,
-  //   gainNode,
-  //   panNode,
-  //   effectNodes,
-  //   nodeSet,
-  //   usingPool,
-  //   startTime: actualStartTime,
-  //   duration,
-  //   frequency,
-  //   voiceIndex: this.voiceIndex,
-  //   velocity: currentVelocity
-  // };
 }
 
-// updateActiveNotesRealTime() {
-//   if (this.activeNotes.size === 0) return;
-  
-//   const now = audioManager.audioContext.currentTime;
-//   const voiceParams = voiceData[this.voiceIndex].parameters;
 
 updateActiveNotesRealTime() {
   // NEW: Update tempo even if no notes are playing (affects next note timing)
@@ -4201,7 +3910,6 @@ createEffectNodes() {
 buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
   const { oscillator, gainNode, filterNode, panNode } = nodeSet;
   
-  console.log(`🔗 Building audio chain with pooled nodes...`);
   
   // Basic chain: oscillator → filter → gain
   oscillator.connect(filterNode);
@@ -4247,7 +3955,6 @@ buildAudioChain(nodeSet, effectNodes, adsrEnvelope, voiceParams, actualStartTime
   audioChain.connect(panNode);
   panNode.connect(audioManager.masterGainNode);
   
-  console.log(`🔗 Audio chain complete with pooled nodes`);
 }
 
 connectTremoloIfActive(inputNode, tremoloNodes, adsrEnvelope, voiceParams, actualStartTime, duration) {
@@ -4418,7 +4125,6 @@ calculateMaxTailTime(voiceParams, duration) {
     const peakGain = baseGain * envelope.peakLevel * volumeBoost;
     const sustainGain = baseGain * envelope.sustain * volumeBoost;
     
-    console.log(`🔊 BOOSTED Velocity: ${(velocityMultiplier * 100).toFixed(0)}%, Peak Gain: ${peakGain.toFixed(3)} (8x boost)`);
     
     const minAudibleGain = 0.1;
     const finalPeakGain = Math.max(minAudibleGain, peakGain);
@@ -4430,7 +4136,6 @@ calculateMaxTailTime(voiceParams, duration) {
     gainNode.gain.setValueAtTime(finalSustainGain, startTime + envelope.sustainEnd);
     gainNode.gain.linearRampToValueAtTime(0.001, startTime + duration);
     
-    console.log(`🔊 Final gains: peak=${finalPeakGain.toFixed(3)}, sustain=${finalSustainGain.toFixed(3)}`);
   }
 
   applyFilterADSR(filterNode, envelope, frequency, velocityNormalized, instrumentName, startTime, duration) {
@@ -4439,7 +4144,6 @@ calculateMaxTailTime(voiceParams, duration) {
     const velocityQ = 0.5 + (velocityNormalized * 8.0);
     filterNode.Q.setValueAtTime(velocityQ, startTime);
     
-    console.log(`🔆 Velocity: ${(velocityNormalized * 100).toFixed(0)}% → Filter Q: ${velocityQ.toFixed(1)} (brightness)`);
     
     const baseCutoff = frequency * 2;
     const velocityMultiplier = 2 + (velocityNormalized * 18);
@@ -4447,7 +4151,6 @@ calculateMaxTailTime(voiceParams, duration) {
     const sustainCutoff = frequency * velocityMultiplier * envelope.sustain * 0.7;
     const releaseCutoff = baseCutoff;
     
-    console.log(`🔆 Cutoff range: ${baseCutoff.toFixed(0)}Hz → ${peakCutoff.toFixed(0)}Hz (${velocityMultiplier.toFixed(1)}x fundamental)`);
     
     filterNode.frequency.setValueAtTime(baseCutoff, startTime);
     filterNode.frequency.exponentialRampToValueAtTime(Math.max(20, peakCutoff), startTime + envelope.attack);
@@ -4459,7 +4162,6 @@ calculateMaxTailTime(voiceParams, duration) {
   applyTremoloADSR(tremoloLFO, tremoloGain, tremoloDepth, tremoloWet, tremoloDry, adsrEnvelope, voiceParams, actualStartTime, duration) {
     if (voiceParams.tremoloDepth <= 0.001) {
       tremoloGain.gain.setValueAtTime(1.0, actualStartTime);
-      console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo bypassed (depth = 0)`);
       return false;
     }
     
@@ -4481,7 +4183,6 @@ calculateMaxTailTime(voiceParams, duration) {
       console.warn(`Tremolo LFO start warning:`, e.message);
     }
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Tremolo active (speed = ${voiceParams.tremoloSpeed.toFixed(1)}Hz, depth = ${(voiceParams.tremoloDepth * 100).toFixed(0)}%)`);
     return true;
   }
 
@@ -4507,7 +4208,6 @@ calculateMaxTailTime(voiceParams, duration) {
     
     if (delayTimeMs > 1800) {
         feedbackLevel = Math.min(feedbackLevel, 0.85);
-        console.log(`🔧 Very long delay (${delayTimeMs.toFixed(0)}ms): feedback capped at 85%`);
     } else if (delayTimeMs > 1500) {
         feedbackLevel = Math.min(feedbackLevel, 0.88);
     } else if (delayTimeMs > 1000) {
@@ -4522,7 +4222,6 @@ calculateMaxTailTime(voiceParams, duration) {
     
     const expectedTail = this.calculateDelayTailTime(delayTimeSeconds, feedbackLevel);
     
-    console.log(`🔧 DELAY SET: time=${delayTimeMs.toFixed(0)}ms, dry=${delayDryLevel.toFixed(2)}, wet=${delayWetLevel.toFixed(2)}, feedback=${(feedbackLevel*100).toFixed(0)}% → tail=${(expectedTail/1000).toFixed(1)}s`);
     
     return true;
   }
@@ -4582,7 +4281,6 @@ calculateMaxTailTime(voiceParams, duration) {
     reverbDry.gain.value = reverbDryLevel;
     reverbWet.gain.value = reverbWetLevel;
     
-    console.log(`🔧 REVERB SET: dry=${reverbDryLevel.toFixed(2)}, wet=${reverbWetLevel.toFixed(2)}, time=${reverbTime.toFixed(2)}s (immediate, constant)`);
     
     return true;
   }
@@ -4595,7 +4293,6 @@ calculateMaxTailTime(voiceParams, duration) {
           chorusGain1.gain.setValueAtTime(0, actualStartTime);
           chorusGain2.gain.setValueAtTime(0, actualStartTime);
           chorusGain3.gain.setValueAtTime(0, actualStartTime);
-          console.log(`🎵 Voice ${this.voiceIndex + 1}: Chorus bypassed (depth = 0)`);
           return false;
       }
       
@@ -4672,7 +4369,6 @@ calculateMaxTailTime(voiceParams, duration) {
           console.warn(`Chorus LFO3 start warning:`, e.message);
       }
       
-      console.log(`🎵 Voice ${this.voiceIndex + 1}: Enhanced Chorus active (speed = ${chorusSpeed.toFixed(2)}Hz, depth = ${(voiceParams.chorusDepth * 100).toFixed(0)}%, 3 voices: 20ms/32ms/48ms)`);
       return true;
   }
 
@@ -4680,7 +4376,6 @@ calculateMaxTailTime(voiceParams, duration) {
       if (voiceParams.phaserDepth <= 0.001) {
           phaserDepth.gain.setValueAtTime(0, actualStartTime);
           phaserFeedback.gain.setValueAtTime(0, actualStartTime);
-          console.log(`🎵 Voice ${this.voiceIndex + 1}: Phaser bypassed (depth = 0)`);
           return false;
       }
       
@@ -4711,7 +4406,6 @@ calculateMaxTailTime(voiceParams, duration) {
           const stageFreq = baseFrequency * frequencyMultiplier;
           stage.frequency.setValueAtTime(stageFreq, actualStartTime);
           
-          console.log(`  Phaser Stage ${index + 1}: ${stageFreq.toFixed(0)}Hz, Q=${stageQ.toFixed(1)}`);
       });
       
       const feedbackAmount = Math.min(0.55, voiceParams.phaserDepth * 0.7);
@@ -4729,7 +4423,6 @@ calculateMaxTailTime(voiceParams, duration) {
           console.warn(`Phaser LFO start warning:`, e.message);
       }
       
-      console.log(`🎵 Voice ${this.voiceIndex + 1}: Enhanced Phaser active (speed = ${phaserSpeed.toFixed(2)}Hz, depth = ${(voiceParams.phaserDepth * 100).toFixed(0)}%, sweep: 300-${(baseFrequency * Math.pow(2.2, 3)).toFixed(0)}Hz)`);
       return true;
   }
 
@@ -4885,45 +4578,35 @@ calculateMaxTailTime(voiceParams, duration) {
   getVelocitySensitiveWaveform(baseType, velocityNormalized, instrumentName) {
       if (instrumentName.includes('Piano')) {
           if (velocityNormalized < 0.3) {
-              console.log(`🎹 Piano soft (${(velocityNormalized * 100).toFixed(0)}%): sine wave (pure/mellow)`);
               return 'sine';
           }
           if (velocityNormalized < 0.7) {
-              console.log(`🎹 Piano medium (${(velocityNormalized * 100).toFixed(0)}%): triangle wave (warm)`);
               return 'triangle';
           }
-          console.log(`🎹 Piano hard (${(velocityNormalized * 100).toFixed(0)}%): square wave (bright/percussive)`);
           return 'square';
       }
       
       if (instrumentName.includes('String') || instrumentName.includes('Violin') || instrumentName.includes('Cello')) {
           if (velocityNormalized < 0.4) {
-              console.log(`🎻 Strings soft (${(velocityNormalized * 100).toFixed(0)}%): sine (gentle bowing)`);
               return 'sine';
           }
-          console.log(`🎻 Strings hard (${(velocityNormalized * 100).toFixed(0)}%): sawtooth (aggressive)`);
           return 'sawtooth';
       }
       
       if (instrumentName.includes('Brass') || instrumentName.includes('Trumpet') || instrumentName.includes('Horn')) {
           if (velocityNormalized < 0.5) {
-              console.log(`🎺 Brass soft (${(velocityNormalized * 100).toFixed(0)}%): triangle (gentle)`);
               return 'triangle';
           }
-          console.log(`🎺 Brass hard (${(velocityNormalized * 100).toFixed(0)}%): square (brassy)`);
           return 'square';
       }
       
       if (instrumentName.includes('Guitar')) {
           if (velocityNormalized < 0.3) {
-              console.log(`🎸 Guitar soft (${(velocityNormalized * 100).toFixed(0)}%): triangle (fingerpicked)`);
               return 'triangle';
           }
-          console.log(`🎸 Guitar hard (${(velocityNormalized * 100).toFixed(0)}%): sawtooth (picked)`);
           return 'sawtooth';
       }
       
-      console.log(`🎨 ${instrumentName} (${(velocityNormalized * 100).toFixed(0)}%): using base type "${baseType}"`);
       return baseType;
   }
 
@@ -5061,7 +4744,6 @@ calculateMaxTailTime(voiceParams, duration) {
       
       this.lastPortamentoFrequency = targetFrequency;
       
-      console.log(`🎯 Portamento: ${currentFrequency.toFixed(1)}Hz → ${targetFrequency.toFixed(1)}Hz over ${(portamentoTime*1000).toFixed(0)}ms`);
   }
 
   getCurrentPortamentoTime() {
@@ -5081,7 +4763,6 @@ calculateMaxTailTime(voiceParams, duration) {
   }
 
   applyDetuning(oscillator, startTime, duration) {
-      console.log(`🔍 DEBUG: applyDetuning called for Voice ${this.voiceIndex + 1}`);
       
       const detuningParam = voiceData[this.voiceIndex].parameters['DETUNING'];
       
@@ -5090,7 +4771,6 @@ calculateMaxTailTime(voiceParams, duration) {
           return;
       }
       
-      console.log(`🔍 Detuning parameter:`, detuningParam);
       
       let detuningValue;
       if (detuningParam.behavior > 0) {
@@ -5111,13 +4791,9 @@ calculateMaxTailTime(voiceParams, duration) {
           detuningValue = (detuningParam.min + detuningParam.max) / 2;
       }
       
-      console.log(`🔍 Calculated detuning value: ${detuningValue}`);
       
       const detuneCents = Math.max(-50, Math.min(50, detuningValue));
       
-      console.log(`🔍 Final detune cents: ${detuneCents}`);
-      console.log(`🔍 Oscillator exists: ${!!oscillator}`);
-      console.log(`🔍 Oscillator.detune exists: ${!!(oscillator && oscillator.detune)}`);
       
       if (!oscillator || !oscillator.detune) {
           console.log(`❌ Oscillator or detune property not available`);
@@ -5126,7 +4802,6 @@ calculateMaxTailTime(voiceParams, duration) {
       
       try {
           oscillator.detune.setValueAtTime(detuneCents, startTime);
-          console.log(`✅ Detune set to ${detuneCents} cents at time ${startTime}`);
           
           if (duration > 0.5 && Math.abs(detuneCents) > 5) {
               const microDetune = detuneCents * 0.1;
@@ -5142,14 +4817,12 @@ calculateMaxTailTime(voiceParams, duration) {
                   detuneCents, 
                   startTime + duration
               );
-              console.log(`🎵 Added micro-detuning evolution: ±${microDetune.toFixed(1)} cents`);
           }
           
       } catch (error) {
           console.error(`❌ Error setting detune:`, error);
       }
       
-      console.log(`🎵 Voice ${this.voiceIndex + 1}: Detuning applied ${detuneCents.toFixed(1)} cents`);
   }
 
   calculateDelayTailTime(delayTime, feedback) {
@@ -5168,7 +4841,6 @@ calculateMaxTailTime(voiceParams, duration) {
       
       if (tailTime > WARN_TAIL_TIME) {
           const echoCount = Math.floor(numberOfEchoes);
-          console.log(`🔄 Long delay tail: ${(tailTime/1000).toFixed(1)}s (${echoCount} echoes)`);
       }
       
       return Math.min(tailTime * 1.5, MAX_TAIL_TIME);
@@ -5185,8 +4857,7 @@ calculateMaxTailTime(voiceParams, duration) {
       };
   }
 }
-
-// Voice Clock Management System
+// ===== VOICE CLOCK MANAGER SYSTEM =====
 class VoiceClockManager {
   constructor() {
     this.voiceClocks = [];
@@ -5194,7 +4865,6 @@ class VoiceClockManager {
     this.isInitialized = false;
     this.isManualStop = false;
 
-    console.log('VoiceClockManager initialized with Life Span integration');
   }
   
   initialize(masterClock) {
@@ -5207,7 +4877,6 @@ class VoiceClockManager {
     }
     
     this.isInitialized = true;
-    console.log('🎵 VoiceClockManager: All 16 voice clocks initialized with Life Span support');
   }
   
   startAllVoices() {
@@ -5230,7 +4899,6 @@ class VoiceClockManager {
       }
     }
     
-    console.log(`🎵 VoiceClockManager: Started ${startedCount} enabled voice clocks with Life Span timing`);
   }
   
   stopAllVoices() {
@@ -5240,7 +4908,6 @@ class VoiceClockManager {
       this.voiceClocks[i].stop();
     }
     
-    console.log('🔇 VoiceClockManager: All voice clocks stopped manually');
     
     setTimeout(() => {
       this.isManualStop = false;
@@ -5265,14 +4932,11 @@ updateAllVoices() {
     const hasCompleted = this.hasVoiceCompletedLifeSpan(i);
 
     if (hasCompleted) {
-      console.log(`⚠️ Voice ${i+1} marked as completed at ${formatMsToMMSS(this.masterClock.getElapsedTime())}`);
     }
     
     if (hasCompleted && !shouldPlay) {
       // Voice has ACTUALLY completed its Life Span - auto-stop it
       const elapsed = this.masterClock.getElapsedTime();
-      console.log(`🏁 Voice ${i + 1} completed its Life Span - auto-stopping at ${formatMsToMMSS(elapsed)}`);
-      console.log(`   Expected exit: ${formatMsToMMSS(voiceData[i].parameters['LIFE SPAN'].lifeSpan1.exit)}`);
       
       // Check if this was a preview voice
       const voiceControls = document.querySelector('.voice-controls');
@@ -5288,7 +4952,6 @@ updateAllVoices() {
       continue;
     } else if (!shouldPlay) {
       // Voice is waiting to start (Enter time > current time) - keep it active but don't count as playing
-      console.log(`⏳ Voice ${i + 1} waiting to enter Life Span`);
     }
     
     activeVoiceCount++;
@@ -5298,7 +4961,6 @@ updateAllVoices() {
   
   // Handle preview button resets
   previewVoicesCompleted.forEach(voiceIndex => {
-    console.log(`🎯 Processing completion for Voice ${voiceIndex + 1}`);
     this.resetPreviewButton(voiceIndex);
   });
   
@@ -5318,7 +4980,6 @@ for (let i = 0; i < 16; i++) {
   const shouldPlay = voiceClock.shouldPlayNote();
   const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
   
-  console.log(`  Voice ${i+1}: active=${voiceClock.isActive}, shouldPlay=${shouldPlay}`);
   
   // Check if this voice has a future enter time
   if (lifeSpan) {
@@ -5326,7 +4987,6 @@ for (let i = 0; i < 16; i++) {
       const span = lifeSpan[`lifeSpan${spanNum}`];
       if (span && span.exit > 0 && span.enter > elapsedMs) {
         voicesWaitingToEnter++;
-        console.log(`    ⏰ Voice ${i+1} will enter at ${formatMsToMMSS(span.enter)}`);
         break; // Count this voice only once
       }
     }
@@ -5335,27 +4995,22 @@ for (let i = 0; i < 16; i++) {
 
 
   // Only auto-reset if NO voices are waiting to enter
-  console.log(`🔍 Auto-reset check: ${voicesCompletedNaturally} completed, ${activeVoiceCount} active, ${voicesWaitingToEnter} waiting`);
 
   if (voicesCompletedNaturally > 0 && activeVoiceCount === 0 && voicesWaitingToEnter === 0 && voicesCompletedNaturally === totalEnabledVoices) {
-    console.log(`🔄 ALL ${totalEnabledVoices} enabled voices completed naturally - triggering auto-reset in 1 second`);
     setTimeout(() => {
       this.performAutoReset();
     }, 1000);
 
 
 } else if (voicesCompletedNaturally > 0 && activeVoiceCount > 0) {
-  console.log(`📊 ${voicesCompletedNaturally} voice(s) completed, but ${activeVoiceCount} still active (some have Repeat enabled) - continuing playback`);
 }
 
   
   if (activeVoiceCount > 10) {
-    console.log(`🔧 High performance: ${activeVoiceCount} voices active with Life Span timing`);
   }
 }
 
 resetPreviewButton(voiceIndex) {
-  console.log(`🔄 Auto-resetting PREVIEW button for Voice ${voiceIndex + 1}`);
   
   const voiceControls = document.querySelector('.voice-controls');
   if (!voiceControls) return;
@@ -5383,7 +5038,6 @@ resetPreviewButton(voiceIndex) {
       this.masterClock.stop();
     }
     
-    console.log(`✅ Voice ${voiceIndex + 1} preview completed (non-repeating)`);
   }
 }
 
@@ -5396,7 +5050,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
   
   // CRITICAL CHECK: If repeat is enabled, NEVER complete
   if (lifeSpanParam.repeat) {
-    console.log(`🔄 Voice ${voiceIndex + 1}: Repeat enabled - NEVER completing (elapsed: ${formatMsToMMSS(elapsedMs)})`);
     return false;
   }
   
@@ -5421,7 +5074,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
   
   const completed = hasAnyActiveSpan && hasPassedAllSpans;
   
-  console.log(`🏁 Voice ${voiceIndex + 1} completion check: hasSpans=${hasAnyActiveSpan}, passedAll=${hasPassedAllSpans}, completed=${completed}`);
   
   return completed;
 }
@@ -5431,7 +5083,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
 
   checkForAutoReset() {
     if (this.isManualStop) {
-      console.log('🔄 Auto-reset skipped - manual stop detected');
       return;
     }
 
@@ -5450,7 +5101,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
       }
     }
     
-    console.log(`🔍 Auto-reset check: ${enabledCount} enabled, ${activeCount} active, ${waitingCount} waiting`);
     
     // Simple auto-reset: if no voices are active (they completed naturally)
     if (enabledCount > 0 && activeCount === 0) {
@@ -5459,9 +5109,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
   }
 
   performAutoReset() {
-    console.log('🔄 AUTO-RESET: All voices completed naturally - resetting PLAY button');
-    console.log('  Elapsed time:', formatMsToMMSS(this.masterClock.getElapsedTime()));
-    console.trace('performAutoReset called from:');
 
     const playButton = document.querySelector('#file-controls button:nth-child(4)');
     if (playButton && playButton.textContent === 'STOP') {
@@ -5475,7 +5122,6 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
       
       this.stopAllVoices();
       
-      console.log('✅ Auto-reset complete - system ready for next composition');
     }
   }
   
@@ -5521,7 +5167,6 @@ class MelodicPhraseGenerator {
       'spiral': this.generateSpiral.bind(this)
     };
     
-    console.log(`🎼 MelodicPhraseGenerator created for Voice ${this.voiceIndex + 1}`);
   }
   
   generate(notePool, noteCount, behaviorSetting) {
@@ -5533,12 +5178,10 @@ class MelodicPhraseGenerator {
     // Select pattern based on behavior setting
     const pattern = this.selectPattern(behaviorSetting);
     
-    console.log(`🎨 Voice ${this.voiceIndex + 1}: Generating ${noteCount}-note phrase using ${pattern} pattern`);
     
     // Generate phrase
     const phrase = this.patterns[pattern](notePool, noteCount);
     
-    console.log(`   Generated: [${phrase.map(n => midiNoteNames[n]).join(', ')}]`);
     
     return phrase;
   }
@@ -5665,11 +5308,6 @@ class MelodicPhraseGenerator {
     return phrase;
   }
 }
-
-console.log('✅ MelodicPhraseGenerator class loaded');
-
-
-
 // ===== LOOKAHEAD SCHEDULER CLASS =====
 class LookaheadScheduler {
   constructor(voiceIndex, audioContext, masterClock) {
@@ -5696,7 +5334,6 @@ class LookaheadScheduler {
     this.currentPhrase = [];
     this.phraseIndex = 0;
     
-    console.log(`🎯 LookaheadScheduler created for Voice ${this.voiceIndex + 1}`);
   }
   
   start() {
@@ -5713,7 +5350,6 @@ class LookaheadScheduler {
     this.lastScheduledTime = now;
     this.nextNoteTime = now + 0.100; // 100ms in future
 
-    console.log(`   🕐 Scheduler timing initialized: now=${now.toFixed(3)}s, first note at ${this.nextNoteTime.toFixed(3)}s`);
 
     
     // Calculate initial lookahead
@@ -5724,9 +5360,6 @@ class LookaheadScheduler {
       this.phraseGenerator = new MelodicPhraseGenerator(this.voiceIndex);
     }
     
-    console.log(`▶ LookaheadScheduler started for Voice ${this.voiceIndex + 1}`);
-    console.log(`   Lookahead: ${(this.currentLookahead * 1000).toFixed(0)}ms`);
-    console.log(`   Update rate: ${this.updateRate}ms`);
     
     // Start update loop
     this.schedulerInterval = setInterval(() => {
@@ -5737,9 +5370,6 @@ class LookaheadScheduler {
   stop() {
   if (!this.isActive) return;
   
-  console.log(`🛑 STOP() CALLED for Voice ${this.voiceIndex + 1}`);
-  console.trace('Stop called from:'); // This will show us WHO called stop()
-  
   this.isActive = false;
   
   if (this.schedulerInterval) {
@@ -5747,7 +5377,6 @@ class LookaheadScheduler {
     this.schedulerInterval = null;
   }
   
-  console.log(`⏹ LookaheadScheduler stopped for Voice ${this.voiceIndex + 1}`);
 }
 
   
@@ -5764,7 +5393,6 @@ class LookaheadScheduler {
   
   // Log occasionally to see if we're here
   if (Math.random() < 0.05) { // 5% of calls
-    console.log(`🔄 Voice ${this.voiceIndex + 1} update() → calling scheduleAhead()`);
   }
   
   // Update lookahead if parameters changed
@@ -5780,7 +5408,6 @@ scheduleAhead() {
   
   // Log every call with timing
   if (Math.random() < 0.1) { // 10% of calls
-    console.log(`⏰ scheduleAhead: current=${currentTime.toFixed(1)}s, until=${scheduleUntil.toFixed(1)}s, next=${this.nextNoteTime.toFixed(1)}s`);
   }
   
   // Safety check: if we're scheduling in the past, reset
@@ -5806,7 +5433,6 @@ scheduleAhead() {
       this.currentPhrase = this.generatePhrase(notesToSchedule);
       this.phraseIndex = 0;
       
-      console.log(`🎨 Generated new ${notesToSchedule}-note phrase:`, this.currentPhrase.map(n => midiNoteNames[n]));
     }
     
     // Get next note from phrase
@@ -5824,14 +5450,12 @@ scheduleAhead() {
   }
   
   if (scheduledCount > 0) {
-    console.log(`✅ Voice ${this.voiceIndex + 1}: Scheduled ${scheduledCount} notes`);
   }
 }
 
 
 
   calculateLookahead() {
-    console.log('🚨 LOOKAHEAD CALC CALLED - Voice', this.voiceIndex + 1, 'TIMESTAMP:', Date.now());
     
     const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
     const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
@@ -5839,19 +5463,13 @@ scheduleAhead() {
     // Count available notes
     let noteCount = 1;
 
-    console.log(`🔍 calculateLookahead() reading melodicParam:`, melodicParam);
-    console.log(`🔍 selectedNotes exists:`, !!melodicParam.selectedNotes);
-    console.log(`🔍 selectedNotes length:`, melodicParam.selectedNotes?.length);
-    console.log(`🔍 selectedNotes array:`, melodicParam.selectedNotes);
 
     if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
       noteCount = melodicParam.selectedNotes.length;
-      console.log(`✅ Using piano selection: ${noteCount} notes`);
     } else {
       const minNote = Math.round(melodicParam.min);
       const maxNote = Math.round(melodicParam.max);
       noteCount = maxNote - minNote + 1;
-      console.log(`✅ Using range: ${minNote}-${maxNote} = ${noteCount} notes`);
     }
 
     
@@ -5871,13 +5489,6 @@ scheduleAhead() {
     
     // Cap at maximum
     const finalLookahead = Math.min(totalLookahead, this.maxLookahead);
-    
-    console.log(`📐 Voice ${this.voiceIndex + 1} Lookahead Calculation:`);
-    console.log(`   Note count: ${noteCount}`);
-    console.log(`   Avg rhythm: ${(avgRhythmDuration * 1000).toFixed(0)}ms`);
-    console.log(`   Behavior: ${behavior}% (${behaviorMultiplier.toFixed(2)}x multiplier)`);
-    console.log(`   Melodic lookahead: ${(melodicLookahead * 1000).toFixed(0)}ms`);
-    console.log(`   Final lookahead: ${(finalLookahead * 1000).toFixed(0)}ms`);
     
     return finalLookahead;
   }
@@ -5907,7 +5518,6 @@ scheduleAhead() {
     const newLookahead = this.calculateLookahead();
     
     if (Math.abs(newLookahead - this.currentLookahead) > 0.050) { // Changed by >50ms
-      console.log(`🔄 Voice ${this.voiceIndex + 1}: Lookahead updated from ${(this.currentLookahead * 1000).toFixed(0)}ms to ${(newLookahead * 1000).toFixed(0)}ms`);
       this.currentLookahead = newLookahead;
     }
   }
@@ -5976,7 +5586,6 @@ scheduleAhead() {
   
   
   scheduleNoteAtTime(midiNote, scheduleTime) {
-    console.log(`🎯 scheduleNoteAtTime() called: note=${midiNoteNames[midiNote]}, time=${scheduleTime.toFixed(3)}`);
 
     // Get voice clock for access to audio methods
     const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
@@ -6017,12 +5626,8 @@ scheduleAhead() {
     voiceClock.triggerNote(noteInfoArray, noteDuration * 1000, scheduleTime); // Pass schedule time!
 
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1}: Scheduled ${noteInfoArray.map(n => n.noteName).join('+')} at ${scheduleTime.toFixed(3)}s`);
   }
 }
-
-console.log('✅ LookaheadScheduler class loaded');
-
 
 function createParameterRollup(param, voiceIndex) {
   if (Object.keys(parameterRollupState).length === 0) {
@@ -6120,14 +5725,12 @@ function toggleParameterRollup(parameterName) {
     header.classList.remove('collapsed');
     content.style.display = 'block';
     arrow.textContent = '▼';
-    console.log(`📖 Expanded: ${parameterName}`);
   } else {
     rollup.classList.remove('expanded');
     rollup.classList.add('collapsed');
     header.classList.add('collapsed');
     content.style.display = 'none';
     arrow.textContent = '▶';
-    console.log(`📕 Collapsed: ${parameterName}`);
   }
 }
 
@@ -6137,7 +5740,6 @@ function expandAllParameters() {
       toggleParameterRollup(param.name);
     }
   });
-  console.log('📖 All parameters expanded');
 }
 
 function collapseAllParameters() {
@@ -6146,7 +5748,6 @@ function collapseAllParameters() {
       toggleParameterRollup(param.name);
     }
   });
-  console.log('📕 All parameters collapsed');
 }
 
 function createNestedGroupRollup(rollupKey, rollupInfo, parameters, voiceIndex) {
@@ -6193,14 +5794,12 @@ function expandInstrumentGroup() {
   if (!rollupState['instrument']) toggleRollup('instrument');
   if (!parameterRollupState['INSTRUMENT']) toggleParameterRollup('INSTRUMENT');
   if (!parameterRollupState['MELODIC RANGE']) toggleParameterRollup('MELODIC RANGE');
-  console.log('🎹 Instrument group expanded');
 }
 
 function expandMixingGroup() {
   if (!rollupState['mixing']) toggleRollup('mixing');
   if (!parameterRollupState['VOLUME']) toggleParameterRollup('VOLUME');
   if (!parameterRollupState['STEREO BALANCE']) toggleParameterRollup('STEREO BALANCE');
-  console.log('🎚️ Mixing group expanded');
 }
 
 function collapseEverything() {
@@ -6208,82 +5807,14 @@ function collapseEverything() {
   Object.keys(rollupState).forEach(key => {
     if (rollupState[key]) toggleRollup(key);
   });
-  console.log('📕 Everything collapsed - clean slate!');
 }
 
-function startTempoTest(expectedTempo) {
-  console.log(`🎵 STARTING TEMPO TEST - Expected: ${expectedTempo} BPM`);
-  
-  tempoTestData = {
-    noteTimestamps: [],
-    isTestingTempo: true,
-    testStartTime: Date.now(),
-    expectedTempo: expectedTempo
-  };
-  
-  console.log('📊 Tempo test active - will measure next 10 notes');
-}
-
-function recordNoteForTempoTest() {
-  if (!tempoTestData.isTestingTempo) return;
-  
-  const now = Date.now();
-  tempoTestData.noteTimestamps.push(now);
-  
-  console.log(`🎵 Note ${tempoTestData.noteTimestamps.length} at ${now}ms`);
-  
-  if (tempoTestData.noteTimestamps.length >= 10) {
-    calculateActualTempo();
-  }
-}
-
-function calculateActualTempo() {
-  const timestamps = tempoTestData.noteTimestamps;
-  const expectedTempo = tempoTestData.expectedTempo;
-  
-  if (timestamps.length < 2) {
-    console.log('❌ Not enough notes recorded for tempo analysis');
-    return;
-  }
-  
-  const intervals = [];
-  for (let i = 1; i < timestamps.length; i++) {
-    intervals.push(timestamps[i] - timestamps[i - 1]);
-  }
-  
-  const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
-  const actualTempo = 60000 / avgInterval;
-  
-  console.log('🎵 ===== TEMPO TEST RESULTS =====');
-  console.log(`Expected Tempo: ${expectedTempo} BPM`);
-  console.log(`Actual Tempo: ${actualTempo.toFixed(1)} BPM`);
-  console.log(`Difference: ${(actualTempo - expectedTempo).toFixed(1)} BPM`);
-  console.log(`Accuracy: ${((actualTempo / expectedTempo) * 100).toFixed(1)}%`);
-  console.log(`Average interval: ${avgInterval.toFixed(1)}ms`);
-  console.log(`All intervals:`, intervals.map(i => i.toFixed(0) + 'ms'));
-  
-  tempoTestData.isTestingTempo = false;
-  
-  return {
-    expected: expectedTempo,
-    actual: actualTempo,
-    difference: actualTempo - expectedTempo,
-    accuracy: (actualTempo / expectedTempo) * 100
-  };
-}
-
-// Connect UI sliders to voice parameters - UPDATED FOR LIFE SPAN
 function connectAllSliders() {
-  console.log('=== CONNECTING ALL PARAMETER CONTROLS (WITH LIFE SPAN) ===');
-  console.log('Current voice:', currentVoice);
-  console.log('VoiceData exists:', !!voiceData);
-  console.log('Parameter section exists:', !!document.getElementById('parameter-section'));
   
   const parameterSection = document.getElementById('parameter-section');
   
   // 1. Connect dual-range sliders
   const dualSliders = parameterSection.querySelectorAll('.noUi-target');
-  console.log(`Found ${dualSliders.length} dual-range sliders to connect`);
   
   dualSliders.forEach((slider, index) => {
     if (slider.noUiSlider) {
@@ -6292,7 +5823,6 @@ function connectAllSliders() {
       const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
       const paramName = rollupTitle ? rollupTitle.textContent.trim() : `Unknown ${index}`;
 
-      console.log(`Connecting dual-slider: ${paramName}`);
       
       slider.noUiSlider.off('update');
       
@@ -6312,7 +5842,6 @@ function connectAllSliders() {
               pianoContainer.pianoInstance.syncWithSliderRange(minMidi, maxMidi);
             }
             
-            console.log(`✅ ${paramName}: ${values[0]}-${values[1]} → MIDI ${minMidi}-${maxMidi}`);
           }
         } else {
           const min = parseFloat(values[0]);
@@ -6332,12 +5861,10 @@ function connectAllSliders() {
                 const voiceClock = voiceClockManager.getVoiceClock(currentVoice);
                 if (voiceClock && voiceClock.isActive) {
                   voiceClock.updateTempo();
-                  console.log(`⚡ Voice ${currentVoice + 1} tempo updated immediately to ${voiceClock.currentTempo} BPM`);
                 }
               }
             }
 
-            console.log(`✅ ${paramName}: ${min}-${max}`);
           }
 
         }
@@ -6347,7 +5874,6 @@ function connectAllSliders() {
   
   // 2. Connect behavior sliders
   const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
-  console.log(`Found ${behaviorSliders.length} behavior sliders to connect`);
 
   behaviorSliders.forEach((slider) => {
     const row = slider.closest('.row-container') || 
@@ -6356,7 +5882,6 @@ function connectAllSliders() {
     const label = row ? (row.querySelector('.parameter-rollup-title') || row.querySelector('.label-container')) : null;
     const paramName = label ? label.textContent.trim() : 'Unknown Behavior';
     
-    console.log(`Connecting behavior slider: ${paramName}`);
     
     slider.oninput = null;
     slider.onchange = null;
@@ -6379,7 +5904,6 @@ function connectAllSliders() {
           tooltip.style.left = `${offset}px`;
         }
         
-        console.log(`✅ ${paramName} behavior: ${value}%`);
       }
     };
     
@@ -6387,7 +5911,6 @@ function connectAllSliders() {
       if (slider.offsetWidth > 0 && slider.offsetHeight > 0) {
         const event = { target: slider };
         slider.oninput(event);
-        console.log(`📍 Initialized tooltip for ${paramName} after layout ready`);
       } else {
         setTimeout(initializeTooltipWhenReady, 100);
       }
@@ -6398,7 +5921,6 @@ function connectAllSliders() {
 
   // 3. Connect dropdown selectors
   const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
-  console.log(`Found ${dropdowns.length} dropdowns to connect`);
 
   dropdowns.forEach((dropdown) => {
     const row = dropdown.closest('.row-container-content');
@@ -6409,7 +5931,6 @@ function connectAllSliders() {
     const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
     const isMinMax = dropdownLabel === 'Minimum' || dropdownLabel === 'Maximum';
     
-    console.log(`Connecting dropdown: ${paramName} (${dropdownLabel || 'single'})`);
     
     dropdown.onchange = null;
     
@@ -6422,19 +5943,14 @@ function connectAllSliders() {
         const soundName = gmSounds[value];
         const waveType = getOscillatorTypeForGMSound(soundName);
         
-        console.log(`✅ INSTRUMENT changed to index ${value}: ${soundName} → ${waveType} wave`);
-        console.log(`   Stored value:`, voiceData[currentVoice].parameters[paramName]);
-        console.log(`   Type check:`, typeof voiceData[currentVoice].parameters[paramName]);
         
       } else if (isMinMax && voiceData[currentVoice].parameters[paramName]) {
         const paramData = voiceData[currentVoice].parameters[paramName];
         
         if (dropdownLabel === 'Minimum') {
           paramData.min = value;
-          console.log(`✅ ${paramName} minimum: ${value}`);
         } else if (dropdownLabel === 'Maximum') {
           paramData.max = value;
-          console.log(`✅ ${paramName} maximum: ${value}`);
         }
         
         if (paramData.min > paramData.max && (paramName === 'RHYTHMS' || paramName === 'RESTS')) {
@@ -6459,13 +5975,11 @@ function connectAllSliders() {
     
     if (paramName === 'INSTRUMENT') {
       dropdown.value = voiceData[currentVoice].parameters[paramName] || 0;
-      console.log(`📍 INSTRUMENT dropdown initialized to: ${dropdown.value} (${gmSounds[dropdown.value]})`);
     }
   });
 
   // 4. Connect multi-dual sliders
   const multiDualContainers = parameterSection.querySelectorAll('.dual-slider');
-  console.log(`Found ${multiDualContainers.length} multi-dual slider containers`);
 
   multiDualContainers.forEach((container) => {
     const rollup = container.closest('.parameter-rollup');
@@ -6474,10 +5988,8 @@ function connectAllSliders() {
     
     if (container.querySelectorAll('.slider-wrapper').length < 2) return;
     
-    console.log(`🔧 Connecting multi-dual sliders for: ${paramName}`);
 
     const allSliders = container.querySelectorAll('.noUi-target');
-    console.log(`  Found ${allSliders.length} sliders in ${paramName} container`);
     
     allSliders.forEach((slider, sliderIndex) => {
       if (slider.noUiSlider) {
@@ -6485,7 +5997,6 @@ function connectAllSliders() {
         const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label') : null;
         const labelText = label ? label.textContent.trim().toLowerCase() : '';
         
-        console.log(`  🔗 Connecting ${paramName} slider ${sliderIndex}: "${labelText}"`);
         
         slider.noUiSlider.off('update');
         
@@ -6518,25 +6029,21 @@ function connectAllSliders() {
             if (!voiceParam.speed) voiceParam.speed = { min: 0, max: 0 };
             voiceParam.speed.min = min;
             voiceParam.speed.max = max;
-            console.log(`✅ ${paramName} speed/time: ${min}-${max}`);
             
           } else if (sliderIndex === 1) {
             if (!voiceParam.depth) voiceParam.depth = { min: 0, max: 0 };
             voiceParam.depth.min = min;
             voiceParam.depth.max = max;
-            console.log(`✅ ${paramName} depth/mix: ${min}-${max}%`);
             
           } else if (sliderIndex === 2) {
             if (!voiceParam.feedback) voiceParam.feedback = { min: 0, max: 0 };
             voiceParam.feedback.min = min;
             voiceParam.feedback.max = max;
-            console.log(`✅ ${paramName} feedback: ${min}-${max}%`);
             
           } else {
             console.warn(`❌ Unknown slider index ${sliderIndex} for ${paramName}`);
           }
           
-          console.log(`🔍 Updated ${paramName} parameter:`, voiceParam);
         });
       }
     });
@@ -6551,12 +6058,9 @@ function connectAllSliders() {
     const paramName = label ? label.textContent.trim() : 'Unknown Piano';
     
     if (paramName === 'MELODIC RANGE') {
-      console.log('🎹 Piano connection - existing instance?', !!container.pianoInstance);
       
       if (container.pianoInstance) {
-        console.log('🎹 Piano already exists - SKIPPING recreation');
       } else {
-        console.log('🎹 Creating NEW piano instance');
         container.pianoInstance = new InteractivePiano(container, currentVoice);
       }
     }
@@ -6569,10 +6073,8 @@ lifeSpanContainers.forEach(settings => {
   const container = settings.closest('.dual-slider');
   if (container) actualContainers.push(container);
 });
-console.log(`Found ${actualContainers.length} Life Span controls to connect`);
 
 actualContainers.forEach((container) => {
-  console.log('🕐 Connecting Life Span control...');
   
   // Find the behavior container for this Life Span parameter
   const parameterRollup = container.closest('.parameter-rollup');
@@ -6641,7 +6143,6 @@ actualContainers.forEach((container) => {
         e.target.style.borderColor = '#28a745';
         e.target.style.backgroundColor = '#f8fff8';
         
-        console.log(`✅ Life Span max time: ${value} (${parsedMs}ms = ${(parsedMs/1000).toFixed(1)} seconds)`);
         
         // IMMEDIATELY rebuild all sliders with new range
         rebuildLifeSpanSliders(container, currentVoice);
@@ -6693,7 +6194,6 @@ if (beatUnitSelect) {
   beatUnitSelect.onchange = function(e) {
     const value = parseInt(e.target.value);
     voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = value;
-    console.log(`✅ Life Span beat unit: ${rhythmOptions[value]}`);
     
     // Rebuild sliders to update tooltips with new beat unit
     rebuildLifeSpanSliders(container, currentVoice);
@@ -6706,20 +6206,17 @@ if (beatUnitSelect) {
   if (repeatCheckbox) {
     repeatCheckbox.onchange = function(e) {
       voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
-      console.log(`✅ Life Span repeat: ${e.target.checked}`);
     };
   }
   
   // Connect existing Life Span sliders (they should already exist now)
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
-  console.log(`Found ${spanSliders.length} Life Span sliders to connect`);
   
   spanSliders.forEach((sliderContainer) => {
     const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
     const slider = sliderContainer.querySelector('.noUi-target');
     
     if (slider && slider.noUiSlider) {
-      console.log(`🔧 Connecting Life Span ${spanNumber} slider events`);
       
       slider.noUiSlider.off('update');
       slider.noUiSlider.on('update', function(values) {
@@ -6733,20 +6230,13 @@ if (beatUnitSelect) {
         voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
         voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
         
-        console.log(`✅ Life Span ${spanNumber}: ${formatMsToMMSS(enterMs)} - ${exitMs === 999999999 ? '∞' : formatMsToMMSS(exitMs)}`);
       });
     } else {
       console.warn(`❌ Life Span ${spanNumber} slider not found or not initialized`);
     }
   });
-}); //This was the missing closing bracket for the lifeSpanContainers.forEach
-  
-  console.log('🎉 ALL PARAMETER CONTROLS CONNECTED! System fully operational:');
-  console.log(`   ✅ ${dualSliders.length} dual-range sliders`);
-  console.log(`   ✅ ${behaviorSliders.length} behavior sliders`);
-  console.log(`   ✅ ${dropdowns.length} dropdown controls`);
-  console.log(`   ✅ Multi-dual sliders (DELAY, etc.)`);
-  console.log(`   ✅ ${lifeSpanContainers.length} Life Span controls`);
+}); 
+
 } 
 
 function updateTempoImmediately(voiceIndex) {
@@ -6755,16 +6245,13 @@ function updateTempoImmediately(voiceIndex) {
   const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
   if (voiceClock && voiceClock.isActive) {
     voiceClock.updateTempo();
-    console.log(`⚡ Voice ${voiceIndex + 1} tempo updated immediately to ${voiceClock.currentTempo} BPM`);
     
     // NEW: Update Life Span sliders for new beat duration
     updateLifeSpanSlidersForTempoChange(voiceIndex);
   }
 }
 
-
 function createLifeSpanSlider(container, spanNumber) {
-  console.log(`🕐 Creating Life Span ${spanNumber} slider`);
   
   const lifeSpanData = voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`];
   const maxTimeMs = voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMinutes * 60 * 1000;
@@ -6788,11 +6275,9 @@ function createLifeSpanSlider(container, spanNumber) {
     format: formatter
   });
   
-  console.log(`✅ Life Span ${spanNumber} slider created with range 0-${formatMsToMMSS(maxTimeMs)}`);
 }
 
 function updateLifeSpanTooltips(container) {
-  console.log('🕐 Updating Life Span tooltips for new beat unit');
   
   const spanSliders = container.querySelectorAll('.life-span-dual-slider .noUi-target');
   const beatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
@@ -6806,7 +6291,6 @@ function updateLifeSpanTooltips(container) {
         format: newFormatter
       });
       
-      console.log('✅ Updated tooltip formatter for beat unit change');
     }
   });
 }
@@ -6870,45 +6354,6 @@ function openUserGuide() {
     userGuideWindow.focus();
   } else {
     alert('Please allow popups to view the User Guide, or navigate to user-guide.html directly.');
-  }
-}
-
-function testMasterTempoTracking() {
-  console.log('=== TESTING MASTER TEMPO TRACKING ===');
-  console.log(`Master Tempo: ${masterTempo} BPM`);
-  console.log(`Current Voice: ${currentVoice + 1}`);
-  
-  const voiceTempo = getVoiceTempo(currentVoice);
-  console.log(`Voice ${currentVoice + 1} tempo: ${voiceTempo} BPM`);
-  
-  const tempoParam = voiceData[currentVoice].parameters['TEMPO (BPM)'];
-  console.log('Voice tempo parameter:', tempoParam);
-  
-  console.log('\n--- Testing different master tempos ---');
-  const originalMaster = masterTempo;
-  
-  [80, 120, 160, 200].forEach(testTempo => {
-    masterTempo = testTempo;
-    const result = getVoiceTempo(currentVoice);
-    console.log(`Master: ${testTempo} → Voice: ${result} BPM`);
-  });
-  
-  masterTempo = originalMaster;
-}
-
-function debugAudioSources() {
-  console.log('=== AUDIO SOURCES DIAGNOSTIC ===');
-  console.log('audioManager.isPlaying:', audioManager?.isPlaying);
-  console.log('isRhythmicPlaybackActive:', isRhythmicPlaybackActive);
-  console.log('currentlyPlayingNotes.length:', currentlyPlayingNotes?.length);
-  
-  if (audioManager && audioManager.testOscillator) {
-    console.log('❌ OLD CONTINUOUS OSCILLATOR STILL RUNNING!');
-    console.log('This is the sound you hear - it ignores tempo changes');
-  }
-  
-  if (isRhythmicPlaybackActive) {
-    console.log('✅ Rhythmic system is active (this responds to tempo)');
   }
 }
 
@@ -6992,7 +6437,6 @@ function createDelayTimeFormatter(voiceIndex) {
 }
 
 function resetAdvancedParameterDefaults() {
-    console.log('=== RESETTING ADVANCED PARAMETER DEFAULTS (ENHANCED) ===');
     
     for (let i = 0; i < 16; i++) {
         if (voiceData[i].parameters['DETUNING']) {
@@ -7009,12 +6453,9 @@ function resetAdvancedParameterDefaults() {
             delete voiceData[i].parameters['PORTAMENTO GLIDE TIME'].currentValue;
         }
     }
-    
-    console.log('🔄 Re-rendering UI...');
     renderParameters();
     
     setTimeout(() => {
-        console.log('🔗 Reconnecting sliders...');
         connectAllSliders();
         
         setTimeout(() => {
@@ -7022,13 +6463,9 @@ function resetAdvancedParameterDefaults() {
         }, 100);
     }, 200);
     
-    console.log('✅ Advanced parameters reset to proper defaults');
-    console.log('- DETUNING: 0 to 0 cents (perfectly in tune)');
-    console.log('- PORTAMENTO: 0 to 0 (no gliding)');
 }
 
 function forceUpdateAdvancedParameterSliders() {
-    console.log('🎯 Force updating advanced parameter sliders...');
     
     const parameterSection = document.getElementById('parameter-section');
     const allSliders = parameterSection.querySelectorAll('.noUi-target');
@@ -7042,7 +6479,6 @@ function forceUpdateAdvancedParameterSliders() {
                 
                 if (paramName === 'DETUNING' || paramName === 'PORTAMENTO GLIDE TIME') {
                     slider.noUiSlider.set([0, 0]);
-                    console.log(`✅ Forced ${paramName} slider to [0, 0]`);
                 }
             } catch (e) {
                 // Slider might not be ready, skip it
@@ -7062,7 +6498,6 @@ function forceUpdateAdvancedParameterSliders() {
             if (tooltip) {
                 tooltip.textContent = '0%';
             }
-            console.log(`✅ Forced ${paramName} behavior to 0%`);
         }
     });
 }
@@ -7074,13 +6509,11 @@ class PresetManager {
         this.presetLibrary = new Map();
         this.isModified = false;
         
-        console.log('🎼 PresetManager initialized');
 
         this.loadFromLocalStorage();
     }
     
     captureCurrentState(presetName, description = "") {
-        console.log(`📸 Capturing current state as "${presetName}"`);
         
         const preset = {
             name: presetName,
@@ -7106,16 +6539,13 @@ class PresetManager {
             masterTempo: masterTempo || 120
         };
         
-        console.log(`✅ Captured preset with ${preset.voices.filter(v => v.enabled).length} enabled voices`);
         return preset;
     }
     
     async applyPreset(preset) {
-        console.log(`🎼 Loading preset: "${preset.name}"`);
         
         try {
             if (masterClock && masterClock.isActive()) {
-                console.log('⏹️ Stopping current playback...');
                 toggleMasterPlayback();
             }
             
@@ -7125,7 +6555,6 @@ class PresetManager {
                     voiceData[i].locked = preset.voices[i].locked;
                     voiceData[i].parameters = this.deepClone(preset.voices[i].parameters);
                     
-                    console.log(`   Voice ${i + 1}: ${preset.voices[i].enabled ? 'enabled' : 'disabled'}`);
                 }
             }
             
@@ -7133,17 +6562,13 @@ class PresetManager {
                 currentVoice = preset.globalSettings.currentVoice || 0;
                 masterTempo = preset.globalSettings.masterTempo || 120;
                 
-                console.log(`   Current voice set to: ${currentVoice + 1}`);
-                console.log(`   Master tempo set to: ${masterTempo} BPM`);
+
             }
             
-            console.log('🔄 Updating UI...');
             createVoiceTabs();
             renderParameters();
-            
             setTimeout(() => {
                 connectAllSliders();
-                console.log(`✅ Preset "${preset.name}" loaded successfully`);
             }, 200);
             
             this.currentPreset = preset;
@@ -7160,9 +6585,6 @@ class PresetManager {
     savePreset(preset) {
         this.presetLibrary.set(preset.name, preset);
         this.saveToLocalStorage();
-        
-        console.log(`💾 Preset "${preset.name}" saved to library and localStorage`);
-        console.log(`📚 Total presets in library: ${this.presetLibrary.size}`);
         
         return true;
     }
@@ -7184,7 +6606,6 @@ class PresetManager {
             const presetsArray = Array.from(this.presetLibrary.values());
             const jsonData = JSON.stringify(presetsArray, null, 2);
             localStorage.setItem('tunersComposerPresets', jsonData);
-            console.log(`💾 Saved ${presetsArray.length} presets to localStorage`);
             return true;
         } catch (error) {
             console.error('❌ Error saving to localStorage:', error);
@@ -7204,10 +6625,8 @@ class PresetManager {
                     this.presetLibrary.set(preset.name, preset);
                 });
                 
-                console.log(`📚 Loaded ${presetsArray.length} presets from localStorage`);
                 return true;
             } else {
-                console.log('📚 No saved presets found in localStorage');
                 return false;
             }
         } catch (error) {
@@ -7232,7 +6651,6 @@ class PresetManager {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            console.log(`📤 Exported ${presetsArray.length} presets to file`);
             alert(`📤 Exported ${presetsArray.length} presets to download folder!`);
             return true;
         } catch (error) {
@@ -7249,7 +6667,6 @@ Are you sure you want to continue?`);
         if (confirmClear) {
             this.presetLibrary.clear();
             localStorage.removeItem('tunersComposerPresets');
-            console.log('🗑️ All presets cleared');
             alert('🗑️ All presets have been deleted.');
             return true;
         }
@@ -7269,7 +6686,6 @@ class PerformanceMonitor {
     this.samples = [];
     this.maxSamples = 100;
     
-    console.log('📊 PerformanceMonitor initialized');
   }
   
   update() {
@@ -7313,7 +6729,6 @@ class PerformanceMonitor {
     };
   }
 }
-// REPLACE the AudioHealthMonitor class with this improved version:
 
 class AudioHealthMonitor {
   constructor(audioContext) {
@@ -7323,20 +6738,17 @@ class AudioHealthMonitor {
     this.isHealthy = true;
     this.isMonitoringActive = false; // Only monitor during playback
     
-    console.log('🔊 AudioHealthMonitor initialized');
   }
   
   startMonitoring() {
     this.isMonitoringActive = true;
     this.lastCheckTime = this.audioContext.currentTime;
     this.dropoutCount = 0;
-    console.log('🔊 Audio health monitoring started');
   }
   
   stopMonitoring() {
     this.isMonitoringActive = false;
     this.lastCheckTime = 0;
-    console.log('🔊 Audio health monitoring stopped');
   }
   
   checkHealth() {
@@ -7385,7 +6797,6 @@ class AudioHealthMonitor {
   reset() {
     this.dropoutCount = 0;
     this.isHealthy = true;
-    console.log('🔊 AudioHealthMonitor reset');
   }
 }
 
@@ -7396,7 +6807,6 @@ class MemoryMonitor {
     this.maxSamples = 100;
     this.baselineMemory = 0;
     
-    console.log('💾 MemoryMonitor initialized');
   }
   
   sample() {
@@ -7411,7 +6821,6 @@ class MemoryMonitor {
       // Set baseline on first sample
       if (this.baselineMemory === 0) {
         this.baselineMemory = usage.used;
-        console.log(`💾 Memory baseline set: ${(this.baselineMemory / 1048576).toFixed(1)} MB`);
       }
       
       this.samples.push(usage);
@@ -7459,7 +6868,7 @@ class MemoryMonitor {
   }
 }
 
-// Oscillator Pool Class - INSERT AFTER MemoryMonitor class
+// Oscillator Pool Class - (must folllow MemoryMonitor class)
 class OscillatorPool {
   constructor(audioContext, poolSize = 50) {
     this.audioContext = audioContext;
@@ -7474,7 +6883,7 @@ class OscillatorPool {
       this.availableNodes.push(this.createNodeSet());
     }
     
-    console.log(`🎛️ Oscillator pool initialized: ${poolSize} node sets ready`);
+
   }
   
   createNodeSet() {
@@ -7551,28 +6960,20 @@ class OscillatorPool {
   
   cleanup() {
     // Force cleanup of all nodes
-    console.log('🧹 Cleaning up oscillator pool...');
     
     this.activeNodes.forEach(nodeSet => {
       this.release(nodeSet);
     });
     
     this.activeNodes.clear();
-    
-    console.log(`✅ Pool cleanup complete: ${this.availableNodes.length} nodes available`);
-  }
+   }
 }
-
-
-
-
 
 // Global preset manager instance
 let presetManager = null;
 
 // File Functions
 async function saveCompositionToFile() {
-    console.log('💾 Opening native Save dialog...');
     
     try {
         if ('showSaveFilePicker' in window) {
@@ -7593,7 +6994,6 @@ async function saveCompositionToFile() {
             await writable.write(JSON.stringify(preset, null, 2));
             await writable.close();
             
-            console.log('✅ File saved successfully via File System Access API');
             
         } else {
             fallbackSaveMethod();
@@ -7610,7 +7010,6 @@ async function saveCompositionToFile() {
 }
 
 function fallbackSaveMethod() {
-    console.log('📁 Using fallback save method...');
     
     const proceed = confirm(`💾 Your browser will download the composition file.
 
@@ -7643,7 +7042,6 @@ Continue with save?`);
 }
 
 function openCompositionFromFile() {
-    console.log('📂 Opening native Open dialog...');
     
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -7653,11 +7051,9 @@ function openCompositionFromFile() {
     fileInput.onchange = async function(event) {
         const file = event.target.files[0];
         if (!file) {
-            console.log('❌ No file selected');
             return;
         }
         
-        console.log(`📖 Loading file: ${file.name}`);
         
         try {
             const fileContent = await readFileAsText(file);
@@ -7669,7 +7065,6 @@ function openCompositionFromFile() {
             
             await presetManager.applyPreset(preset);
             
-            console.log(`✅ Successfully loaded: ${preset.name || file.name}`);
             alert(`✅ Successfully loaded: ${preset.name || file.name}`);
             
         } catch (error) {
@@ -7694,11 +7089,9 @@ function readFileAsText(file) {
 }
 
 async function createNewComposition() {
-    console.log('📄 Creating new composition...');
     
     try {
         if (masterClock && masterClock.isActive()) {
-            console.log('⏹️ Stopping current playback...');
             toggleMasterPlayback();
         }
         
@@ -7712,7 +7105,6 @@ Any unsaved work will be lost.
 Continue?`);
             
             if (!proceed) {
-                console.log('❌ New composition cancelled by user');
                 return;
             }
         }
@@ -7733,7 +7125,6 @@ Continue?`);
             newButton.style.color = 'white';
         }
         
-        console.log('🔄 Resetting all systems to defaults...');
         
         currentVoice = 0;
         masterTempo = 120;
@@ -7749,7 +7140,6 @@ Continue?`);
             presetManager.isModified = false;
         }
         
-        console.log('🎨 Updating UI...');
         createVoiceTabs();
         renderParameters();
         
@@ -7779,7 +7169,6 @@ Continue?`);
             }, 2000);
         }
         
-        console.log('✅ New composition created successfully with Life Span defaults!');
         return true;
         
     } catch (error) {
@@ -7804,7 +7193,6 @@ Continue?`);
 }
 
 function resetNewButton() {
-    console.log('🚨 Emergency: Resetting NEW button...');
     
     const newButton = document.querySelector('#file-controls button:nth-child(1)');
     if (newButton) {
@@ -7813,7 +7201,6 @@ function resetNewButton() {
         newButton.style.backgroundColor = '';
         newButton.style.color = '';
         
-        console.log('✅ NEW button reset to normal state');
     } else {
         console.log('❌ NEW button not found');
     }
@@ -7893,119 +7280,7 @@ function logPerformanceSummary() {
 window.showPerformanceStats = logPerformanceSummary;
 
 
-
 // ADD this pool testing function before DOMContentLoaded
-
-function testOscillatorPool() {
-  if (!audioManager || !audioManager.oscillatorPool) {
-    console.log('❌ Oscillator pool not available');
-    return;
-  }
-  
-  console.log('🧪 TESTING OSCILLATOR POOL PERFORMANCE');
-  console.log('═══════════════════════════════════════');
-  
-  const initialStats = audioManager.oscillatorPool.getStats();
-  console.log('📊 Initial Pool State:', initialStats);
-  
-  // Acquire 5 node sets
-  const acquiredNodes = [];
-  for (let i = 0; i < 5; i++) {
-    const nodeSet = audioManager.oscillatorPool.acquire();
-    acquiredNodes.push(nodeSet);
-    console.log(`✅ Acquired node set ${nodeSet.id}`);
-  }
-  
-  const midStats = audioManager.oscillatorPool.getStats();
-  console.log('📊 After Acquiring 5 Nodes:', midStats);
-  
-  // Release them back
-  acquiredNodes.forEach(nodeSet => {
-    audioManager.oscillatorPool.release(nodeSet);
-    console.log(`🔄 Released node set ${nodeSet.id}`);
-  });
-  
-  const finalStats = audioManager.oscillatorPool.getStats();
-  console.log('📊 Final Pool State:', finalStats);
-  
-  console.log('═══════════════════════════════════════');
-  console.log('✅ Pool test complete - efficiency should be 100%');
-}
-
-// ADD this after the testOscillatorPool function
-
-function stressTestMemory() {
-  console.log('🧪 STARTING MEMORY STRESS TEST');
-  console.log('═══════════════════════════════════════');
-  
-  if (!audioManager || !audioManager.memoryMonitor) {
-    console.log('❌ Memory monitor not available');
-    return;
-  }
-  
-  const initialSample = audioManager.memoryMonitor.sample();
-  console.log(`📊 Initial Memory: ${(initialSample.used / 1048576).toFixed(1)} MB`);
-  
-  let testCount = 0;
-  const maxTests = 5; // Reduced for quicker testing
-  
-  const runStressTest = () => {
-    testCount++;
-    console.log(`🔄 Stress Test ${testCount}/${maxTests}`);
-    
-    // Simulate heavy load by acquiring and releasing many nodes
-    const nodes = [];
-    for (let i = 0; i < 10; i++) { // Reduced from 20 to 10
-      if (audioManager.oscillatorPool) {
-        nodes.push(audioManager.oscillatorPool.acquire());
-      }
-    }
-    
-    // Release them after a short delay
-    setTimeout(() => {
-      nodes.forEach(node => {
-        if (audioManager.oscillatorPool) {
-          audioManager.oscillatorPool.release(node);
-        }
-      });
-      
-      // Sample memory
-      const sample = audioManager.memoryMonitor.sample();
-      const growthMB = (sample.used - initialSample.used) / 1048576;
-      console.log(`📊 Memory after test ${testCount}: ${(sample.used / 1048576).toFixed(1)} MB (+${growthMB.toFixed(1)} MB)`);
-      
-      // Check for leaks
-      if (audioManager.memoryMonitor.detectLeak()) {
-        console.warn('⚠️ Memory leak detected during stress test!');
-      }
-      
-      if (testCount < maxTests) {
-        setTimeout(runStressTest, 500); // Reduced from 1000ms to 500ms
-      } else {
-        console.log('✅ Memory stress test complete');
-        
-        const finalSample = audioManager.memoryMonitor.sample();
-        const totalGrowth = (finalSample.used - initialSample.used) / 1048576;
-        console.log(`📊 Total memory growth: ${totalGrowth.toFixed(1)} MB`);
-        
-        if (totalGrowth < 2) {
-          console.log('✅ Memory usage stable - no significant leaks detected');
-        } else {
-          console.warn(`⚠️ Memory growth of ${totalGrowth.toFixed(1)} MB may indicate leaks`);
-        }
-      }
-    }, 100);
-  };
-  
-  runStressTest();
-}
-
-// Make it available globally
-window.stressTestMemory = stressTestMemory;
-
-
-// Make it available globally
-window.testPool = testOscillatorPool;
 
 // Initialize systems on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -8015,19 +7290,16 @@ document.addEventListener('DOMContentLoaded', () => {
   renderParameters();
   
   presetManager = new PresetManager();
-  console.log('✅ PresetManager ready');
 
   setTimeout(() => {
       const openButton = document.querySelector('#file-controls button:nth-child(2)');
       if (openButton) {
           openButton.onclick = openCompositionFromFile;
-          console.log('✅ OPEN button connected to native file dialog');
       }
       
       const saveButton = document.querySelector('#file-controls button:nth-child(3)');
       if (saveButton) {
           saveButton.onclick = saveCompositionToFile;
-          console.log('✅ SAVE button connected to native save dialog');
       }
   }, 300);
 
@@ -8035,7 +7307,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const newButton = document.querySelector('#file-controls button:nth-child(1)');
       if (newButton) {
           newButton.onclick = createNewComposition;
-          console.log('✅ NEW button connected to composition reset');
       } else {
           console.log('❌ NEW button not found');
       }
@@ -8067,54 +7338,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // FORCE CONNECT PLAY BUTTON
 setTimeout(() => {
-  console.log('🔧 FORCING PLAY BUTTON CONNECTION...');
+
   
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
-  console.log('Play button found:', !!playButton);
-  console.log('Play button text:', playButton?.textContent);
+
+
   
   if (playButton) {
     playButton.onclick = null;
     playButton.onclick = toggleMasterPlayback;
-    
-    console.log('✅ PLAY button force-connected to toggleMasterPlayback');
+
     console.log('Try clicking PLAY now!');
   } else {
     console.log('❌ PLAY button not found in DOM');
   }
 }, 2000);
 
-console.log('✅ Enhanced scripts.js loaded - Life Span system fully integrated');
-console.log('🕐 Life Span features:');
-console.log('   - 3 dual sliders with Enter/Exit times');
-console.log('   - Repeat checkbox for cycling');
-console.log('   - Max time input (MM:SS format)');
-console.log('   - Beat unit dropdown for musical tooltips');
-console.log('   - Integration with voice clock timing system');
 
-
-// TESTING REALTIME UPDATES
-function testRealTimeUpdates() {
-  console.log('🧪 REAL-TIME PARAMETER UPDATE TEST');
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('1. Start PREVIEW on Voice 1 with long notes (2-4 seconds)');
-  console.log('2. While notes are playing, move these sliders:');
-  console.log('   - Stereo Balance (should pan immediately)');
-  console.log('   - Tremolo Speed (should change wobble speed immediately)');
-  console.log('   - Chorus Depth (should change shimmer immediately)');
-  console.log('   - Phaser Speed (should change sweep speed immediately)');
-  console.log('   - Reverb Mix (should change spatial depth immediately)');
-  console.log('   - Delay Feedback (should change echo repeats immediately)');
-  console.log('');
-  console.log('Expected: ALL changes should be audible within 50ms');
-  console.log('═══════════════════════════════════════════════════════');
-  
-  if (voiceClockManager && voiceClockManager.isInitialized) {
-    const voiceClock = voiceClockManager.getVoiceClock(0);
-    if (voiceClock) {
-      console.log(`Voice 1 active notes: ${voiceClock.activeNotes.size}`);
-    }
-  }
-}
-
-window.testRealTime = testRealTimeUpdates;
