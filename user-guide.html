@@ -459,6 +459,227 @@
 </div>
 
 <div class="content-box">
+    <h4>🎵 PHRASE STYLES</h4>
+    <p><span class="bold">Purpose</span>: Control how notes are organized into melodic phrases - the shapes and patterns your melodies follow</p>
+    
+    <p><span class="bold">Controls</span>: Six melodic patterns plus optional breathing space</p>
+    
+    <p>Each pattern has:</p>
+    <ul>
+        <li><span class="bold">Checkbox</span>: Enable/disable the pattern</li>
+        <li><span class="bold">Length slider</span>: Set phrase length (2 to 24 notes)</li>
+    </ul>
+
+    <h3>The Six Melodic Patterns</h3>
+
+    <p><span class="bold">1. Random</span> (enabled by default)</p>
+    <ul>
+        <li><span class="bold">Description</span>: Each note is independently and unpredictably selected from your melodic range</li>
+        <li><span class="bold">Sound</span>: Unpredictable, scattered, no melodic pattern</li>
+        <li><span class="bold">Use for</span>: Atonal textures, percussive elements, chaotic energy, experimental sounds</li>
+        <li><span class="bold">Example</span>: Length 2 = pure randomness, Length 12 = longer random sequences</li>
+    </ul>
+
+    <p><span class="bold">2. Ascending</span></p>
+    <ul>
+        <li><span class="bold">Description</span>: Notes move upward through your melodic range, starting from a random position each phrase</li>
+        <li><span class="bold">Sound</span>: Rising sequences, building energy, climbing motion</li>
+        <li><span class="bold">Behavior effect</span>: 0% = smooth scalar steps (C→D→E→F), 100% = large intervallic leaps (C→G→D→B) while still ascending</li>
+        <li><span class="bold">Use for</span>: Building intensity, uplifting passages, rising arpeggios</li>
+    </ul>
+
+    <p><span class="bold">3. Descending</span></p>
+    <ul>
+        <li><span class="bold">Description</span>: Notes move downward through your range, starting from random positions</li>
+        <li><span class="bold">Sound</span>: Falling sequences, releasing tension, downward motion</li>
+        <li><span class="bold">Behavior effect</span>: 0% = smooth steps down, 100% = dramatic downward leaps</li>
+        <li><span class="bold">Use for</span>: Calming passages, resolution, falling melodic lines</li>
+    </ul>
+
+    <p><span class="bold">4. Pendulum</span></p>
+    <ul>
+        <li><span class="bold">Description</span>: Notes oscillate up to the top of your range, then down to the bottom, repeating</li>
+        <li><span class="bold">Sound</span>: Wave-like back-and-forth motion, symmetrical arcs</li>
+        <li><span class="bold">Behavior effect</span>: 0% = gentle swaying (small steps), 100% = dramatic swings (large leaps)</li>
+        <li><span class="bold">Use for</span>: Rocking motion, cyclical patterns, balanced movement</li>
+    </ul>
+
+    <p><span class="bold">5. Wave</span></p>
+    <ul>
+        <li><span class="bold">Description</span>: Notes follow a sine wave pattern through your range, creating smooth, flowing curves</li>
+        <li><span class="bold">Sound</span>: Organic, flowing melodies with natural contours</li>
+        <li><span class="bold">Behavior effect</span>: 0% = smooth flowing curves (many gentle waves), 100% = jagged angular motion (fewer dramatic waves)</li>
+        <li><span class="bold">Use for</span>: Lyrical melodies, natural-sounding phrases, ambient textures</li>
+    </ul>
+
+    <p><span class="bold">6. Spiral</span></p>
+    <ul>
+        <li><span class="bold">Description</span>: Starts near a random center point and gradually expands outward, alternating above and below</li>
+        <li><span class="bold">Sound</span>: Growing intensity, expanding range, blooming outward</li>
+        <li><span class="bold">Behavior effect</span>: 0% = gradual gentle expansion, 100% = rapid dramatic expansion with added chaos</li>
+        <li><span class="bold">Use for</span>: Building complexity, expanding musical ideas, organic growth</li>
+    </ul>
+
+    <h3>Use Space Between Phrases (Breathe)</h3>
+    <p><span class="bold">Purpose</span>: Insert periods of complete silence between melodic phrases - separate from the RESTS parameter</p>
+    
+    <p><span class="bold">Controls</span>: Checkbox + Length slider (located in header row of Phrase Styles box)</p>
+    <ul>
+        <li><span class="bold">Checkbox unchecked</span>: No breathing space (continuous melodic phrases)</li>
+        <li><span class="bold">Checkbox checked</span>: System probabilistically inserts silence gaps between phrases</li>
+        <li><span class="bold">Length slider</span>: Sets duration of silence (2-24 rhythm units)</li>
+    </ul>
+
+    <p><span class="bold">How Breathe Frequency Works</span>: Controlled by the Behavior slider</p>
+    <ul>
+        <li><span class="bold">0% Behavior</span>: Breathe rarely (~10% probability) - occasional gaps</li>
+        <li><span class="bold">50% Behavior</span>: Breathe sometimes (~50% probability) - frequent spaces</li>
+        <li><span class="bold">100% Behavior</span>: Breathe often (~90% probability) - gaps after almost every phrase</li>
+    </ul>
+
+    <p><span class="bold">Important</span>: Breathe is completely separate from the RESTS parameter</p>
+    <ul>
+        <li><span class="bold">RESTS</span>: Silence between individual notes (micro-level spacing)</li>
+        <li><span class="bold">BREATHE</span>: Silence between entire phrases (macro-level phrasing)</li>
+    </ul>
+
+    <p><span class="bold">Use for</span>: Creating natural phrasing, adding dramatic pauses, reducing density, mimicking human breathing in performance</p>
+
+    <h3>How Pattern Selection Works</h3>
+    
+    <p><span class="bold">Multiple Patterns Enabled</span>: System randomly chooses from your enabled patterns</p>
+    <ul>
+        <li>Each pattern uses its own length setting</li>
+        <li>Example: Ascending (length 6) + Wave (length 14) = alternates between 6-note ascending phrases and 14-note wave phrases</li>
+    </ul>
+
+    <p><span class="bold">Behavior Slider Effect on Pattern Selection</span>:</p>
+    <ul>
+        <li><span class="bold">0-50% Behavior</span>: History avoidance - system tries to avoid repeating the same pattern consecutively</li>
+        <li><span class="bold">50-100% Behavior</span>: Pure random selection - any pattern can follow any other pattern</li>
+    </ul>
+
+    <p><span class="bold">Single Pattern Enabled</span>: System uses only that pattern (Behavior controls interval sizes within the pattern)</p>
+
+    <p><span class="bold">No Patterns Enabled</span>: System automatically enables Random pattern (length 2) and continues playing</p>
+
+    <h3>The Behavior Slider - Dual Purpose</h3>
+    <p>The Behavior slider for PHRASE STYLES serves two musical functions simultaneously:</p>
+
+    <p>1. <span class="bold">Pattern Switching Frequency</span>: How the system chooses between enabled patterns</p>
+    <ul>
+        <li><span class="bold">0% Behavior</span>: Maximum pattern variety - rarely repeats same pattern</li>
+        <li><span class="bold">100% Behavior</span>: Pure randomness - any pattern can repeat multiple times</li>
+    </ul>
+
+    <p>2. <span class="bold">Interval Sizes Within Patterns</span>: How far notes jump within a pattern</p>
+    <ul>
+        <li><span class="bold">0% Behavior</span>: Small steps (adjacent notes, scalar motion)</li>
+        <li><span class="bold">50% Behavior</span>: Mix of steps and leaps</li>
+        <li><span class="bold">100% Behavior</span>: Large intervallic jumps (dramatic, wide-ranging motion)</li>
+    </ul>
+
+    <h3>Practical Examples</h3>
+
+    <p><span class="bold">Example 1 - Smooth Ambient Pad</span>:</p>
+    <blockquote>
+        Enabled: Wave only<br>
+        Wave Length: 16 notes<br>
+        Breathe: Unchecked<br>
+        Behavior: 25%<br><br>
+        Result: Continuous flowing melodies with gentle curves, smooth scalar motion (perfect for background pads)
+    </blockquote>
+
+    <p><span class="bold">Example 2 - Dramatic Lead Voice</span>:</p>
+    <blockquote>
+        Enabled: Ascending + Descending + Pendulum<br>
+        All Lengths: 8 notes<br>
+        Breathe: Checked, Length 6<br>
+        Behavior: 85%<br><br>
+        Result: Dramatic phrases with large leaps, frequently switching between ascending/descending/pendulum patterns, with frequent silence gaps for breathing (perfect for expressive solo lines)
+    </blockquote>
+
+    <p><span class="bold">Example 3 - Textural Variety</span>:</p>
+    <blockquote>
+        Enabled: Random (length 2) + Wave (length 18)<br>
+        Breathe: Checked, Length 4<br>
+        Behavior: 60%<br><br>
+        Result: Alternates between short chaotic bursts (2-note random) and long flowing phrases (18-note wave), with occasional breathing space - creates compelling contrast
+    </blockquote>
+
+    <h3>Understanding Phrase Length</h3>
+    
+    <p><span class="bold">What is a Phrase?</span> A phrase is a complete musical gesture - a sequence of notes that forms a coherent melodic statement</p>
+    <ul>
+        <li><span class="bold">Short phrases (2-6 notes)</span>: Quick, repetitive, rhythmic focus</li>
+        <li><span class="bold">Medium phrases (7-12 notes)</span>: Balanced, natural phrasing</li>
+        <li><span class="bold">Long phrases (13-24 notes)</span>: Elaborate, developmental, melodic focus</li>
+    </ul>
+
+    <p><span class="bold">Each Pattern Can Have Different Lengths</span>:</p>
+    <ul>
+        <li>Random can be set to 3 notes (short bursts)</li>
+        <li>Wave can be set to 20 notes (long flowing lines)</li>
+        <li>System will alternate: short chaotic bursts, then long flowing phrases</li>
+    </ul>
+
+    <h3>Random Starting Notes</h3>
+    <p><span class="bold">Key Feature</span>: Each phrase starts from a different random position in your melodic range</p>
+    <ul>
+        <li>An 8-note Ascending phrase doesn't always start on C - it might start on E, or G, or any note in your range</li>
+        <li>This ensures the same pattern sounds fresh each time it appears</li>
+        <li>Phrases wrap around when they reach the edge of your range</li>
+    </ul>
+
+    <h3>Common Pattern Combinations</h3>
+
+    <p><span class="bold">For Ambient/Drone</span>: Wave only, length 18-24, Behavior 20%</p>
+
+    <p><span class="bold">For Minimalism</span>: Ascending + Descending, length 4-6, Behavior 10%, Breathe enabled (length 8)</p>
+
+    <p><span class="bold">For Experimental/Atonal</span>: Random only, length 2-4, Behavior 100%</p>
+
+    <p><span class="bold">For Lyrical Melody</span>: Wave + Pendulum, length 10-14, Behavior 35%, Breathe enabled (length 4-6)</p>
+
+    <p><span class="bold">For Maximum Variety</span>: Enable all 6 patterns with varying lengths, Behavior 75%</p>
+
+    <h3>Advanced: Per-Voice Pattern Design</h3>
+    <p>Since each voice has independent Phrase Styles, create complementary patterns across voices:</p>
+    <ul>
+        <li><span class="bold">Voice 1 (bass)</span>: Ascending only, length 24, Behavior 10% (long, consistent upward motion)</li>
+        <li><span class="bold">Voice 2 (harmony)</span>: Wave only, length 12, Behavior 40% (flowing counterpoint)</li>
+        <li><span class="bold">Voice 3 (accent)</span>: Random only, length 2, Breathe enabled (length 12), Behavior 90% (sparse punctuation with lots of space)</li>
+    </ul>
+    <p>Result: Three distinct melodic characters working together in complementary roles</p>
+
+    <h3>Pattern Selection Strategy</h3>
+    <p><span class="bold">When multiple patterns are enabled</span>, the system selects randomly from your enabled set:</p>
+    <ul>
+        <li><span class="bold">Low Behavior (0-50%)</span>: System tracks the last 2-3 patterns used and tries to avoid immediate repetition - creates variety</li>
+        <li><span class="bold">High Behavior (50-100%)</span>: Pure random selection - same pattern can appear multiple times in a row</li>
+    </ul>
+
+    <p><span class="bold">Musical Insight</span>: At low Behavior, enabling many patterns ensures maximum variety. At high Behavior, the system explores repetition and obsessive patterns.</p>
+
+    <h3>Tips for Phrase Styles</h3>
+    <ul>
+        <li><span class="bold">Start with one pattern</span>: Enable only Random or Ascending initially to understand how phrase length affects the music</li>
+        <li><span class="bold">Combine contrasting patterns</span>: Ascending + Descending creates clear directional contrast</li>
+        <li><span class="bold">Use Breathe sparingly</span>: At high Behavior (100%), breathing happens ~90% of the time - consider using 30-60% Behavior for more balanced phrasing</li>
+        <li><span class="bold">Match phrase length to rhythm</span>: Shorter phrases (4-8) work well with fast rhythms (Sixteenth, Eighth Notes), longer phrases (12-20) suit slower rhythms</li>
+        <li><span class="bold">Wide melodic ranges</span>: Use longer phrases (12+) to fully explore the range - short phrases (2-4) in wide ranges create more scattered effects</li>
+        <li><span class="bold">Experiment with Behavior</span>: The same pattern sounds completely different at 0% vs 100% - try extreme settings to hear the full range</li>
+    </ul>
+</div>
+
+
+
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
     <h4>🎵 POLYPHONY</h4>
     <p><span class="bold">Purpose</span>: How many simultaneous notes can play at once</p>
     <p><span class="bold">Control</span>: Dual-handle slider (1 to 16 notes)</p>
@@ -1354,7 +1575,7 @@
 </div>
 
 <div class="content-box">
-    <p style="font-size: 8pt; font-weight: bold; color: #111827;">Updated November 11, 2025</p>
+    <p style="font-size: 8pt; font-weight: bold; color: #111827;">Updated December 3, 2025</p>
     <p>This guide reflects the current state of The Tuner as of this version. Features and interface may evolve based on user feedback and ongoing development.</p>
 </div>
 

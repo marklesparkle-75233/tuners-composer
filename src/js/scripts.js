@@ -3,6 +3,7 @@ const parameterDefinitions = [
   // INSTRUMENT & SOUND ROLLUP - CORRECTED ORDER
   { name: "INSTRUMENT", type: "dropdown", options: "gm-sounds", rollup: "instrument" },
   { name: "MELODIC RANGE", type: "single-dual", min: 21, max: 108, rollup: "instrument" },
+  { name: "PHRASE STYLES", type: "phrase-styles-control", rollup: "instrument" },
   { name: "POLYPHONY", type: "single-dual", min: 1, max: 16, rollup: "instrument" },
   { name: "ATTACK VELOCITY", type: "single-dual", min: 0, max: 127, rollup: "instrument" },
   { name: "DETUNING", type: "single-dual", min: -50, max: 50, rollup: "instrument" },
@@ -33,6 +34,8 @@ const MIN_LIFE_SPAN_MS = 5000;        // 5 seconds minimum
 const MAX_LIFE_SPAN_MS = 3600000;     // 60 minutes maximum (1 hour)
 const DEFAULT_LIFE_SPAN_MS = 300000;  // 5 minutes default
 
+// Phrase Styles Debug Logging
+const PHRASE_STYLES_DEBUG = false;  // Set to true for detailed pattern debugging
 
 // Life Span Helper Functions
 function formatMsToMMSS(ms) {
@@ -437,6 +440,24 @@ function initializeVoices() {
           repeat: false,
           behavior: 0
         };
+      } else if (param.name === 'PHRASE STYLES') {
+        // Initialize Phrase Styles parameter with defaults
+        voice.parameters[param.name] = {
+          patterns: {
+            random: { enabled: true, length: 2 },        // DEFAULT ENABLED
+            ascending: { enabled: false, length: 12 },   // 50% of 24
+            descending: { enabled: false, length: 12 },
+            pendulum: { enabled: false, length: 12 },
+            wave: { enabled: false, length: 12 },
+            spiral: { enabled: false, length: 12 }
+          },
+          breathe: {
+            enabled: false,  // Checkbox state
+            length: 12       // Slider value (50% of 24)
+          },
+          behavior: 50  // Pattern switching frequency (0-100%)
+        };
+
       } else if (param.type === 'dropdown') {
         if (param.name === 'INSTRUMENT') {
           voice.parameters[param.name] = 0;
@@ -1456,6 +1477,152 @@ function createBehaviorSlider(param, voiceIndex) {
   
   return wrapper;
 }
+
+// ===== PHRASE STYLES CONTROL CREATION =====
+
+function createPhraseStylesControl(param, voiceIndex) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'phrase-styles-container';
+  
+  const stylesBox = document.createElement('div');
+  stylesBox.className = 'phrase-styles-box';
+  
+  // Header row with "PHRASE STYLES" label and "Breathe" control
+  const headerRow = createPhraseStylesHeader(voiceIndex);
+  stylesBox.appendChild(headerRow);
+  
+  // Pattern rows (2 rows x 3 columns)
+  const patternsGrid = createPatternsGrid(voiceIndex);
+  stylesBox.appendChild(patternsGrid);
+  
+  wrapper.appendChild(stylesBox);
+  return wrapper;
+}
+
+function createPhraseStylesHeader(voiceIndex) {
+  const header = document.createElement('div');
+  header.className = 'phrase-styles-header';
+  
+  // "PHRASE STYLES" label
+  const label = document.createElement('div');
+  label.className = 'phrase-styles-label';
+  label.textContent = 'PHRASE STYLES';
+  
+  // Breathe checkbox
+  const breatheCheckbox = document.createElement('input');
+  breatheCheckbox.type = 'checkbox';
+  breatheCheckbox.className = 'breathe-checkbox';
+  breatheCheckbox.id = `breathe-checkbox-${voiceIndex}`;
+  breatheCheckbox.checked = voiceData[voiceIndex].parameters['PHRASE STYLES'].breathe.enabled;
+  
+  // Breathe label
+  const breatheLabel = document.createElement('label');
+  breatheLabel.htmlFor = `breathe-checkbox-${voiceIndex}`;
+  breatheLabel.textContent = 'Breathe Between Phrases';
+  breatheLabel.style.cursor = 'pointer';
+  
+  // Breathe length slider container
+  const breatheSlider = createLengthSlider(
+    voiceData[voiceIndex].parameters['PHRASE STYLES'].breathe.length,
+    'breathe-length-slider',
+    voiceIndex,
+    'breathe'
+  );
+  
+  header.appendChild(label);
+  header.appendChild(breatheCheckbox);
+  header.appendChild(breatheLabel);
+  header.appendChild(breatheSlider);
+  
+  return header;
+}
+
+function createPatternsGrid(voiceIndex) {
+  const grid = document.createElement('div');
+  grid.className = 'patterns-grid';
+  
+  const patterns = [
+    { name: 'random', display: 'Random' },
+    { name: 'pendulum', display: 'Pendulum' },
+    { name: 'ascending', display: 'Ascending' },
+    { name: 'wave', display: 'Wave' },
+    { name: 'descending', display: 'Descending' },
+    { name: 'spiral', display: 'Spiral' }
+  ];
+
+  
+  patterns.forEach(pattern => {
+    const patternRow = createPatternRow(pattern, voiceIndex);
+    grid.appendChild(patternRow);
+  });
+  
+  return grid;
+}
+
+function createPatternRow(pattern, voiceIndex) {
+  const row = document.createElement('div');
+  row.className = 'pattern-row';
+  
+  // Checkbox
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'pattern-checkbox';
+  checkbox.id = `pattern-${pattern.name}-${voiceIndex}`;
+  checkbox.dataset.pattern = pattern.name;
+  checkbox.checked = voiceData[voiceIndex].parameters['PHRASE STYLES'].patterns[pattern.name].enabled;
+  
+  // Label
+  const label = document.createElement('label');
+  label.htmlFor = `pattern-${pattern.name}-${voiceIndex}`;
+  label.textContent = pattern.display;
+  label.style.cursor = 'pointer';
+  
+  // Length slider
+  const lengthSlider = createLengthSlider(
+    voiceData[voiceIndex].parameters['PHRASE STYLES'].patterns[pattern.name].length,
+    'pattern-length-slider',
+    voiceIndex,
+    pattern.name
+  );
+  lengthSlider.dataset.pattern = pattern.name;
+  
+  row.appendChild(checkbox);
+  row.appendChild(label);
+  row.appendChild(lengthSlider);
+  
+  return row;
+}
+
+function createLengthSlider(initialValue, className, voiceIndex, patternName) {
+  const sliderContainer = document.createElement('div');
+  sliderContainer.className = 'length-slider-container';
+  
+  const lengthLabel = document.createElement('span');
+  lengthLabel.textContent = 'Length';
+  lengthLabel.className = 'length-label';
+  
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = 2;
+  slider.max = 24;
+  slider.value = initialValue;
+  slider.className = className;
+  slider.dataset.voiceIndex = voiceIndex;
+  slider.dataset.pattern = patternName;
+  
+  const valueDisplay = document.createElement('span');
+  valueDisplay.className = 'length-value-display';
+  valueDisplay.textContent = initialValue;
+  
+  sliderContainer.appendChild(lengthLabel);
+  sliderContainer.appendChild(slider);
+  sliderContainer.appendChild(valueDisplay);
+  
+  return sliderContainer;
+}
+
+
+
 
 function createRow(param, voiceIndex) {
   const row = document.createElement('div');
@@ -5152,162 +5319,390 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
     return this.voiceClocks.filter(clock => clock.isActive).length;
   }
 }
-// ===== MELODIC PHRASE GENERATOR CLASS =====
+// ===== MELODIC PHRASE GENERATOR CLASS (UPDATED FOR PHRASE STYLES) =====
+
 class MelodicPhraseGenerator {
   constructor(voiceIndex) {
     this.voiceIndex = voiceIndex;
+    this.patternHistory = [];
     
-    // Available patterns
+    // Pattern generation methods
     this.patterns = {
-      'static': this.generateStatic.bind(this),
+      'random': this.generateRandom.bind(this),
       'ascending': this.generateAscending.bind(this),
       'descending': this.generateDescending.bind(this),
       'pendulum': this.generatePendulum.bind(this),
       'wave': this.generateWave.bind(this),
-      'spiral': this.generateSpiral.bind(this)
+      'spiral': this.generateSpiral.bind(this),
     };
-    
   }
   
-  generate(notePool, noteCount, behaviorSetting) {
-    if (!notePool || notePool.length === 0) {
-      console.warn(`Voice ${this.voiceIndex + 1}: Empty note pool`);
-      return [60]; // Default to middle C
+  selectActivePattern() {
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    
+    if (!phraseStyles) {
+      console.warn(`Voice ${this.voiceIndex + 1}: No PHRASE STYLES parameter, using Random`);
+      return { name: 'random', length: 2 };
     }
     
-    // Select pattern based on behavior setting
-    const pattern = this.selectPattern(behaviorSetting);
+    const enabledPatterns = [];
     
+    // Collect enabled MELODIC patterns only (exclude breathe)
+    Object.keys(phraseStyles.patterns).forEach(patternName => {
+      if (phraseStyles.patterns[patternName].enabled) {
+        enabledPatterns.push({
+          name: patternName,
+          length: phraseStyles.patterns[patternName].length
+        });
+      }
+    });
+        // NOTE: Breathe is NOT included in pattern selection
+    // It will be inserted separately based on probability
+
+
+
+    // NEW: Validation - ensure at least one enabled pattern
+    if (enabledPatterns.length === 0) {
+      if (PHRASE_STYLES_DEBUG) {
+        console.warn(`Voice ${this.voiceIndex + 1}: No patterns enabled, auto-enabling Random`);
+      }
+
+      
+      // Auto-enable Random pattern in the data
+      phraseStyles.patterns.random.enabled = true;
+      
+      // Update UI checkbox if visible
+      const parameterSection = document.getElementById('parameter-section');
+      if (parameterSection && currentVoice === this.voiceIndex) {
+        const randomCheckbox = parameterSection.querySelector('.pattern-checkbox[data-pattern="random"]');
+        if (randomCheckbox) {
+          randomCheckbox.checked = true;
+        }
+      }
+      
+      return { name: 'random', length: 2 };
+    }
+
+    
+    // Fallback if nothing enabled
+    if (enabledPatterns.length === 0) {
+      console.warn(`Voice ${this.voiceIndex + 1}: No patterns enabled, using Random`);
+      return { name: 'random', length: 2 };
+    }
+    
+    // Pattern selection based on Behavior slider
+    const behaviorSetting = phraseStyles.behavior || 50;
+    
+    if (behaviorSetting > 50) {
+      // High behavior = pure random selection
+      const selected = enabledPatterns[Math.floor(Math.random() * enabledPatterns.length)];
+      return selected;
+    } else {
+      // Low behavior = avoid recent patterns
+      return this.selectWithHistoryAvoidance(enabledPatterns);
+    }
+  }
+  
+    selectWithHistoryAvoidance(enabledPatterns) {
+    // Filter out patterns used in last 2 phrases
+    const available = enabledPatterns.filter(p => 
+      !this.patternHistory.slice(-2).includes(p.name)
+    );
+    
+    if (available.length > 0) {
+      return available[Math.floor(Math.random() * available.length)];
+    } else {
+      // All patterns recently used, pick from full list
+      return enabledPatterns[Math.floor(Math.random() * enabledPatterns.length)];
+    }
+  }
+  
+  // NEW: Determine if breathe should be inserted after this phrase
+  shouldInsertBreathe() {
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    
+    if (!phraseStyles || !phraseStyles.breathe.enabled) {
+      return false; // Breathe not enabled
+    }
+    
+    // Use Behavior slider to control breathe frequency
+    // 0% behavior = breathe rarely (10% chance)
+    // 50% behavior = breathe sometimes (50% chance)  
+    // 100% behavior = breathe often (90% chance)
+    
+    const behaviorSetting = phraseStyles.behavior || 50;
+    const breatheProbability = 0.1 + (behaviorSetting / 100) * 0.8; // 10% to 90%
+    
+    const shouldBreathe = Math.random() < breatheProbability;
+    
+    if (PHRASE_STYLES_DEBUG && shouldBreathe) {
+      console.log(`💨 Voice ${this.voiceIndex + 1}: Inserting Breathe (probability: ${(breatheProbability * 100).toFixed(0)}%)`);
+    }
+    
+    return shouldBreathe;
+  }
+  
+  getBreatheLength() {
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    return phraseStyles ? phraseStyles.breathe.length : 12;
+  }
+
+  generate(notePool, maxNotes, behaviorSetting) {
+    const selectedPattern = this.selectActivePattern();
+    
+    // Use the pattern's configured length (from UI slider)
+    // Only limit by notePool size (can't generate more notes than available)
+    const actualLength = Math.min(selectedPattern.length, notePool.length);
+    
+    if (PHRASE_STYLES_DEBUG) {
+      console.log(`🎵 Voice ${this.voiceIndex + 1}: ${selectedPattern.name} pattern, length=${selectedPattern.length}, actual=${actualLength} notes`);
+    }
     
     // Generate phrase
-    const phrase = this.patterns[pattern](notePool, noteCount);
+    const phrase = this.patterns[selectedPattern.name](notePool, actualLength);
+
     
+    // NEW: Validate generated phrase
+    if (!Array.isArray(phrase)) {
+      console.error(`Voice ${this.voiceIndex + 1}: Invalid phrase generated by ${selectedPattern.name}`);
+      return [notePool[0]]; // Fallback to single note
+    }
+    
+    // Breathe returns empty array - this is valid
+    if (phrase.length === 0 && selectedPattern.name === 'breathe') {
+      // Valid breathe phrase - skip history update
+      return phrase;
+    }
+    
+    // Other patterns should never return empty
+    if (phrase.length === 0) {
+      console.error(`Voice ${this.voiceIndex + 1}: Empty phrase from ${selectedPattern.name}`);
+      return [notePool[0]]; // Fallback
+    }
+    // Update history
+    this.patternHistory.push(selectedPattern.name);
+    if (this.patternHistory.length > 3) {
+      this.patternHistory.shift();
+    }
     
     return phrase;
   }
   
-  selectPattern(behaviorSetting) {
-    if (behaviorSetting === 0) {
-      return 'static';
-    } else if (behaviorSetting < 25) {
-      return 'ascending';
-    } else if (behaviorSetting < 50) {
-      return 'descending';
-    } else if (behaviorSetting < 75) {
-      return 'pendulum';
-    } else {
-      return 'wave';
-    }
-  }
+  // ===== PATTERN GENERATORS =====
   
-  generateStatic(notePool, noteCount) {
-    // Always return the same note (middle of range)
-    const sorted = [...notePool].sort((a, b) => a - b);
-    const middleNote = sorted[Math.floor(sorted.length / 2)];
-    return Array(noteCount).fill(middleNote);
+  generateRandom(notePool, noteCount) {
+    // Pure randomization - each note independent
+    const phrase = [];
+    for (let i = 0; i < noteCount; i++) {
+      const randomNote = notePool[Math.floor(Math.random() * notePool.length)];
+      phrase.push(randomNote);
+    }
+    return phrase;
   }
   
   generateAscending(notePool, noteCount) {
-    // Simple ascending sweep through range
     const sorted = [...notePool].sort((a, b) => a - b);
+    
+    // Pick random starting note from pool
+    const startIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
+    // Get behavior setting for interval control
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
+    
+    let currentIndex = startIndex;
+    
     for (let i = 0; i < noteCount; i++) {
-      const index = i % sorted.length;
-      phrase.push(sorted[index]);
+      phrase.push(sorted[currentIndex]);
+      
+      // Determine step size based on behavior
+      const stepSize = this.calculateAscendingStepSize(behaviorSetting, sorted.length);
+      
+      currentIndex = (currentIndex + stepSize) % sorted.length;
     }
     
     return phrase;
   }
+  
+  calculateAscendingStepSize(behaviorSetting, poolSize) {
+    // 0% behavior = step by 1 (scalar)
+    // 50% behavior = step by 1-3 (mix)
+    // 100% behavior = step by 1-6 (large leaps)
+    
+    const maxStep = Math.max(1, Math.floor(poolSize / 4)); // Cap based on pool size
+    
+    if (behaviorSetting <= 25) {
+      // Mostly scalar
+      return Math.random() < 0.8 ? 1 : 2;
+    } else if (behaviorSetting <= 50) {
+      // Mix of scalar and small leaps
+      return Math.floor(Math.random() * 3) + 1; // 1-3
+    } else if (behaviorSetting <= 75) {
+      // More leaps
+      return Math.floor(Math.random() * 4) + 1; // 1-4
+    } else {
+      // Large intervals
+      return Math.floor(Math.random() * Math.min(6, maxStep)) + 1; // 1-6
+    }
+  }
+
   
   generateDescending(notePool, noteCount) {
-    // Simple descending sweep through range
-    const sorted = [...notePool].sort((a, b) => b - a); // Reverse sort
+    const sorted = [...notePool].sort((a, b) => b - a); // Descending order
+    
+    // Pick random starting note from pool
+    const startIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
+    // Get behavior setting for interval control
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
+    
+    let currentIndex = startIndex;
+    
     for (let i = 0; i < noteCount; i++) {
-      const index = i % sorted.length;
-      phrase.push(sorted[index]);
+      phrase.push(sorted[currentIndex]);
+      
+      // Determine step size based on behavior
+      const stepSize = this.calculateAscendingStepSize(behaviorSetting, sorted.length);
+      
+      currentIndex = (currentIndex + stepSize) % sorted.length;
     }
     
     return phrase;
   }
+
   
   generatePendulum(notePool, noteCount) {
-  // Up to top, then down to bottom, repeat
-  const sorted = [...notePool].sort((a, b) => a - b);
-  const phrase = [];
-  let direction = 1; // 1 = up, -1 = down
-  let index = 0;
-  
-  for (let i = 0; i < noteCount; i++) {
-    phrase.push(sorted[index]);
+    const sorted = [...notePool].sort((a, b) => a - b);
     
-    // Move to next note
-    index += direction;
+    // Get behavior setting
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
     
-    // Reverse at boundaries
-    if (index >= sorted.length) {
-      direction = -1;
-      index = sorted.length - 2; // Start descending from second-to-last
-      // Handle case where pool only has 1 note
-      if (index < 0) index = 0;
-    } else if (index < 0) {
-      direction = 1;
-      index = 1; // Start ascending from second note
-      // Handle case where pool only has 1 note
-      if (index >= sorted.length) index = 0;
+    // Pick random starting note
+    const startIndex = Math.floor(Math.random() * sorted.length);
+    const phrase = [];
+    
+    let direction = Math.random() > 0.5 ? 1 : -1; // Random initial direction
+    let currentIndex = startIndex;
+    
+    for (let i = 0; i < noteCount; i++) {
+      phrase.push(sorted[currentIndex]);
+      
+      // Behavior controls step size (like ascending/descending)
+      const stepSize = this.calculateAscendingStepSize(behaviorSetting, sorted.length);
+      
+      currentIndex += (stepSize * direction);
+      
+      // Wrap around with direction change
+      if (currentIndex >= sorted.length) {
+        direction = -1;
+        currentIndex = sorted.length - 1 - (currentIndex - sorted.length);
+        if (currentIndex < 0) currentIndex = 0;
+      } else if (currentIndex < 0) {
+        direction = 1;
+        currentIndex = Math.abs(currentIndex);
+        if (currentIndex >= sorted.length) currentIndex = sorted.length - 1;
+      }
     }
+    
+    return phrase;
   }
-  
-  return phrase;
-}
+
+
 
   
   generateWave(notePool, noteCount) {
-    // Sine wave-like motion through range
     const sorted = [...notePool].sort((a, b) => a - b);
+    
+    // Get behavior setting
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
+    
+    // Pick random phase offset for variety
+    const phaseOffset = Math.random() * Math.PI * 2;
     const phrase = [];
     
+    // Behavior controls wave smoothness
+    // 0% = smooth sine wave (many cycles, small steps)
+    // 100% = jagged wave (few cycles, large jumps)
+    const cycleCount = behaviorSetting <= 25 ? 6 : 
+                       behaviorSetting <= 50 ? 4 : 
+                       behaviorSetting <= 75 ? 2 : 1;
+    
     for (let i = 0; i < noteCount; i++) {
-      // Calculate sine wave position (0 to 1)
-      const phase = (i / noteCount) * Math.PI * 4; // 2 complete sine waves
-      const sineValue = Math.sin(phase); // -1 to 1
-      const normalized = (sineValue + 1) / 2; // 0 to 1
+      const phase = (i / noteCount) * Math.PI * cycleCount * 2 + phaseOffset;
+      const sineValue = Math.sin(phase);
+      const normalized = (sineValue + 1) / 2;
       
-      // Map to note index
-      const index = Math.floor(normalized * (sorted.length - 1));
+      // Add randomness at high behavior
+      let indexFloat = normalized * (sorted.length - 1);
+      
+      if (behaviorSetting > 75) {
+        // Add jitter for jagged effect
+        const jitter = (Math.random() - 0.5) * (sorted.length * 0.2);
+        indexFloat += jitter;
+      }
+      
+      const index = Math.max(0, Math.min(sorted.length - 1, Math.floor(indexFloat)));
       phrase.push(sorted[index]);
     }
     
     return phrase;
   }
+
+
   
   generateSpiral(notePool, noteCount) {
-    // Start narrow, gradually expand range
     const sorted = [...notePool].sort((a, b) => a - b);
-    const middle = Math.floor(sorted.length / 2);
+    
+    // Get behavior setting
+    const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
+    const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
+    
+    // Pick random center point
+    const centerIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
+    // Behavior controls expansion rate
+    // 0% = slow expansion (gradual)
+    // 100% = fast expansion (dramatic)
+    const expansionRate = behaviorSetting <= 25 ? 0.5 : 
+                          behaviorSetting <= 50 ? 1.0 : 
+                          behaviorSetting <= 75 ? 1.5 : 2.0;
+    
     for (let i = 0; i < noteCount; i++) {
-      // Expansion factor (0 to 1)
-      const expansion = i / noteCount;
+      const expansion = Math.pow(i / noteCount, 1.0 / expansionRate);
+      const maxRange = Math.floor(sorted.length / 2);
+      const range = Math.floor(expansion * maxRange);
       
-      // Maximum range at this point
-      const range = Math.floor(expansion * middle);
+      // Add randomness at high behavior
+      let offset = (i % 2 === 0) ? range : -range;
       
-      // Alternate above and below middle
-      const offset = (i % 2 === 0) ? range : -range;
+      if (behaviorSetting > 75) {
+        const jitter = Math.floor((Math.random() - 0.5) * maxRange * 0.3);
+        offset += jitter;
+      }
       
-      // Clamp to valid index
-      const index = Math.max(0, Math.min(sorted.length - 1, middle + offset));
-      
+      const index = Math.max(0, Math.min(sorted.length - 1, centerIndex + offset));
       phrase.push(sorted[index]);
     }
     
     return phrase;
   }
+
+
+  
+  generateBreathe(notePool, noteCount) {
+    // Return empty array - signals "no notes" to scheduler
+    return [];
+  }
 }
+
+
+
 // ===== LOOKAHEAD SCHEDULER CLASS =====
 class LookaheadScheduler {
   constructor(voiceIndex, audioContext, masterClock) {
@@ -5402,56 +5797,100 @@ class LookaheadScheduler {
   this.scheduleAhead();
 }
 
-scheduleAhead() {
-  const currentTime = this.audioContext.currentTime;
-  const scheduleUntil = currentTime + this.currentLookahead;
-  
-  // Log every call with timing
-  if (Math.random() < 0.1) { // 10% of calls
-  }
-  
-  // Safety check: if we're scheduling in the past, reset
-  if (this.nextNoteTime < currentTime) {
-    console.warn(`⚠️ Voice ${this.voiceIndex + 1}: Resetting nextNoteTime from past (${this.nextNoteTime.toFixed(3)}) to now (${currentTime.toFixed(3)})`);
-    this.nextNoteTime = currentTime + 0.050; // 50ms from now
-  }
-  
-  // Schedule notes to fill the lookahead window
-  let scheduledCount = 0;
-  const maxNotesPerCycle = 20; // Safety limit
-  
-  // Schedule if next note is before the end of our lookahead window
-  while (this.nextNoteTime < scheduleUntil && scheduledCount < maxNotesPerCycle) {
-    // Generate next note in phrase
-    if (this.phraseIndex >= this.currentPhrase.length) {
-      // Need new phrase
-      const avgRhythmDuration = this.calculateAverageRhythmDuration(
-        voiceData[this.voiceIndex].parameters['RHYTHMS']
-      );
-      const notesToSchedule = Math.ceil(this.currentLookahead / avgRhythmDuration);
-      
-      this.currentPhrase = this.generatePhrase(notesToSchedule);
-      this.phraseIndex = 0;
-      
+  scheduleAhead() {
+    const currentTime = this.audioContext.currentTime;
+    const scheduleUntil = currentTime + this.currentLookahead;
+    
+    // NEW: Safety counter to prevent infinite loops
+      let loopIterations = 0;
+      const MAX_LOOP_ITERATIONS = 100;
+    
+      // Log every call with timing
+    if (Math.random() < 0.1) { // 10% of calls
     }
     
-    // Get next note from phrase
-    const midiNote = this.currentPhrase[this.phraseIndex];
-    this.phraseIndex++;
+    // Safety check: if we're scheduling in the past, reset
+    if (this.nextNoteTime < currentTime) {
+      console.warn(`⚠️ Voice ${this.voiceIndex + 1}: Resetting nextNoteTime from past (${this.nextNoteTime.toFixed(3)}) to now (${currentTime.toFixed(3)})`);
+      this.nextNoteTime = currentTime + 0.050; // 50ms from now
+    }
     
-    // Schedule this note
-    this.scheduleNoteAtTime(midiNote, this.nextNoteTime);
-    scheduledCount++;
+    // Schedule notes to fill the lookahead window
+    let scheduledCount = 0;
+    const maxNotesPerCycle = 20; // Safety limit
     
-    // Advance time for next note
-    const rhythmDuration = this.getNextRhythmDuration();
-    const restDuration = this.getNextRestDuration();
-    this.nextNoteTime += (rhythmDuration + restDuration);
+    // Schedule if next note is before the end of our lookahead window
+      while (this.nextNoteTime < scheduleUntil && scheduledCount < maxNotesPerCycle && loopIterations < MAX_LOOP_ITERATIONS) {
+      loopIterations++;
+
+    // Generate next note in phrase
+    if (this.phraseIndex >= this.currentPhrase.length) {
+      // Phrase completed - check if we should insert breathe
+      if (this.phraseGenerator.shouldInsertBreathe()) {
+        // Insert breathe (silence)
+        const breatheLength = this.phraseGenerator.getBreatheLength();
+        const rhythmDuration = this.getNextRhythmDuration();
+        const breatheDuration = breatheLength * rhythmDuration;
+        
+        if (PHRASE_STYLES_DEBUG) {
+          console.log(`💨 Voice ${this.voiceIndex + 1}: Breathe inserted (${breatheDuration.toFixed(3)}s)`);
+        }
+        
+        // Advance time for breathe duration
+        this.nextNoteTime += breatheDuration;
+        
+        // Don't increment scheduledCount - breathe doesn't count as a note
+        // Continue to generate next melodic phrase
+      }
+      
+            // Generate new melodic phrase
+      // NOTE: Don't use lookahead to determine phrase length!
+      // Use the actual pattern length from user settings
+      
+      this.currentPhrase = this.generatePhrase(999); // Pass large number, generator will use actual pattern length
+      this.phraseIndex = 0;
+
+      
+      // Sanity check - phrase should never be empty now
+      if (this.currentPhrase.length === 0) {
+        console.error(`⚠️ Voice ${this.voiceIndex + 1}: Empty phrase generated! Falling back to single note.`);
+        const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+        const fallbackNote = melodicParam.selectedNotes ? 
+          melodicParam.selectedNotes[0] : Math.round((melodicParam.min + melodicParam.max) / 2);
+        this.currentPhrase = [fallbackNote];
+      }
+      
+      if (PHRASE_STYLES_DEBUG) {
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: New phrase ready (${this.currentPhrase.length} notes)`);
+      }
+    }
+
+
+      
+      // Get next note from phrase
+      const midiNote = this.currentPhrase[this.phraseIndex];
+      this.phraseIndex++;
+      
+      // Schedule this note
+      this.scheduleNoteAtTime(midiNote, this.nextNoteTime);
+      scheduledCount++;
+      
+      // Advance time for next note
+      const rhythmDuration = this.getNextRhythmDuration();
+      const restDuration = this.getNextRestDuration();
+      this.nextNoteTime += (rhythmDuration + restDuration);
+    }
+    
+    // NEW: Check if we hit safety limit
+    if (loopIterations >= MAX_LOOP_ITERATIONS) {
+      console.error(`⚠️ Voice ${this.voiceIndex + 1}: Scheduler safety limit reached (${loopIterations} iterations)`);
+      console.error(`   This usually means Breathe phrase caused an infinite loop`);
+      console.error(`   nextNoteTime: ${this.nextNoteTime.toFixed(3)}, scheduleUntil: ${scheduleUntil.toFixed(3)}`);
   }
-  
-  if (scheduledCount > 0) {
+
+    if (scheduledCount > 0) {
+    }
   }
-}
 
 
 
@@ -5522,27 +5961,27 @@ scheduleAhead() {
     }
   }
   
-  generatePhrase(noteCount) {
-    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
-    
-    // Get note pool
-    let notePool;
-    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
-      notePool = melodicParam.selectedNotes;
-    } else {
-      // Generate pool from range
-      const minNote = Math.round(melodicParam.min);
-      const maxNote = Math.round(melodicParam.max);
-      notePool = [];
-      for (let note = minNote; note <= maxNote; note++) {
-        notePool.push(note);
-      }
+generatePhrase(maxNotes) {
+  const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+  
+  // Get note pool
+  let notePool;
+  if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 0) {
+    notePool = melodicParam.selectedNotes;
+  } else {
+    const minNote = Math.round(melodicParam.min);
+    const maxNote = Math.round(melodicParam.max);
+    notePool = [];
+    for (let note = minNote; note <= maxNote; note++) {
+      notePool.push(note);
     }
-    
-    // Generate phrase using behavior setting
-    const behaviorSetting = melodicParam.behavior || 50;
-    return this.phraseGenerator.generate(notePool, noteCount, behaviorSetting);
   }
+  
+  // NOTE: maxNotes is ignored - pattern generator uses its own length settings
+  const behaviorSetting = melodicParam.behavior || 50;
+  return this.phraseGenerator.generate(notePool, maxNotes, behaviorSetting);
+}
+
   
   getNextRhythmDuration() {
     const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
@@ -5687,15 +6126,21 @@ function createParameterContent(param, voiceIndex) {
     range.appendChild(createMultiDualSlider(param, voiceIndex));
   } else if (param.type === 'life-span') {
     range.appendChild(createLifeSpanControl(param, voiceIndex));
+  } else if (param.type === 'phrase-styles-control') {
+    range.appendChild(createPhraseStylesControl(param, voiceIndex));
   }
 
   
   controlsContainer.appendChild(range);
   
-  // Handle behavior container - LIFE SPAN gets special treatment
+  // Handle behavior container - LIFE SPAN and PHRASE STYLES get special treatment
   if (param.type === 'life-span') {
     const lifeSpanBehavior = createLifeSpanBehaviorContainer(param, voiceIndex);
     controlsContainer.appendChild(lifeSpanBehavior);
+  } else if (param.type === 'phrase-styles-control') {
+    // Phrase Styles uses behavior slider WITHIN the piano keyboard area
+    const behaviorContainer = createBehaviorSlider(param, voiceIndex);
+    controlsContainer.appendChild(behaviorContainer);
   } else if (param.type !== 'dropdown') {
     const behaviorContainer = createBehaviorSlider(param, voiceIndex);
     controlsContainer.appendChild(behaviorContainer);
@@ -5704,6 +6149,7 @@ function createParameterContent(param, voiceIndex) {
     emptyBehavior.className = 'behavior-container';
     controlsContainer.appendChild(emptyBehavior);
   }
+
   
   contentDiv.appendChild(controlsContainer);
   return contentDiv;
@@ -5809,6 +6255,87 @@ function collapseEverything() {
   });
 }
 
+// ===== PHRASE STYLES CONTROL CONNECTION =====
+
+function connectPhraseStylesControls(container, voiceIndex) {
+  if (!container) {
+    console.warn('Phrase Styles container not found');
+    return;
+  }
+  
+  const phraseStylesParam = voiceData[voiceIndex].parameters['PHRASE STYLES'];
+  if (!phraseStylesParam) {
+    console.warn(`Voice ${voiceIndex + 1}: PHRASE STYLES parameter not found`);
+    return;
+  }
+  
+  // Connect pattern checkboxes
+  const patternCheckboxes = container.querySelectorAll('.pattern-checkbox');
+  patternCheckboxes.forEach(checkbox => {
+    checkbox.onchange = (e) => {
+      const patternName = e.target.dataset.pattern;
+      const isChecked = e.target.checked;
+      
+      phraseStylesParam.patterns[patternName].enabled = isChecked;
+      
+      console.log(`Voice ${voiceIndex + 1}: ${patternName} pattern = ${isChecked ? 'ENABLED' : 'DISABLED'}`);
+    };
+  });
+  
+  // Connect pattern length sliders
+  const patternSliders = container.querySelectorAll('.pattern-length-slider');
+  patternSliders.forEach(slider => {
+    const valueDisplay = slider.parentElement.querySelector('.length-value-display');
+    
+    slider.oninput = (e) => {
+      const patternName = e.target.dataset.pattern;
+      const length = parseInt(e.target.value);
+      
+      phraseStylesParam.patterns[patternName].length = length;
+      
+      if (valueDisplay) {
+        valueDisplay.textContent = length;
+      }
+      
+      console.log(`Voice ${voiceIndex + 1}: ${patternName} length = ${length}`);
+    };
+  });
+  
+  // Connect breathe checkbox
+  const breatheCheckbox = container.querySelector('.breathe-checkbox');
+  if (breatheCheckbox) {
+    breatheCheckbox.onchange = (e) => {
+      const isChecked = e.target.checked;
+      phraseStylesParam.breathe.enabled = isChecked;
+      
+      console.log(`Voice ${voiceIndex + 1}: Breathe = ${isChecked ? 'ENABLED' : 'DISABLED'}`);
+    };
+  }
+  
+  // Connect breathe length slider
+  const breatheSlider = container.querySelector('.breathe-length-slider');
+  if (breatheSlider) {
+    const breatheValueDisplay = breatheSlider.parentElement.querySelector('.length-value-display');
+    
+    breatheSlider.oninput = (e) => {
+      const length = parseInt(e.target.value);
+      phraseStylesParam.breathe.length = length;
+      
+      if (breatheValueDisplay) {
+        breatheValueDisplay.textContent = length;
+      }
+      
+      console.log(`Voice ${voiceIndex + 1}: Breathe length = ${length}`);
+    };
+  }
+  
+  if (PHRASE_STYLES_DEBUG) {
+    console.log(`✅ Connected Phrase Styles controls for Voice ${voiceIndex + 1}`);
+  }
+}
+
+
+
 function connectAllSliders() {
   
   const parameterSection = document.getElementById('parameter-section');
@@ -5890,7 +6417,13 @@ function connectAllSliders() {
       const value = parseInt(e.target.value);
       
       if (voiceData[currentVoice].parameters[paramName]) {
-        voiceData[currentVoice].parameters[paramName].behavior = value;
+        // Special handling for PHRASE STYLES
+        if (paramName === 'PHRASE STYLES') {
+          voiceData[currentVoice].parameters[paramName].behavior = value;
+        } else {
+          // Regular parameters
+          voiceData[currentVoice].parameters[paramName].behavior = value;
+        }
         
         const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
         if (tooltip) {
@@ -5918,6 +6451,7 @@ function connectAllSliders() {
 
     setTimeout(initializeTooltipWhenReady, 500);
   });
+
 
   // 3. Connect dropdown selectors
   const dropdowns = parameterSection.querySelectorAll('select.param-select, select.sound-select');
@@ -6066,7 +6600,14 @@ function connectAllSliders() {
     }
   });
 
-// 6. Connect Life Span Controls - UPDATED for new layout
+  // 6. Connect Phrase Styles Controls
+  const phraseStylesContainers = parameterSection.querySelectorAll('.phrase-styles-container');
+  
+  phraseStylesContainers.forEach((container) => {
+    connectPhraseStylesControls(container, currentVoice);
+  });
+
+  // 7. Connect Life Span Controls - UPDATED for new layout
 const lifeSpanContainers = parameterSection.querySelectorAll('.life-span-settings');
 const actualContainers = [];
 lifeSpanContainers.forEach(settings => {
