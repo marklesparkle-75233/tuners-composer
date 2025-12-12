@@ -261,6 +261,11 @@ class MasterClock {
       voiceClockManager.updateAllVoices();
     }
     
+    // Update timeline playhead if timeline view is active
+    if (timelineViewActive) {
+      updateTimelinePlayhead();
+    }
+
     this.lastUpdateTime = now;
   }
   
@@ -402,7 +407,7 @@ let tempoScrollDirection = 0;
 // Global state
 let currentVoice = 0;
 let voiceData = [];
-
+let timelineViewActive = false; // Track if timeline view is open
 
 function initializeVoices() {
   voiceData = [];
@@ -727,8 +732,814 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   controlsWrapper.appendChild(repeatContainer);
   wrapper.appendChild(controlsWrapper);
   
+  // NEW: Add Timeline View button
+  const timelineButton = document.createElement('button');
+  timelineButton.className = 'timeline-view-button';
+  timelineButton.textContent = 'TIMELINE VIEW';
+  timelineButton.style.cssText = `
+    width: 50%;
+    margin-top: 15px;
+    padding: 10px 20px;
+    background: linear-gradient(to bottom, #4a90e2, #357abd);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  `;
+  
+  timelineButton.onmouseover = function() {
+    this.style.background = 'linear-gradient(to bottom, #357abd, #2868a8)';
+    this.style.transform = 'translateY(-1px)';
+    this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+  };
+  
+  timelineButton.onmouseout = function() {
+    this.style.background = 'linear-gradient(to bottom, #4a90e2, #357abd)';
+    this.style.transform = 'translateY(0)';
+    this.style.boxShadow = 'none';
+  };
+  
+    timelineButton.onclick = function() {
+    showTimelineView();
+  };
+
+  
+  wrapper.appendChild(timelineButton);
+  
   return wrapper;
 }
+
+// ===== TIMELINE VIEW FUNCTIONS =====
+
+function showTimelineView() {
+  console.log('🎬 Opening Timeline View...');
+  
+  // 1. Mark timeline as active
+  timelineViewActive = true;
+  
+  // 2. Hide parameter section
+  const paramSection = document.getElementById('parameter-section');
+  if (!paramSection) {
+    console.error('❌ Parameter section not found');
+    return;
+  }
+  paramSection.style.display = 'none';
+  
+  // 3. Create timeline view container
+  const timelineContainer = document.createElement('div');
+  timelineContainer.id = 'timeline-view-container';
+  timelineContainer.className = 'timeline-view-container';
+  timelineContainer.style.cssText = `
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    overflow-y: auto;
+  `;
+  
+  // 4. Create header
+  const header = document.createElement('div');
+  header.className = 'timeline-view-header';
+  header.style.cssText = `
+    background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+    border-bottom: 2px solid #4a90e2;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  
+  const title = document.createElement('h2');
+  title.textContent = 'LIFE SPAN TIMELINE VIEW';
+  title.style.cssText = 'margin: 0; font-size: 20px; color: #333;';
+  
+  const backButton = document.createElement('button');
+  backButton.textContent = 'BACK TO VOICE CONTROLS';
+  backButton.className = 'timeline-back-button';
+  backButton.style.cssText = `
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+  backButton.onclick = closeTimelineView;
+  
+  header.appendChild(title);
+  header.appendChild(backButton);
+  timelineContainer.appendChild(header);
+  
+  console.log('✅ Header created and appended');
+  console.log('📏 About to create master timeline bar...');
+
+// NEW: Create master timeline bar
+  const masterTimelineBar = document.createElement('div');
+  
+  // NEW: Create master timeline bar
+  try {
+    const masterTimelineBar = document.createElement('div');
+    masterTimelineBar.className = 'master-timeline-bar';
+    masterTimelineBar.style.cssText = `
+      background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
+      border-bottom: 2px solid #dee2e6;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    `;
+    
+    console.log('✅ Master timeline bar div created');
+    
+    const maxTimeMs = calculateMasterTimelineLength();
+    const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
+    
+    console.log('✅ Max time calculated:', maxTimeFormatted);
+    
+    const timelineInfo = document.createElement('div');
+    timelineInfo.className = 'timeline-info';
+    timelineInfo.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex: 1;
+    `;
+    
+    const startLabel = document.createElement('span');
+    startLabel.textContent = '0:00';
+    startLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
+    
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'timeline-progress-container';
+    progressContainer.style.cssText = `
+      position: relative;
+      flex: 1;
+      height: 8px;
+      background: #e9ecef;
+      border-radius: 4px;
+      overflow: visible;
+    `;
+    
+    const progressBar = document.createElement('div');
+    progressBar.id = 'timeline-progress-bar';
+    progressBar.className = 'timeline-progress-bar';
+    progressBar.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: #4a90e2;
+      border-radius: 4px;
+      transition: width 0.05s linear;
+    `;
+    
+  const playhead = document.createElement('div');
+  playhead.id = 'timeline-playhead';
+  playhead.className = 'timeline-playhead';
+  playhead.style.cssText = `
+    position: absolute;
+    top: -10px;
+    left: 0%;
+    width: 3px;
+    height: calc(100% + 20px);
+    background: #dc3545;
+    transition: left 0.05s linear;
+    pointer-events: none;
+    z-index: 100;
+  `;
+  
+  const playheadArrow = document.createElement('div');
+  playheadArrow.style.cssText = `
+    position: absolute;
+    top: -18px;
+    left: -7px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 10px solid #dc3545;
+  `;
+  playhead.appendChild(playheadArrow);
+  
+    // Add tooltip to playhead
+  const playheadTooltip = document.createElement('div');
+  playheadTooltip.id = 'timeline-playhead-tooltip';
+  playheadTooltip.className = 'timeline-playhead-tooltip';
+  playheadTooltip.textContent = '0:00';
+  playheadTooltip.style.cssText = `
+    position: absolute;
+    top: -1px;
+    left: 8px;
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  `;
+  playhead.appendChild(playheadTooltip);
+
+
+    
+    progressContainer.appendChild(progressBar);
+    progressContainer.appendChild(playhead);
+    
+    console.log('✅ Progress container created');
+    
+    const endLabel = document.createElement('span');
+    endLabel.id = 'timeline-max-time';
+    endLabel.textContent = maxTimeFormatted;
+    endLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
+    
+    timelineInfo.appendChild(startLabel);
+    timelineInfo.appendChild(progressContainer);
+    timelineInfo.appendChild(endLabel);
+    
+    masterTimelineBar.appendChild(timelineInfo);
+    timelineContainer.appendChild(masterTimelineBar);
+
+    
+    console.log('✅ Master timeline bar fully created and appended!');
+    
+  } catch (error) {
+    console.error('❌ ERROR creating master timeline bar:', error);
+    console.error('   Error message:', error.message);
+    console.error('   Error stack:', error.stack);
+  }
+
+  // 5. Create content area with voice rows
+  const content = document.createElement('div');
+  content.className = 'timeline-content';
+  content.style.cssText = `
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+  `;
+  
+  // Calculate master timeline length
+  const maxTimeMs = calculateMasterTimelineLength();
+  
+  // Count enabled voices
+  const enabledVoices = voiceData.filter(v => v.enabled);
+  
+  if (enabledVoices.length === 0) {
+    const noVoices = document.createElement('div');
+    noVoices.style.cssText = `
+      text-align: center;
+      padding: 40px;
+      color: #dc3545;
+      font-size: 16px;
+    `;
+    noVoices.innerHTML = `
+      <p style="margin: 0 0 10px 0;">⚠️ No Enabled Voices</p>
+      <p style="margin: 0; font-size: 14px;">Please enable at least one voice to use Timeline View.</p>
+    `;
+    content.appendChild(noVoices);
+  } else {
+    console.log(`📊 Generating timeline for ${enabledVoices.length} voices`);
+    
+    // Generate a row for each enabled voice
+    for (let i = 0; i < 16; i++) {
+      if (!voiceData[i].enabled) continue;
+      
+      const voiceRow = createTimelineVoiceRow(i, maxTimeMs);
+      content.appendChild(voiceRow);
+    }
+  }
+  
+  timelineContainer.appendChild(content);
+
+  
+  // 6. Inject into main content
+  const mainContent = document.getElementById('main-content');
+  if (!mainContent) {
+    console.error('❌ Main content area not found');
+    return;
+  }
+  mainContent.appendChild(timelineContainer);
+  
+  console.log('✅ Timeline View opened successfully');
+  console.log('   Enabled voices:', voiceData.filter(v => v.enabled).map((v, i) => `Voice ${i + 1}`).join(', '));
+
+// NEW: Connect all timeline sliders to voiceData
+  setTimeout(() => {
+    connectTimelineSliders();
+  }, 100);
+}
+
+function closeTimelineView() {
+  console.log('🔙 Closing Timeline View...');
+  
+  // 1. Mark timeline as inactive
+  timelineViewActive = false;
+  
+  // 2. Remove timeline container
+  const timeline = document.getElementById('timeline-view-container');
+  if (timeline) {
+    timeline.remove();
+    console.log('✅ Timeline container removed');
+  }
+  
+  // 3. Restore parameter section
+  const paramSection = document.getElementById('parameter-section');
+  if (paramSection) {
+    paramSection.style.display = 'flex';
+    console.log('✅ Parameter section restored');
+  }
+  
+    // 4. Refresh parameter view to show updated values
+  setTimeout(() => {
+    console.log('🔄 Refreshing parameter view for Voice', currentVoice + 1);
+    
+    // Simple approach: just re-render the entire parameter section
+    renderParameters();
+    
+    // Then reconnect all sliders
+    setTimeout(() => {
+      connectAllSliders();
+      console.log('✅ Parameter view refreshed and reconnected');
+    }, 100);
+  }, 100);
+
+}
+function calculateMasterTimelineLength() {
+  let maxTime = 0;
+  
+  for (let i = 0; i < 16; i++) {
+    if (!voiceData[i].enabled) continue;
+    
+    const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+    if (!lifeSpan) continue;
+    
+    // USE VOICE'S DECLARED MAX TIME (Total Time Length setting)
+    // This is the authoritative value for timeline scale
+    if (lifeSpan.maxTimeMs && lifeSpan.maxTimeMs > maxTime) {
+      maxTime = lifeSpan.maxTimeMs;
+    }
+  }
+  
+  // Fallback to 5 minutes if nothing set
+  const finalTime = maxTime > 0 ? maxTime : 300000;
+  console.log(`📏 Master timeline length: ${formatMsToMMSS(finalTime)} (${finalTime}ms)`);
+  return finalTime;
+}
+
+
+// ===== ADVANCED TIMELINE VIEW FUNCTIONS =====
+function createTimelineVoiceRow(voiceIndex, maxTimeMs) {
+  const row = document.createElement('div');
+  row.className = 'voice-timeline-row';
+  row.dataset.voiceIndex = voiceIndex;
+  row.style.cssText = `
+    border-bottom: 1px solid #dee2e6;
+    padding: 15px 20px;
+    background: white;
+    position: relative;
+  `;
+  
+  // Voice header
+  const header = document.createElement('div');
+  header.className = 'voice-timeline-header';
+  header.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 12px;
+  `;
+  
+  const voiceLabel = document.createElement('div');
+  voiceLabel.className = 'voice-timeline-label';
+  const instrumentIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
+  const instrumentName = gmSounds[instrumentIndex] || 'Unknown';
+  voiceLabel.innerHTML = `
+    <strong style="font-size: 16px; color: #333;">Voice ${voiceIndex + 1}</strong>
+    <span style="font-size: 14px; color: #666; margin-left: 8px;">(${instrumentName})</span>
+  `;
+  
+  header.appendChild(voiceLabel);
+  row.appendChild(header);
+  
+  // Get Life Span data
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  const beatUnit = lifeSpan.beatUnit;
+  const storedMaxTimeMs = lifeSpan.maxTimeMs || 300000;
+  const storedMaxTimeFormatted = formatMsToMMSS(storedMaxTimeMs);
+  
+  // Create parameter content container (standard size)
+  const paramContentContainer = document.createElement('div');
+  paramContentContainer.className = 'row-container-content';
+  paramContentContainer.style.cssText = `
+    display: flex;
+    width: 100%;
+    gap: 20px;
+  `;
+  
+  // Left side: Sliders container
+  const slidersContainer = document.createElement('div');
+  slidersContainer.className = 'range-container';
+  slidersContainer.style.cssText = `
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  `;
+  
+  // Create 3 entrance sliders (vertically compressed)
+  for (let i = 1; i <= 3; i++) {
+    const entranceContainer = createTimelineEntranceSlider(voiceIndex, i, storedMaxTimeMs, beatUnit);
+    slidersContainer.appendChild(entranceContainer);
+  }
+  
+  paramContentContainer.appendChild(slidersContainer);
+  
+  // Right side: Behavior container (standard)
+  const behaviorContainer = document.createElement('div');
+  behaviorContainer.className = 'behavior-container';
+  behaviorContainer.style.cssText = `
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px;
+    background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
+    border-radius: 8px;
+  `;
+  
+    // Total Time Length - READ ONLY DISPLAY
+  const timeContainer = document.createElement('div');
+  timeContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  `;
+  const timeLabel = document.createElement('label');
+  timeLabel.textContent = 'Total Time Length:';
+  timeLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
+  
+  const timeDisplay = document.createElement('div');
+  timeDisplay.className = 'timeline-max-time-display';
+  timeDisplay.textContent = storedMaxTimeFormatted;
+  timeDisplay.style.cssText = `
+    width: 100%;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+  `;
+  
+  timeContainer.appendChild(timeLabel);
+  timeContainer.appendChild(timeDisplay);
+  behaviorContainer.appendChild(timeContainer);
+
+  
+  // Beat Unit - READ ONLY DISPLAY
+  const beatContainer = document.createElement('div');
+  beatContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  `;
+  const beatLabel = document.createElement('label');
+  beatLabel.textContent = 'Beat Unit:';
+  beatLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
+  
+  const beatDisplay = document.createElement('div');
+  beatDisplay.className = 'timeline-beat-unit-display';
+  beatDisplay.textContent = rhythmOptions[beatUnit] || 'Quarter Notes';
+  beatDisplay.style.cssText = `
+    width: 100%;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #495057;
+    text-align: center;
+  `;
+  
+  beatContainer.appendChild(beatLabel);
+  beatContainer.appendChild(beatDisplay);
+  behaviorContainer.appendChild(beatContainer);
+
+  
+  // Repeat checkbox
+  const repeatContainer = document.createElement('div');
+  repeatContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #dee2e6;
+  `;
+  
+  const repeatLabel = document.createElement('label');
+  repeatLabel.textContent = 'Repeat';
+  repeatLabel.style.cssText = 'font-size: 14px; font-weight: bold; color: #333;';
+  
+  const repeatCheckbox = document.createElement('input');
+  repeatCheckbox.type = 'checkbox';
+  repeatCheckbox.className = 'timeline-repeat-checkbox';
+  repeatCheckbox.dataset.voiceIndex = voiceIndex;
+  repeatCheckbox.checked = lifeSpan.repeat;
+  repeatCheckbox.style.cssText = `
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    transform: scale(1.2);
+  `;
+  
+  // Connect to voiceData
+  repeatCheckbox.onchange = function(e) {
+    voiceData[voiceIndex].parameters['LIFE SPAN'].repeat = e.target.checked;
+    console.log(`✅ Voice ${voiceIndex + 1} Repeat = ${e.target.checked}`);
+  };
+  
+  repeatContainer.appendChild(repeatLabel);
+  repeatContainer.appendChild(repeatCheckbox);
+  behaviorContainer.appendChild(repeatContainer);
+  
+  paramContentContainer.appendChild(behaviorContainer);
+  row.appendChild(paramContentContainer);
+  
+  console.log(`✅ Created timeline row for Voice ${voiceIndex + 1}`);
+  
+  return row;
+}
+
+function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUnit) {
+  const container = document.createElement('div');
+  container.className = 'timeline-entrance-slider';
+  container.style.cssText = `
+    margin-bottom: 8px;
+    width: 100%;
+  `;
+
+  
+  const label = document.createElement('div');
+  label.className = 'timeline-entrance-label';
+  label.textContent = `Entrance & Exit ${entranceNum}`;
+  label.style.cssText = `
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 5px;
+    font-weight: 600;
+  `;
+  container.appendChild(label);
+  
+  const sliderWrapper = document.createElement('div');
+  sliderWrapper.className = 'timeline-slider-wrapper';
+  sliderWrapper.dataset.voiceIndex = voiceIndex;
+  sliderWrapper.dataset.entranceNum = entranceNum;
+  sliderWrapper.style.cssText = `
+    width: 100%;
+    height: 40px;
+    position: relative;
+    box-sizing: border-box;
+  `;
+
+  const sliderDiv = document.createElement('div');
+  sliderDiv.className = 'timeline-nouislider';
+  sliderDiv.style.cssText = `
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  `;
+  sliderWrapper.appendChild(sliderDiv);
+  container.appendChild(sliderWrapper);
+
+ 
+  // Get Life Span data for this entrance
+  const lifeSpanData = voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`];
+  const startEnter = lifeSpanData.enter || 0;
+  const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : (lifeSpanData.exit || 0);
+  
+  // Calculate beat-based step size
+  const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
+  
+  // Create formatter for beat-based tooltips
+  const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
+  
+  try {
+    noUiSlider.create(sliderDiv, {
+      start: [startEnter, Math.min(startExit, maxTimeMs)],
+      connect: true,
+      range: { min: 0, max: maxTimeMs },
+      step: beatStepMs,
+      tooltips: [true, true],
+      format: formatter
+    });
+   
+   // Force timeline sliders to full width - aggressive override
+    setTimeout(() => {
+      sliderDiv.style.setProperty('width', '100%', 'important');
+      sliderDiv.style.setProperty('min-width', '0', 'important');
+      sliderDiv.style.setProperty('max-width', '100%', 'important');
+      
+      const base = sliderDiv.querySelector('.noUi-base');
+      if (base) {
+        base.style.setProperty('width', '100%', 'important');
+      }
+      
+      const connects = sliderDiv.querySelector('.noUi-connects');
+      if (connects) {
+        connects.style.setProperty('width', '100%', 'important');
+      }
+    }, 0);
+
+
+    console.log(`✅ Created slider for Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
+    
+    // NEW: Add visual boundary line at voice's max time (if less than master max)
+    const voiceMaxTimeMs = voiceData[voiceIndex].parameters['LIFE SPAN'].maxTimeMs || 300000;
+    
+    if (voiceMaxTimeMs < maxTimeMs) {
+      const boundaryPercentage = (voiceMaxTimeMs / maxTimeMs) * 100;
+      
+      const boundaryLine = document.createElement('div');
+      boundaryLine.className = 'voice-max-boundary';
+      boundaryLine.style.cssText = `
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: ${boundaryPercentage}%;
+        width: 2px;
+        background: #dc3545;
+        z-index: 50;
+        pointer-events: none;
+      `;
+      
+      const boundaryLabel = document.createElement('div');
+      boundaryLabel.style.cssText = `
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: #dc3545;
+        font-weight: 600;
+        white-space: nowrap;
+        background: white;
+        padding: 2px 4px;
+        border-radius: 2px;
+      `;
+      boundaryLabel.textContent = `Max: ${formatMsToMMSS(voiceMaxTimeMs)}`;
+      
+      boundaryLine.appendChild(boundaryLabel);
+      sliderWrapper.appendChild(boundaryLine);
+      
+      console.log(`🚧 Voice ${voiceIndex + 1}: Boundary at ${formatMsToMMSS(voiceMaxTimeMs)} (${boundaryPercentage.toFixed(1)}%)`);
+    }
+  } catch (error) {
+    console.error(`❌ Error creating timeline slider for Voice ${voiceIndex + 1}, Entrance ${entranceNum}:`, error);
+  }
+  
+  return container;
+}
+
+// ===== END TIMELINE VIEW FUNCTIONS =====
+
+function connectTimelineSliders() {
+  console.log('🔗 Connecting timeline sliders to voiceData...');
+  
+  const timelineSliders = document.querySelectorAll('.timeline-slider-wrapper');
+  
+  timelineSliders.forEach((wrapper) => {
+    const voiceIndex = parseInt(wrapper.dataset.voiceIndex);
+    const entranceNum = parseInt(wrapper.dataset.entranceNum);
+    
+    const sliderDiv = wrapper.querySelector('.timeline-nouislider');
+    
+    if (!sliderDiv || !sliderDiv.noUiSlider) {
+      console.warn(`⚠️ Timeline slider not found for Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
+      return;
+    }
+    
+    // Remove any existing handlers
+    sliderDiv.noUiSlider.off('update');
+    
+       // Connect to voiceData with clamping
+    sliderDiv.noUiSlider.on('update', function(values) {
+      const enterValue = values[0];
+      const exitValue = values[1];
+      
+      let enterMs = parseLifeSpanValue(enterValue);
+      let exitMs = parseLifeSpanValue(exitValue);
+      
+      // NEW: Clamp to voice's individual max time
+      const voiceMaxTimeMs = voiceData[voiceIndex].parameters['LIFE SPAN'].maxTimeMs || 300000;
+      
+      let clamped = false;
+      
+      if (enterMs > voiceMaxTimeMs) {
+        enterMs = voiceMaxTimeMs;
+        clamped = true;
+      }
+      
+      if (exitMs > voiceMaxTimeMs && exitMs < 999999999) { // Don't clamp infinity
+        exitMs = voiceMaxTimeMs;
+        clamped = true;
+      }
+      
+      // If clamped, update slider to show clamped values
+      if (clamped) {
+        sliderDiv.noUiSlider.set([enterMs, exitMs]);
+        console.log(`🚧 Voice ${voiceIndex + 1}, Entrance ${entranceNum}: Clamped to max ${formatMsToMMSS(voiceMaxTimeMs)}`);
+      }
+      
+      // Update voiceData
+      voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`].enter = enterMs;
+      voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`].exit = exitMs;
+      
+      console.log(`✅ Voice ${voiceIndex + 1}, Entrance ${entranceNum}: ${formatMsToMMSS(enterMs)} → ${formatMsToMMSS(exitMs)}`);
+    });
+
+  });
+  
+  console.log(`✅ Connected ${timelineSliders.length} timeline sliders`);
+}
+function updateTimelinePlayhead() {
+  // Check 1: Is timeline active?
+  if (!timelineViewActive) {
+    console.log('❌ Timeline not active');
+    return;
+  }
+  
+  // Check 2: Is master clock running?
+  if (!masterClock || !masterClock.isActive()) {
+    console.log('❌ Master clock not active');
+    return;
+  }
+  
+  const elapsedMs = masterClock.getElapsedTime();
+  const maxTimeMs = calculateMasterTimelineLength();
+  
+  // Debug log (5% of calls)
+  if (Math.random() < 0.05) {
+    console.log('⏱️ Playhead update:', formatMsToMMSS(elapsedMs));
+    console.log('   Raw elapsedMs:', elapsedMs);
+    console.log('   masterStartTime:', masterClock.masterStartTime);
+    console.log('   currentTime:', masterClock.currentTime);
+    console.log('   isActive:', masterClock.isActive());
+  }
+
+  
+  // Calculate percentage position
+  let percentage = (elapsedMs / maxTimeMs) * 100;
+  
+  // Handle repeat/cycling (wrap around if past 100%)
+  if (percentage > 100) {
+    percentage = percentage % 100;
+  }
+  
+  // Update progress bar
+  const progressBar = document.getElementById('timeline-progress-bar');
+  if (progressBar) {
+    progressBar.style.width = Math.min(percentage, 100) + '%';
+  } else {
+    console.warn('⚠️ Progress bar element not found');
+  }
+  
+  // Update playhead position
+  const playhead = document.getElementById('timeline-playhead');
+  if (playhead) {
+    playhead.style.left = Math.min(percentage, 100) + '%';
+  } else {
+    console.warn('⚠️ Playhead element not found');
+  }
+  
+  // Update playhead tooltip
+  const tooltip = document.getElementById('timeline-playhead-tooltip');
+  if (tooltip) {
+    tooltip.textContent = formatMsToMMSS(elapsedMs);
+  } else {
+    console.warn('⚠️ Tooltip element not found');
+  }
+}
+
+// ===== END TIMELINE VIEW FUNCTIONS =====
+
 
 function rebuildLifeSpanSliders(container, voiceIndex) {
   
@@ -5209,6 +6020,42 @@ resetPreviewButton(voiceIndex) {
 }
 
 
+// hasVoiceCompletedLifeSpan(voiceIndex) {
+//   const elapsedMs = this.masterClock.getElapsedTime();
+//   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+//   if (!lifeSpanParam) return false;
+  
+//   // CRITICAL CHECK: If repeat is enabled, NEVER complete
+//   if (lifeSpanParam.repeat) {
+//     return false;
+//   }
+  
+//   let hasAnyActiveSpan = false;
+//   let hasPassedAllSpans = true;
+  
+//   // Check all 3 Life Spans
+//   for (let i = 1; i <= 3; i++) {
+//     const span = lifeSpanParam[`lifeSpan${i}`];
+    
+//     if (!span || span.exit <= 0) continue; // Skip disabled spans
+    
+//     hasAnyActiveSpan = true;
+    
+//     const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
+    
+//     // If we haven't passed this span's exit time, we haven't completed everything
+//     if (elapsedMs < exitTime) {
+//       hasPassedAllSpans = false;
+//     }
+//   }
+  
+//   const completed = hasAnyActiveSpan && hasPassedAllSpans;
+  
+  
+//   return completed;
+// }
+
 hasVoiceCompletedLifeSpan(voiceIndex) {
   const elapsedMs = this.masterClock.getElapsedTime();
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
@@ -5220,31 +6067,18 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
     return false;
   }
   
-  let hasAnyActiveSpan = false;
-  let hasPassedAllSpans = true;
+  // NEW LOGIC: Voice completes when elapsed time reaches Total Time Length
+  const voiceMaxTimeMs = lifeSpanParam.maxTimeMs || 300000;
   
-  // Check all 3 Life Spans
-  for (let i = 1; i <= 3; i++) {
-    const span = lifeSpanParam[`lifeSpan${i}`];
-    
-    if (!span || span.exit <= 0) continue; // Skip disabled spans
-    
-    hasAnyActiveSpan = true;
-    
-    const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
-    
-    // If we haven't passed this span's exit time, we haven't completed everything
-    if (elapsedMs < exitTime) {
-      hasPassedAllSpans = false;
-    }
+  // Check if we've reached the voice's declared total time
+  const completed = elapsedMs >= voiceMaxTimeMs;
+  
+  if (completed) {
+    console.log(`✅ Voice ${voiceIndex + 1} completed its Total Time Length: ${formatMsToMMSS(voiceMaxTimeMs)}`);
   }
-  
-  const completed = hasAnyActiveSpan && hasPassedAllSpans;
-  
   
   return completed;
 }
-
 
 
 

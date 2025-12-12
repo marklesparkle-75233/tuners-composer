@@ -1067,6 +1067,370 @@
 </div>
 
 <div class="content-box">
+    <h4>🎯 LIFE SPAN TIMELINE VIEW</h4>
+    <p><span class="bold">Purpose</span>: Visualize and coordinate entrance/exit timing across all enabled voices simultaneously</p>
+
+    <p><span class="bold">Access</span>: Click the <span class="bold">"TIMELINE VIEW"</span> button (blue, located below the Repeat checkbox in any voice's LIFE SPAN parameter)</p>
+
+    <h3>What Timeline View Shows</h3>
+    <p>Timeline View provides a <span class="bold">bird's-eye view</span> of your entire composition's timing structure:</p>
+    <ul>
+        <li><span class="bold">Master timeline bar</span>: Shows total composition duration (0:00 to maximum time)</li>
+        <li><span class="bold">All enabled voices</span>: Stacked vertically with aligned time scales</li>
+        <li><span class="bold">Moving playhead</span>: Red vertical line with tooltip showing elapsed time during playback</li>
+        <li><span class="bold">Progress bar</span>: Blue bar filling to show playback position</li>
+    </ul>
+
+    <h3>Timeline View Interface</h3>
+
+    <p><span class="bold">Header</span>:</p>
+    <ul>
+        <li>Title: "LIFE SPAN TIMELINE VIEW"</li>
+        <li><span class="bold">"BACK TO VOICE CONTROLS"</span> button (gray) - returns to standard parameter view</li>
+    </ul>
+
+    <p><span class="bold">Master Timeline Bar</span>:</p>
+    <ul>
+        <li>Start time: 0:00 (left)</li>
+        <li>End time: Longest voice's Total Time Length (right)</li>
+        <li>Progress bar: Blue, shows elapsed percentage</li>
+        <li>Playhead: Red vertical line with downward arrow</li>
+        <li>Playhead tooltip: Shows current elapsed time (follows playhead)</li>
+    </ul>
+
+    <p><span class="bold">Each Voice Row Shows</span>:</p>
+    <ul>
+        <li><span class="bold">Voice header</span>: "Voice X (Instrument Name)"</li>
+        <li><span class="bold">Three entrance/exit sliders</span>: Fully editable, all aligned to same time scale</li>
+        <li><span class="bold">Right panel</span> (gray box) containing:
+            <ul>
+                <li>Total Time Length (read-only display)</li>
+                <li>Beat Unit (read-only display)</li>
+                <li>Repeat checkbox (editable)</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h3>How to Use Timeline View</h3>
+
+    <p><span class="bold">Opening Timeline View</span>:</p>
+    <ol>
+        <li>Enable the voices you want to coordinate (2 or more voices works best)</li>
+        <li>Expand any voice's LIFE SPAN parameter</li>
+        <li>Click the <span class="bold">"TIMELINE VIEW"</span> button</li>
+        <li>Timeline view replaces the parameter section</li>
+    </ol>
+
+    <p><span class="bold">Editing in Timeline View</span>:</p>
+    <ul>
+        <li><span class="bold">Drag slider handles</span> to adjust entrance and exit times</li>
+        <li><span class="bold">Changes save automatically</span> to voice data</li>
+        <li><span class="bold">Tooltips show</span> both beat counts and clock time</li>
+        <li><span class="bold">All sliders aligned</span>: 1:00 on Voice 1 = same position as 1:00 on Voice 2</li>
+        <li><span class="bold">Check/uncheck Repeat</span> for each voice</li>
+    </ul>
+
+    <p><span class="bold">During Playback</span>:</p>
+    <ul>
+        <li>Timeline view can be opened while music is playing</li>
+        <li><span class="bold">Red playhead moves</span> left to right showing current position</li>
+        <li><span class="bold">Tooltip follows playhead</span> displaying elapsed time</li>
+        <li><span class="bold">Blue progress bar fills</span> behind playhead</li>
+        <li>Watch which voices are currently in their active time windows</li>
+        <li>Make timing adjustments in real-time (changes take effect on next cycle)</li>
+    </ul>
+
+    <p><span class="bold">Returning to Controls View</span>:</p>
+    <ul>
+        <li>Click <span class="bold">"BACK TO VOICE CONTROLS"</span> button</li>
+        <li>Parameter section restores</li>
+        <li>All timing changes are preserved</li>
+        <li>View current voice's Life Span parameter to verify changes</li>
+    </ul>
+
+    <h3>Timeline View Design Philosophy</h3>
+
+    <p><span class="bold">Read-Only Configuration Fields</span>:</p>
+    <ul>
+        <li>Total Time Length and Beat Unit are <span class="bold">displayed but not editable</span> in Timeline View</li>
+        <li><span class="bold">Why?</span> Changing these would require rebuilding all sliders (complex)</li>
+        <li><span class="bold">To change</span>: Return to Controls View, edit there, then reopen Timeline View</li>
+        <li>This keeps Timeline View focused on <span class="bold">timing coordination</span>, not configuration</li>
+    </ul>
+
+    <p><span class="bold">Unified Timeline Scale</span>:</p>
+    <ul>
+        <li>All sliders share the <span class="bold">longest voice's Total Time Length</span> as their maximum</li>
+        <li>Example: Voice 1 max = 2:00, Voice 2 max = 5:00 → Timeline shows 0:00 to 5:00 for both</li>
+        <li><span class="bold">Why?</span> Enables perfect visual alignment - 1:00 appears at same position for all voices</li>
+        <li>Shorter voices can still be set to shorter times, they just have "extra space" on the timeline</li>
+    </ul>
+
+    <h3>Practical Timeline View Workflows</h3>
+
+    <p><span class="bold">Workflow 1 - Staggered Entrances (Building Intensity)</span>:</p>
+    <ol>
+        <li>Enable 4 voices with different instruments</li>
+        <li>Set all to same Total Time Length (e.g., 5:00)</li>
+        <li>Open Timeline View</li>
+        <li>Set Voice 1: 0:00 to ∞</li>
+        <li>Set Voice 2: 1:00 to ∞</li>
+        <li>Set Voice 3: 2:00 to ∞</li>
+        <li>Set Voice 4: 3:00 to ∞</li>
+        <li>Visual result: Clear staircase pattern showing voices entering at 1-minute intervals</li>
+    </ol>
+
+    <p><span class="bold">Workflow 2 - Call and Response (Non-Overlapping)</span>:</p>
+    <ol>
+        <li>Enable 2 voices</li>
+        <li>Set both to Total Time Length 2:00, Repeat ON</li>
+        <li>Open Timeline View</li>
+        <li>Voice 1 - Entrance 1: 0:00 to 0:30, Entrance 2: 1:00 to 1:30</li>
+        <li>Voice 2 - Entrance 1: 0:30 to 1:00, Entrance 2: 1:30 to 2:00</li>
+        <li>Visual result: Complementary patterns with no overlap - voices alternate</li>
+    </ol>
+
+    <p><span class="bold">Workflow 3 - Layered Complexity (Overlapping Windows)</span>:</p>
+    <ol>
+        <li>Enable 3 voices</li>
+        <li>Open Timeline View</li>
+        <li>Voice 1: 0:00 to 2:00 (foundation)</li>
+        <li>Voice 2: 0:30 to 2:30 (middle layer enters after foundation established)</li>
+        <li>Voice 3: 1:00 to 3:00 (top layer enters last, extends past others)</li>
+        <li>Visual result: Cascading overlaps showing how density builds and releases</li>
+    </ol>
+
+    <p><span class="bold">Workflow 4 - Sparse Accents (Short Bursts)</span>:</p>
+    <ol>
+        <li>Voice 1: Continuous drone (0:00 to ∞)</li>
+        <li>Voice 2: Short appearance (1:30 to 1:45) - 15-second accent</li>
+        <li>Voice 3: Multiple short bursts (0:30-0:40, 1:00-1:10, 2:00-2:10)</li>
+        <li>Visual result: Background drone with punctuation marks clearly visible on timeline</li>
+    </ol>
+
+    <h3>Real-Time Playback Visualization</h3>
+
+    <p><span class="bold">The Moving Playhead</span>:</p>
+    <ul>
+        <li>Updates 20 times per second (smooth animation)</li>
+        <li>Tooltip shows elapsed time in MM:SS format</li>
+        <li>Positioned to right of playhead line for easy reading</li>
+        <li>Works whether you open Timeline View before or during playback</li>
+    </ul>
+
+    <p><span class="bold">What You Can See</span>:</p>
+    <ul>
+        <li>Which voices are currently in their active time windows</li>
+        <li>When next voice will enter</li>
+        <li>How much time until current voice exits</li>
+        <li>Overall composition structure at a glance</li>
+    </ul>
+
+    <h3>Data Synchronization</h3>
+
+    <p><span class="bold">Changes Are Bidirectional and Immediate</span>:</p>
+    <ul>
+        <li><span class="bold">Edit in Timeline View</span> → Values update in Controls View</li>
+        <li><span class="bold">Edit in Controls View</span> → Values update in Timeline View (when reopened)</li>
+        <li><span class="bold">Repeat checkbox</span>: Syncs in both directions</li>
+        <li><span class="bold">No "Save" needed</span>: Changes apply instantly</li>
+    </ul>
+
+    <p><span class="bold">Single Source of Truth</span>:</p>
+    <ul>
+        <li>All data stored in voice data structure</li>
+        <li>Both views read/write to same data</li>
+        <li>No risk of desynchronization</li>
+        <li>Close and reopen Timeline View to refresh voice list (if voices enabled/disabled)</li>
+    </ul>
+
+    <h3>Timeline View Advantages</h3>
+
+    <p><span class="bold">Why Use Timeline View?</span></p>
+    <ul>
+        <li><span class="bold">See all voices at once</span>: No need to switch between voice tabs</li>
+        <li><span class="bold">Visual alignment</span>: Immediately see timing relationships</li>
+        <li><span class="bold">Precise coordination</span>: Align entrances/exits to exact times</li>
+        <li><span class="bold">Complex orchestration</span>: Plan 16-voice layering easily</li>
+        <li><span class="bold">Real-time feedback</span>: Watch playhead to verify timing</li>
+        <li><span class="bold">Faster workflow</span>: Edit multiple voices without context switching</li>
+    </ul>
+
+    <p><span class="bold">When to Use Timeline View</span>:</p>
+    <ul>
+        <li>Setting up multi-voice compositions (3+ voices)</li>
+        <li>Creating precise entrance choreography</li>
+        <li>Designing repeating patterns with specific timing</li>
+        <li>Debugging timing issues (why doesn't Voice 3 appear?)</li>
+        <li>Verifying overall composition structure</li>
+    </ul>
+
+    <p><span class="bold">When to Use Controls View</span>:</p>
+    <ul>
+        <li>Changing Total Time Length or Beat Unit</li>
+        <li>Adjusting other parameters (Volume, Tempo, Effects, etc.)</li>
+        <li>Fine-tuning individual voice settings</li>
+        <li>Using PREVIEW button to audition voices</li>
+    </ul>
+
+    <h3>Tips for Timeline View</h3>
+
+    <ul>
+        <li><span class="bold">Open during playback</span>: Watch the playhead to see exactly where you are in the composition</li>
+        <li><span class="bold">Use consistent Total Time Lengths</span>: Set all voices to same max time (e.g., all 5:00) for simplest coordination</li>
+        <li><span class="bold">Vary Total Time Lengths intentionally</span>: Different max times create polyrhythmic cycling when Repeat is enabled</li>
+        <li><span class="bold">Set Beat Unit before opening Timeline</span>: Choose your preferred display unit in Controls View first</li>
+        <li><span class="bold">Plan on paper first</span>: Sketch your desired entrance pattern, then implement in Timeline View</li>
+        <li><span class="bold">Leave Timeline open while composing</span>: Make changes in real-time, watch playhead to hear results</li>
+        <li><span class="bold">Use multiple entrances creatively</span>: Voice can appear, disappear, reappear multiple times in one cycle</li>
+    </ul>
+
+    <h3>Advanced Timeline Techniques</h3>
+
+    <p><span class="bold">Technique 1 - Phased Cycling (Different Length Cycles)</span>:</p>
+    <blockquote>
+        Voice 1: Total Time 1:00, Entrance 0:00-0:20, Repeat ON<br>
+        Voice 2: Total Time 1:30, Entrance 0:00-0:30, Repeat ON<br>
+        Voice 3: Total Time 2:00, Entrance 0:00-0:40, Repeat ON<br><br>
+        Result: Three voices cycling at different rates (1 min, 1.5 min, 2 min) - creates slowly evolving phase relationships over time
+    </blockquote>
+
+    <p><span class="bold">Technique 2 - Gradual Layer Reveal</span>:</p>
+    <blockquote>
+        All voices: Total Time 10:00, Repeat OFF<br>
+        Voice 1: 0:00 to ∞<br>
+        Voice 2: 1:00 to ∞<br>
+        Voice 3: 2:00 to ∞<br>
+        Voice 4: 3:00 to ∞<br>
+        Voice 5: 4:00 to 9:00 (temporary climax layer)<br><br>
+        Result: Composition builds for 4 minutes, adds temporary climax layer at minute 4, releases it at minute 9, final minute with 4 remaining voices
+    </blockquote>
+
+    <p><span class="bold">Technique 3 - Breathing Texture (In-and-Out Pattern)</span>:</p>
+    <blockquote>
+        All voices: Total Time 3:00, Repeat ON<br>
+        Voice 1: 0:00-1:00, 2:00-3:00 (bookends)<br>
+        Voice 2: 0:30-1:30 (overlaps with Voice 1)<br>
+        Voice 3: 1:00-2:00 (center section)<br><br>
+        Result: Density rises and falls in waves - never silent, but texture constantly morphing
+    </blockquote>
+
+    <p><span class="bold">Technique 4 - Metric Modulation Visual Planning</span>:</p>
+    <blockquote>
+        Voice 1 (slow): Tempo 60 BPM, plays 0:00-2:00<br>
+        Voice 2 (medium): Tempo 90 BPM, plays 1:30-3:30 (overlaps transition)<br>
+        Voice 3 (fast): Tempo 180 BPM, plays 3:00-5:00<br><br>
+        Result: Tempo gradually accelerates through voice layering - Timeline View makes the transition points visually clear
+    </blockquote>
+
+    <h3>Timeline View Limitations</h3>
+
+    <p><span class="bold">By Design</span>:</p>
+    <ul>
+        <li><span class="bold">Configuration is read-only</span>: Can't edit Total Time Length or Beat Unit in Timeline View (edit in Controls View instead)</li>
+        <li><span class="bold">Static voice list</span>: Shows voices that were enabled when Timeline opened (close and reopen to refresh if you enable/disable voices)</li>
+        <li><span class="bold">Unified timeline scale</span>: All sliders share longest voice's max time (ensures visual alignment)</li>
+    </ul>
+
+    <p><span class="bold">What You CAN Edit</span>:</p>
+    <ul>
+        <li>✅ All entrance Enter times</li>
+        <li>✅ All entrance Exit times</li>
+        <li>✅ Repeat checkboxes</li>
+    </ul>
+
+    <p><span class="bold">What You CANNOT Edit</span>:</p>
+    <ul>
+        <li>❌ Total Time Length (use Controls View)</li>
+        <li>❌ Beat Unit (use Controls View)</li>
+        <li>❌ Enable/disable voices (use voice tabs, then reopen Timeline)</li>
+    </ul>
+
+    <h3>Troubleshooting Timeline View</h3>
+
+    <p><span class="bold">Problem: Voice doesn't appear in Timeline View</span></p>
+    <ul>
+        <li><span class="bold">Solution</span>: Voice is not enabled - check voice tab checkbox, then reopen Timeline View</li>
+    </ul>
+
+    <p><span class="bold">Problem: Slider won't drag past certain point</span></p>
+    <ul>
+        <li><span class="bold">Cause</span>: Voice's Total Time Length is shorter than you're trying to drag</li>
+        <li><span class="bold">Solution</span>: Close Timeline, increase that voice's Total Time Length in Controls View, reopen Timeline</li>
+        <li><span class="bold">Visual indicator</span>: Red boundary line shows voice's maximum time</li>
+    </ul>
+
+    <p><span class="bold">Problem: Playhead isn't moving during playback</span></p>
+    <ul>
+        <li><span class="bold">Solution</span>: Let playback run for at least 2-3 seconds before opening Timeline View (playhead updates may not be visible in first second)</li>
+    </ul>
+
+    <p><span class="bold">Problem: Changes in Timeline View don't appear in Controls View</span></p>
+    <ul>
+        <li><span class="bold">Solution</span>: Expand the LIFE SPAN parameter in Controls View to see updated values (rollup might be collapsed)</li>
+    </ul>
+
+    <p><span class="bold">Problem: Can't change Total Time Length in Timeline View</span></p>
+    <ul>
+        <li><span class="bold">Not a problem</span>: This is intentional design - use Controls View for configuration changes</li>
+    </ul>
+
+    <h3>Timeline View Best Practices</h3>
+
+    <ul>
+        <li><span class="bold">Set Total Time Lengths first</span>: Configure max times in Controls View before opening Timeline</li>
+        <li><span class="bold">Use round numbers</span>: 1:00, 2:00, 5:00 are easier to work with than 1:37</li>
+        <li><span class="bold">Start with simple patterns</span>: Get 2-3 voices working before adding more</li>
+        <li><span class="bold">Leave Timeline open while testing</span>: Click PLAY, watch playhead, verify your timing works as intended</li>
+        <li><span class="bold">Use Repeat strategically</span>: Repeating short patterns (30-60 seconds) creates minimalist textures</li>
+        <li><span class="bold">Save often</span>: Complex timing arrangements take time to perfect - save variations</li>
+        <li><span class="bold">Sketch first</span>: Draw your desired pattern on paper (helps visualize before implementing)</li>
+    </ul>
+
+    <h3>Example: Creating a 5-Minute Build Using Timeline View</h3>
+
+    <p><span class="bold">Goal</span>: Start with solo voice, add layers gradually, reach climax, then reduce to solo again</p>
+
+    <p><span class="bold">Setup</span>:</p>
+    <ol>
+        <li>Enable Voices 1-5</li>
+        <li>Set all to Total Time Length: 5:00, Repeat: OFF</li>
+        <li>Open Timeline View</li>
+        <li>Set timings:
+            <ul>
+                <li>Voice 1 (foundation): 0:00 to ∞</li>
+                <li>Voice 2 (layer): 1:00 to ∞</li>
+                <li>Voice 3 (layer): 2:00 to ∞</li>
+                <li>Voice 4 (climax): 3:00 to 4:00 (only 1 minute!)</li>
+                <li>Voice 5 (layer): 2:30 to 4:30</li>
+            </ul>
+        </li>
+        <li>Click PLAY and watch playhead move through your structure</li>
+    </ol>
+
+    <p><span class="bold">Result Timeline</span>:</p>
+    <blockquote>
+        0:00-1:00: Voice 1 solo (sparse, minimal)<br>
+        1:00-2:00: Voices 1+2 (builds)<br>
+        2:00-2:30: Voices 1+2+3 (fuller)<br>
+        2:30-3:00: Voices 1+2+3+5 (building to climax)<br>
+        3:00-4:00: Voices 1+2+3+4+5 (CLIMAX - all 5 voices)<br>
+        4:00-4:30: Voices 1+2+3+5 (releases)<br>
+        4:30-5:00: Voices 1+2+3 (winding down)<br>
+        After 5:00: Composition stops (Repeat OFF)
+    </blockquote>
+
+    <p>This kind of precise orchestration would be extremely difficult without Timeline View - you'd have to mentally track all the relationships. Timeline View makes it visual and intuitive.</p>
+</div>
+
+
+
+
+<div class="section-divider">
+    <hr>
+</div>
+
+<div class="content-box">
     <h4>🌀 TREMOLO</h4>
     <p><span class="bold">Purpose</span>: Rhythmic volume pulsing (classic "wobble" effect)</p>
     <p><span class="bold">Controls</span>: Two dual-handle sliders</p>
