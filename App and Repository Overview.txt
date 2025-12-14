@@ -66,3 +66,13 @@ python -m http.server 8000
 - **Responsive UI**: Adaptive layouts for desktop, tablet, and mobile devices
 - **GM Sound Support**: Access to General MIDI instrument palette (Piano, Guitar, Strings, Brass, Woodwinds, etc.)
 
+16-voice polyphonic system
+✅ 20 parameters per voice
+✅ Interactive piano keyboard with scale/chord filtering
+✅ Phrase Styles system (6 patterns + breathe)
+✅ Life Span with 3 entrances per voice
+✅ Timeline View for multi-voice coordination
+✅ Real-time parameter evolution
+✅ Professional effects (Tremolo, Chorus, Phaser, Reverb, Delay)
+✅ Save/Load compositions
+✅ Comprehensive user guide

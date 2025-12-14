@@ -155,6 +155,71 @@ const gmSounds = [
   "Drum Kit"
 ];
 
+// Melodic Scale Definitions (intervals from root)
+const scaleDefinitions = {
+  'None': null, // No filtering
+  'Chromatic': [0,1,2,3,4,5,6,7,8,9,10,11],
+  'Major': [0,2,4,5,7,9,11],
+  'Natural Minor': [0,2,3,5,7,8,10],
+  'Harmonic Minor': [0,2,3,5,7,8,11],
+  'Melodic Minor': [0,2,3,5,7,9,11],
+  'Dorian': [0,2,3,5,7,9,10],
+  'Phrygian': [0,1,3,5,7,8,10],
+  'Lydian': [0,2,4,6,7,9,11],
+  'Mixolydian': [0,2,4,5,7,9,10],
+  'Locrian': [0,1,3,5,6,8,10],
+  'Blues': [0,3,5,6,7,10],
+  'Pentatonic Major': [0,2,4,7,9],
+  'Pentatonic Minor': [0,3,5,7,10],
+  'Whole Tone': [0,2,4,6,8,10],
+  'Diminished': [0,2,3,5,6,8,9,11],
+  'Augmented': [0,3,4,7,8,11]
+};
+
+// Note names for root note dropdown
+const noteNames = [
+  'C', 'C# / Db', 'D', 'D# / Eb', 'E', 'F', 
+  'F# / Gb', 'G', 'G# / Ab', 'A', 'A# / Bb', 'B'
+];
+
+// Chord quality display names (maps to existing chordQualities object)
+const chordQualityNames = {
+  'none': 'None (All Scale Notes)',
+  'major': 'Major Triad',
+  'minor': 'Minor Triad',
+  'diminished': 'Diminished Triad',
+  'augmented': 'Augmented Triad',
+  'sus2': 'Suspended 2nd',
+  'sus4': 'Suspended 4th',
+  'major7': 'Major 7th',
+  'minor7': 'Minor 7th',
+  'dominant7': 'Dominant 7th',
+  'diminished7': 'Diminished 7th',
+  'halfDiminished7': 'Half-Diminished 7th',
+  'augmented7': 'Augmented 7th',
+  'majorMajor7': 'Major/Major 7th',
+  'add9': 'Add 9',
+  'major9': 'Major 9th',
+  'minor9': 'Minor 9th',
+  'dominant9': 'Dominant 9th',
+  'major11': 'Major 11th',
+  'minor11': 'Minor 11th',
+  'dominant11': 'Dominant 11th',
+  'major13': 'Major 13th',
+  'minor13': 'Minor 13th',
+  'dominant13': 'Dominant 13th',
+  'sixth': '6th Chord',
+  'minorSixth': 'Minor 6th',
+  'sixNine': '6/9 Chord',
+  'dom7sharp5': 'Dom 7 ♯5',
+  'dom7flat5': 'Dom 7 ♭5',
+  'dom7sharp9': 'Dom 7 ♯9',
+  'dom7flat9': 'Dom 7 ♭9',
+  'quartal': 'Quartal',
+  'cluster': 'Cluster',
+  'wholeTone': 'Whole Tone'
+};
+
 const rhythmOptions = [
   "Thirty-second Notes",
   "Thirty-second Note Triplets",
@@ -505,7 +570,12 @@ function initializeVoices() {
             min: 60,
             max: 60,
             behavior: 50,
-            selectedNotes: [60]
+            selectedNotes: [60],
+            filterSettings: {
+              rootNote: -1,  // -1 = "None Selected"
+              scale: 'None',
+              chord: 'none'
+            }
           };
         } else if (param.name === 'DETUNING') {
           voice.parameters[param.name] = {
@@ -3455,7 +3525,7 @@ class InteractivePiano {
     this.loadInitialSelection();
   }
   
-  render() {
+    render() {
     this.container.innerHTML = '';
     
     const keyboard = document.createElement('div');
@@ -3475,7 +3545,12 @@ class InteractivePiano {
       <span class="piano-instructions">Click notes or drag to select range</span>
     `;
     this.container.appendChild(infoDiv);
+    
+    // NEW: Add filter controls
+    const filterControls = this.createFilterControls();
+    this.container.appendChild(filterControls);
   }
+
   
   createKey(midiNote) {
     const isBlack = this.isBlackKey(midiNote);
@@ -3656,6 +3731,302 @@ class InteractivePiano {
     this.selectedNotes.clear();
     this.loadInitialSelection();
   }
+
+    createFilterControls() {
+    const filterContainer = document.createElement('div');
+    filterContainer.className = 'melodic-filter-controls';
+    filterContainer.style.cssText = `
+      margin-top: 12px;
+      padding: 12px;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+    `;
+    
+    // Filter row with three dropdowns
+    const filterRow = document.createElement('div');
+    filterRow.className = 'filter-row';
+    filterRow.style.cssText = `
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    `;
+    
+    // Root Note dropdown
+    const rootGroup = document.createElement('div');
+    rootGroup.className = 'filter-group';
+    rootGroup.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
+    
+    const rootLabel = document.createElement('label');
+    rootLabel.textContent = 'Root Note:';
+    rootLabel.style.cssText = 'font-size: 11px; font-weight: 600; color: #495057;';
+    
+    const rootSelect = document.createElement('select');
+    rootSelect.className = 'root-note-select';
+    rootSelect.style.cssText = `
+      padding: 6px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+    `;
+    
+    // Add "None Selected" as first option
+    const noneOption = document.createElement('option');
+    noneOption.value = '-1';
+    noneOption.textContent = 'None Selected';
+    rootSelect.appendChild(noneOption);
+    
+    noteNames.forEach((name, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = name;
+      rootSelect.appendChild(option);
+    });
+    
+    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+    rootSelect.value = melodicParam.filterSettings?.rootNote ?? -1; // Default to -1 (None)
+
+    
+    rootGroup.appendChild(rootLabel);
+    rootGroup.appendChild(rootSelect);
+    
+    // Scale dropdown
+    const scaleGroup = document.createElement('div');
+    scaleGroup.className = 'filter-group';
+    scaleGroup.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
+    
+    const scaleLabel = document.createElement('label');
+    scaleLabel.textContent = 'Scale:';
+    scaleLabel.style.cssText = 'font-size: 11px; font-weight: 600; color: #495057;';
+    
+    const scaleSelect = document.createElement('select');
+    scaleSelect.className = 'scale-select';
+    scaleSelect.style.cssText = `
+      padding: 6px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+    `;
+    
+    Object.keys(scaleDefinitions).forEach(scaleName => {
+      const option = document.createElement('option');
+      option.value = scaleName;
+      option.textContent = scaleName;
+      scaleSelect.appendChild(option);
+    });
+    
+    scaleSelect.value = melodicParam.filterSettings?.scale || 'None';
+    
+    scaleGroup.appendChild(scaleLabel);
+    scaleGroup.appendChild(scaleSelect);
+    
+    // Chord dropdown
+    const chordGroup = document.createElement('div');
+    chordGroup.className = 'filter-group';
+    chordGroup.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 4px;';
+    
+    const chordLabel = document.createElement('label');
+    chordLabel.textContent = 'Chord:';
+    chordLabel.style.cssText = 'font-size: 11px; font-weight: 600; color: #495057;';
+    
+    const chordSelect = document.createElement('select');
+    chordSelect.className = 'chord-select';
+    chordSelect.style.cssText = `
+      padding: 6px 8px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+    `;
+    
+    Object.keys(chordQualityNames).forEach(chordKey => {
+      const option = document.createElement('option');
+      option.value = chordKey;
+      option.textContent = chordQualityNames[chordKey];
+      chordSelect.appendChild(option);
+    });
+    
+    chordSelect.value = melodicParam.filterSettings?.chord || 'none';
+    
+    chordGroup.appendChild(chordLabel);
+    chordGroup.appendChild(chordSelect);
+    
+    filterRow.appendChild(rootGroup);
+    filterRow.appendChild(scaleGroup);
+    filterRow.appendChild(chordGroup);
+    filterContainer.appendChild(filterRow);
+    
+    // Filter result display
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'filter-result';
+    resultDiv.style.cssText = `
+      font-size: 11px;
+      color: #6c757d;
+      text-align: center;
+      font-style: italic;
+      padding: 6px;
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 3px;
+    `;
+    resultDiv.textContent = 'Select scale/chord to filter notes';
+    filterContainer.appendChild(resultDiv);
+    
+    // Connect event handlers (pass event for mutual exclusivity detection)
+    rootSelect.onchange = (e) => this.applyFilters(e);
+    scaleSelect.onchange = (e) => this.applyFilters(e);
+    chordSelect.onchange = (e) => this.applyFilters(e);
+    
+    return filterContainer;
+  }
+
+
+  applyFilters(event = null) {
+    const rootSelect = this.container.querySelector('.root-note-select');
+    const scaleSelect = this.container.querySelector('.scale-select');
+    const chordSelect = this.container.querySelector('.chord-select');
+    const resultDiv = this.container.querySelector('.filter-result');
+    
+    if (!rootSelect || !scaleSelect || !chordSelect) return;
+    
+    const rootNote = parseInt(rootSelect.value);
+    const scaleName = scaleSelect.value;
+    const chordName = chordSelect.value;
+    
+    // Check if root is selected when scale/chord is active
+    if (rootNote === -1 && (scaleName !== 'None' || chordName !== 'none')) {
+      resultDiv.textContent = '⚠️ Please select a Root Note first';
+      resultDiv.style.color = '#dc3545';
+      
+      // Reset scale and chord to None
+      scaleSelect.value = 'None';
+      chordSelect.value = 'none';
+      
+      console.log('⚠️ Root Note required for scale/chord filtering');
+      return;
+    }
+
+
+
+
+    // NEW: Mutual exclusivity - if scale selected, clear chord (and vice versa)
+    if (scaleName !== 'None' && chordName !== 'none') {
+      // Determine which was just changed by checking event target
+      const changedElement = event?.target;
+      
+      if (changedElement === scaleSelect) {
+        // Scale was just changed - clear chord
+        chordSelect.value = 'none';
+        console.log(`🎵 Scale selected (${scaleName}) - clearing chord`);
+      } else if (changedElement === chordSelect) {
+        // Chord was just changed - clear scale
+        scaleSelect.value = 'None';
+        console.log(`🎵 Chord selected (${chordName}) - clearing scale`);
+      }
+    }
+    
+    // Re-read values after potential reset
+    const finalScale = scaleSelect.value;
+    const finalChord = chordSelect.value;
+    
+    // Save filter settings
+    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+    melodicParam.filterSettings = {
+      rootNote: rootNote,
+      scale: finalScale,
+      chord: finalChord
+    };
+
+    
+    console.log(`🎵 Voice ${this.voiceIndex + 1} filters: Root=${noteNames[rootNote]}, Scale=${finalScale}, Chord=${finalChord}`);
+
+    
+    // Get current selection range
+    if (this.selectedNotes.size === 0) {
+      resultDiv.textContent = 'Select notes on keyboard first';
+      return;
+    }
+    
+    const selectedArray = Array.from(this.selectedNotes).sort((a, b) => a - b);
+    const minNote = selectedArray[0];
+    const maxNote = selectedArray[selectedArray.length - 1];
+
+    // Apply filtering with final values
+    const filteredNotes = this.filterNotesToScaleAndChord(minNote, maxNote, rootNote, finalScale, finalChord);
+
+    // Update selection
+    this.selectedNotes.clear();
+    filteredNotes.forEach(note => this.selectedNotes.add(note));
+    
+    // Update visual and data
+    this.updateVisualSelection();
+    this.updateVoiceData();
+    
+    // Update result display
+    if (filteredNotes.length === 0) {
+      resultDiv.textContent = '⚠️ No notes match this scale/chord in selected range';
+      resultDiv.style.color = '#dc3545';
+    } else {
+      const noteNamesList = filteredNotes.slice(0, 8).map(n => midiNoteNames[n]).join(', ');
+      const suffix = filteredNotes.length > 8 ? `, ...+${filteredNotes.length - 8} more` : '';
+      resultDiv.textContent = `Filtered: ${filteredNotes.length} notes (${noteNamesList}${suffix})`;
+      resultDiv.style.color = '#6c757d';
+    }
+    
+    console.log(`✅ Filtered to ${filteredNotes.length} notes:`, filteredNotes.map(n => midiNoteNames[n]).join(', '));
+  }
+  
+    filterNotesToScaleAndChord(minNote, maxNote, rootNote, scaleName, chordName) {
+    // If no filtering selected, return all notes in range
+    if (scaleName === 'None' && chordName === 'none') {
+      const allNotes = [];
+      for (let midi = minNote; midi <= maxNote; midi++) {
+        allNotes.push(midi);
+      }
+      return allNotes;
+    }
+    
+    const filteredNotes = [];
+    
+    // Get scale intervals
+    const scaleIntervals = scaleDefinitions[scaleName];
+    
+    // Get chord intervals and normalize to single octave
+    let normalizedChordIntervals = null;
+    if (chordName !== 'none' && chordQualities[chordName]) {
+      normalizedChordIntervals = chordQualities[chordName].map(interval => interval % 12);
+      console.log(`🎵 Chord intervals for ${chordName}:`, chordQualities[chordName], '→ normalized:', normalizedChordIntervals);
+    }
+    
+    // Iterate through range
+    for (let midi = minNote; midi <= maxNote; midi++) {
+      const noteInOctave = midi % 12;
+      const rootInOctave = rootNote % 12;
+      const intervalFromRoot = (noteInOctave - rootInOctave + 12) % 12;
+      
+      // Check scale filter
+      if (scaleName !== 'None' && scaleIntervals) {
+        if (!scaleIntervals.includes(intervalFromRoot)) {
+          continue; // Note not in scale, skip it
+        }
+      }
+      
+      // Check chord filter (using normalized intervals)
+      if (chordName !== 'none' && normalizedChordIntervals) {
+        if (!normalizedChordIntervals.includes(intervalFromRoot)) {
+          continue; // Note not in chord, skip it
+        }
+      }
+      
+      // Note passes all filters
+      filteredNotes.push(midi);
+    }
+    
+    return filteredNotes;
+  }
+
 }
 
 // Get tempo for a specific voice
