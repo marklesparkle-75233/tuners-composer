@@ -67,43 +67,45 @@ function calculateBeatsFromTime(timeMs, beatUnit, currentTempo) {
 
 function createLifeSpanBeatFormatter(voiceIndex, beatUnit) {
   return {
-    to: function(timeMs) {
-      const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
-      const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
+    to: function(beatCount) {
+      // Get current tempo
+      const tempo = getCurrentTempoForVoice(voiceIndex);
       
-      if (timeMs >= 999999999) return '∞ beats (∞)';
-      if (timeMs <= 0) return '0 beats (0:00)';
+      // Round to integer and handle infinity
+      const roundedBeats = Math.round(beatCount);
       
-      const beats = calculateBeatsFromTime(timeMs, beatUnit, currentTempo);
+      if (roundedBeats >= 999999) return '∞ beats (∞)';
+      if (roundedBeats <= 0) return '0 beats (0:00)';
+      
+      // Convert beats to milliseconds for time display
+      const timeMs = beatsToMs(roundedBeats, beatUnit, tempo);
       const timeStr = formatMsToMMSS(timeMs);
       
-      // Format: "45 beats (0:20)"
-      return `${beats} beats (${timeStr})`;
+      // Format: "80 beats (1:20)" - NO DECIMALS
+      return `${roundedBeats} beats (${timeStr})`;
     },
+
+
     from: function(value) {
-      if (value === '∞ beats (∞)' || value === '∞ (∞)') return 999999999;
+      // Handle infinity strings
+      if (value === '∞ beats (∞)' || value === '∞' || value === 'Infinity') {
+        return 999999;
+      }
       
-      // Parse "45 beats (0:20)" format
+      // Parse "80 beats (1:20)" format
       const beatsMatch = value.match(/^(\d+) beats/);
-      const timeMatch = value.match(/\((\d+:\d+)\)/);
       
-      if (timeMatch) {
-        return parseMMSSToMs(timeMatch[1]) || 0;
-      }
       if (beatsMatch) {
-        // Fallback: convert beats to time
-        const beats = parseInt(beatsMatch[1]);
-        const voiceIndex = 0; // Default, will be overridden
-        const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
-        const currentTempo = tempoParam ? (tempoParam.min + tempoParam.max) / 2 : 120;
-        const beatDuration = 60 / currentTempo;
-        return Math.round(beats * beatDuration * 1000);
+        return parseInt(beatsMatch[1]);
       }
       
-      return parseFloat(value) || 0;
+      // Fallback: parse as number
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? 0 : Math.round(parsed);
     }
   };
 }
+
 
 function calculateBeatDurationMs(voiceIndex, beatUnit) {
   const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
@@ -116,8 +118,68 @@ function calculateBeatDurationMs(voiceIndex, beatUnit) {
   
   const durationMs = Math.round(unitDuration * 1000);
   
+  console.log(`🎵 Beat duration for Voice ${voiceIndex + 1}: ${durationMs}ms (tempo: ${currentTempo} BPM)`);
+
   return durationMs;
 }
+
+// ===== BEAT-BASED TIME CONVERSION SYSTEM =====
+
+/**
+ * Convert beat count to milliseconds
+ * @param {number} beatCount - Number of beats in the selected unit
+ * @param {number} beatUnit - Index in rhythmOptions (0-14)
+ * @param {number} tempo - Current tempo in BPM
+ * @returns {number} Time in milliseconds
+ */
+function beatsToMs(beatCount, beatUnit, tempo) {
+  if (beatCount >= 999999) return 999999999; // Infinity case
+  
+  const beatDurationS = 60 / tempo; // Quarter note duration in seconds
+  const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7];
+  const unitDurationS = rhythmInfo.beats * beatDurationS;
+  
+  return Math.round(beatCount * unitDurationS * 1000);
+}
+
+/**
+ * Convert milliseconds to beat count
+ * @param {number} timeMs - Time in milliseconds
+ * @param {number} beatUnit - Index in rhythmOptions (0-14)
+ * @param {number} tempo - Current tempo in BPM
+ * @returns {number} Number of beats (integer)
+ */
+function msToBeats(timeMs, beatUnit, tempo) {
+  if (timeMs >= 999999999) return 999999; // Infinity case
+  
+  const beatDurationS = 60 / tempo;
+  const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7];
+  const unitDurationS = rhythmInfo.beats * beatDurationS;
+  
+  if (unitDurationS === 0) return 0; // Safety check
+  
+  return Math.round(timeMs / (unitDurationS * 1000));
+}
+
+/**
+ * Get current tempo for a voice (handles behavior interpolation)
+ * @param {number} voiceIndex - Voice index (0-15)
+ * @returns {number} Current tempo in BPM
+ */
+function getCurrentTempoForVoice(voiceIndex) {
+  const tempoParam = voiceData[voiceIndex].parameters['TEMPO (BPM)'];
+  
+  if (!tempoParam) return 120; // Default fallback
+  
+  // If tempo is evolving with behavior, use current value
+  if (tempoParam.behavior > 0 && tempoParam.currentValue !== undefined) {
+    return Math.round(tempoParam.currentValue);
+  }
+  
+  // Otherwise use midpoint
+  return Math.round((tempoParam.min + tempoParam.max) / 2);
+}
+
 
 // GM Sounds list
 const gmSounds = [
@@ -482,7 +544,6 @@ function initializeVoices() {
       locked: false,
       parameters: {}
     };
-    
     parameterDefinitions.forEach(param => {
       if (param.name === 'POLYPHONY') {
         voice.parameters[param.name] = {
@@ -490,26 +551,55 @@ function initializeVoices() {
           max: 4,
           behavior: 25
         };
-      } else if (param.name === 'LIFE SPAN') {
-        // Initialize Life Span parameter with defaults
-        voice.parameters[param.name] = {
-          maxTimeMinutes: 5,
-          beatUnit: 7, // Quarter Notes (index in rhythmOptions)
-          lifeSpan1: {
-            enter: 0,
-            exit: 999999999 // Represents infinity
-          },
-          lifeSpan2: {
-            enter: 0,
-            exit: 0 // Disabled
-          },
-          lifeSpan3: {
-            enter: 0,
-            exit: 0 // Disabled
-          },
-          repeat: false,
-          behavior: 0
-        };
+
+        // Inside initializeVoices() function, update LIFE SPAN parameter:
+
+} else if (param.name === 'LIFE SPAN') {
+  // Initialize Life Span parameter with BEAT-BASED storage
+  const defaultTempo = 120;
+  const defaultBeatUnit = 7; // Quarter Notes
+  const defaultTimeMs = 300000; // 5 minutes
+  
+  // Calculate default in beats
+  // const defaultMaxBeats = msToBeats(defaultTimeMs, defaultBeatUnit, defaultTempo);
+  const defaultMaxBeats = 700;
+  
+  voice.parameters[param.name] = {
+    // PRIMARY STORAGE (beats)
+    maxTimeBeats: defaultMaxBeats,     // NEW: Store as beats (600 quarter notes @ 120 BPM)
+    beatUnit: defaultBeatUnit,         
+    lifeSpan1: {
+      enterBeats: 0,                   // NEW: Store entrance as beats
+      exitBeats: 999999                // NEW: Store exit as beats (infinity)
+    },
+    lifeSpan2: {
+      enterBeats: 0,
+      exitBeats: 0                     // Disabled
+    },
+    lifeSpan3: {
+      enterBeats: 0,
+      exitBeats: 0                     // Disabled
+    },
+    repeat: false,
+    behavior: 0,
+    
+    // LEGACY STORAGE (milliseconds - for backward compatibility)
+    maxTimeMs: defaultTimeMs,          // Keep for old file loading
+    lifeSpan1Legacy: {
+      enter: 0,
+      exit: 999999999
+    },
+    lifeSpan2Legacy: {
+      enter: 0,
+      exit: 0
+    },
+    lifeSpan3Legacy: {
+      enter: 0,
+      exit: 0
+    }
+  };
+
+
       } else if (param.name === 'PHRASE STYLES') {
         // Initialize Phrase Styles parameter with defaults
         voice.parameters[param.name] = {
@@ -662,16 +752,21 @@ function initializeVoices() {
 }
 
 function createLifeSpanControl(param, voiceIndex) {
-
-  
   const wrapper = document.createElement('div');
-  wrapper.className = 'dual-slider'; // Use standard class
+  wrapper.className = 'dual-slider';
   
-  // GET THE STORED MAX TIME VALUE
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  const storedMaxTimeMs = lifeSpanParam.maxTimeMs || 300000; // Default to 5 minutes if not set
-  const storedMaxTimeFormatted = formatMsToMMSS(storedMaxTimeMs);
+  const beatUnit = lifeSpanParam.beatUnit || 7;
   
+  // GET MAX BEATS (primary storage)
+  const maxBeats = lifeSpanParam.maxTimeBeats || 600;
+  
+  // Calculate equivalent time for display
+  const tempo = getCurrentTempoForVoice(voiceIndex);
+  const maxTimeMs = beatsToMs(maxBeats, beatUnit, tempo);
+  const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
+  
+  console.log(`🎵 Voice ${voiceIndex + 1} Life Span: ${maxBeats} beats = ${maxTimeFormatted} @ ${tempo} BPM`);
   
   // Max Time and Beat Unit Controls
   const settingsRow = document.createElement('div');
@@ -685,7 +780,7 @@ function createLifeSpanControl(param, voiceIndex) {
   settingsRow.innerHTML = `
     <div class="max-time-container" style="flex: 1;">
       <label>Total Time Length:</label>
-      <input type="text" class="max-time-input" value="${storedMaxTimeFormatted}" placeholder="0:05" maxlength="5" 
+      <input type="text" class="max-time-input" value="${maxTimeFormatted}" placeholder="0:05" maxlength="5" 
              title="Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)"
              style="width: 100%; padding: 4px; margin-left: 5px;" />
     </div>
@@ -693,14 +788,14 @@ function createLifeSpanControl(param, voiceIndex) {
       <label>Beat Unit:</label>
       <select class="beat-unit-select" style="width: 100%; padding: 4px; margin-left: 5px;">
         ${rhythmOptions.map((option, index) => 
-          `<option value="${index}" ${index === lifeSpanParam.beatUnit ? 'selected' : ''}>${option}</option>`
+          `<option value="${index}" ${index === beatUnit ? 'selected' : ''}>${option}</option>`
         ).join('')}
       </select>
     </div>
   `;
   wrapper.appendChild(settingsRow);
   
-  // Create 3 Life Span sliders with immediate slider creation
+  // Create 3 Life Span sliders
   for (let i = 1; i <= 3; i++) {
     const spanContainer = document.createElement('div');
     spanContainer.className = 'slider-wrapper';
@@ -716,44 +811,62 @@ function createLifeSpanControl(param, voiceIndex) {
     sliderWrapper.dataset.spanNumber = i;
     sliderWrapper.style.cssText = 'width: 100%; height: 40px; margin-top: 8px;';
     
-    // CREATE THE SLIDER IMMEDIATELY
+    // CREATE THE SLIDER
     const sliderDiv = document.createElement('div');
     sliderWrapper.appendChild(sliderDiv);
     
-    // Get Life Span data for this span - use stored maxTimeMs
-    const lifeSpanData = voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${i}`];
-    const maxTimeMs = storedMaxTimeMs; // Use stored value
-    const beatUnit = lifeSpanParam.beatUnit;
+
+
+   // Get Life Span data for this span (BEAT-BASED)
+let lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
+
+// SAFEGUARD: Create if missing
+if (!lifeSpanData) {
+  console.warn(`⚠️ Creating missing lifeSpan${i} for Voice ${voiceIndex + 1}`);
+  lifeSpanParam[`lifeSpan${i}`] = {
+    enterBeats: 0,
+    exitBeats: i === 1 ? 999999 : 0 // First entrance defaults to infinity
+  };
+  lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
+}
+
+// SAFEGUARD: Ensure beat properties exist
+if (typeof lifeSpanData.enterBeats === 'undefined') {
+  console.warn(`⚠️ enterBeats missing for lifeSpan${i}, initializing to 0`);
+  lifeSpanData.enterBeats = 0;
+}
+
+if (typeof lifeSpanData.exitBeats === 'undefined') {
+  console.warn(`⚠️ exitBeats missing for lifeSpan${i}, initializing...`);
+  lifeSpanData.exitBeats = i === 1 ? 999999 : 0;
+}
+
+const enterBeats = lifeSpanData.enterBeats;
+const exitBeats = lifeSpanData.exitBeats;
+
+console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beats`);
+
+
+
+
+
+    // Check if exit is infinity
+    const isInfinity = (exitBeats >= 999999);
     
     // Create formatter for beat-based tooltips
     const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
     
-    const startEnter = lifeSpanData.enter || 0;
-    const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : (lifeSpanData.exit || 0);
-    
-    
-    // try {
-    //   noUiSlider.create(sliderDiv, {
-    //     start: [startEnter, Math.min(startExit, maxTimeMs)],
-    //     connect: true,
-    //     range: { min: 0, max: maxTimeMs },
-    //     step: 1000, // 1 second steps
-    //     tooltips: [true, true],
-    //     format: formatter
-    //   });
     try {
-      // Calculate beat-based step size
-      const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
-      
-      
       noUiSlider.create(sliderDiv, {
-        start: [startEnter, Math.min(startExit, maxTimeMs)],
+        start: [enterBeats, isInfinity ? maxBeats : Math.min(exitBeats, maxBeats)],
         connect: true,
-        range: { min: 0, max: maxTimeMs },
-        step: beatStepMs, // Beat-based steps instead of 1000ms
+        range: { min: 0, max: maxBeats },
+        step: 1, // 1 BEAT increments (no rounding needed!)
         tooltips: [true, true],
         format: formatter
       });
+      
+      console.log(`✅ Created Life Span ${i} slider: ${enterBeats}-${exitBeats} beats (max: ${maxBeats})`);
       
     } catch (error) {
       console.error(`❌ Error creating Life Span ${i} slider:`, error);
@@ -765,6 +878,7 @@ function createLifeSpanControl(param, voiceIndex) {
   
   return wrapper;
 }
+
 
 function createLifeSpanBehaviorContainer(param, voiceIndex) {
   const wrapper = document.createElement('div');
@@ -832,9 +946,17 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
     this.style.boxShadow = 'none';
   };
   
-    timelineButton.onclick = function() {
+timelineButton.onclick = function() {
+  console.log('🔘 Timeline View button clicked');
+  console.log('   Function exists:', typeof showTimelineView);
+  
+  try {
     showTimelineView();
-  };
+  } catch (error) {
+    console.error('❌ Error in button onclick handler:', error);
+    alert(`Error: ${error.message}\n\nCheck console for details.`);
+  }
+};
 
   
   wrapper.appendChild(timelineButton);
@@ -842,312 +964,12 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   return wrapper;
 }
 
-// ===== TIMELINE VIEW FUNCTIONS =====
+// ===== TIMELINE VIEW HELPER FUNCTIONS =====
 
-function showTimelineView() {
-  console.log('🎬 Opening Timeline View...');
-  
-  // 1. Mark timeline as active
-  timelineViewActive = true;
-  
-  // 2. Hide parameter section
-  const paramSection = document.getElementById('parameter-section');
-  if (!paramSection) {
-    console.error('❌ Parameter section not found');
-    return;
-  }
-  paramSection.style.display = 'none';
-  
-  // 3. Create timeline view container
-  const timelineContainer = document.createElement('div');
-  timelineContainer.id = 'timeline-view-container';
-  timelineContainer.className = 'timeline-view-container';
-  timelineContainer.style.cssText = `
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    background: white;
-    overflow-y: auto;
-  `;
-  
-  // 4. Create header
-  const header = document.createElement('div');
-  header.className = 'timeline-view-header';
-  header.style.cssText = `
-    background: linear-gradient(to bottom, #f7f8f8, #c0def7);
-    border-bottom: 2px solid #4a90e2;
-    padding: 15px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  `;
-  
-  const title = document.createElement('h2');
-  title.textContent = 'LIFE SPAN TIMELINE VIEW';
-  title.style.cssText = 'margin: 0; font-size: 20px; color: #333;';
-  
-  const backButton = document.createElement('button');
-  backButton.textContent = 'BACK TO VOICE CONTROLS';
-  backButton.className = 'timeline-back-button';
-  backButton.style.cssText = `
-    background: #6c757d;
-    color: white;
-    border: none;
-    padding: 10px 24px;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 14px;
-  `;
-  backButton.onclick = closeTimelineView;
-  
-  header.appendChild(title);
-  header.appendChild(backButton);
-  timelineContainer.appendChild(header);
-  
-  console.log('✅ Header created and appended');
-  console.log('📏 About to create master timeline bar...');
-
-// NEW: Create master timeline bar
-  const masterTimelineBar = document.createElement('div');
-  
-  // NEW: Create master timeline bar
-  try {
-    const masterTimelineBar = document.createElement('div');
-    masterTimelineBar.className = 'master-timeline-bar';
-    masterTimelineBar.style.cssText = `
-      background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
-      border-bottom: 2px solid #dee2e6;
-      padding: 15px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    `;
-    
-    console.log('✅ Master timeline bar div created');
-    
-    const maxTimeMs = calculateMasterTimelineLength();
-    const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
-    
-    console.log('✅ Max time calculated:', maxTimeFormatted);
-    
-    const timelineInfo = document.createElement('div');
-    timelineInfo.className = 'timeline-info';
-    timelineInfo.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      flex: 1;
-    `;
-    
-    const startLabel = document.createElement('span');
-    startLabel.textContent = '0:00';
-    startLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
-    
-    const progressContainer = document.createElement('div');
-    progressContainer.className = 'timeline-progress-container';
-    progressContainer.style.cssText = `
-      position: relative;
-      flex: 1;
-      height: 8px;
-      background: #e9ecef;
-      border-radius: 4px;
-      overflow: visible;
-    `;
-    
-    const progressBar = document.createElement('div');
-    progressBar.id = 'timeline-progress-bar';
-    progressBar.className = 'timeline-progress-bar';
-    progressBar.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 0%;
-      background: #4a90e2;
-      border-radius: 4px;
-      transition: width 0.05s linear;
-    `;
-    
-  const playhead = document.createElement('div');
-  playhead.id = 'timeline-playhead';
-  playhead.className = 'timeline-playhead';
-  playhead.style.cssText = `
-    position: absolute;
-    top: -10px;
-    left: 0%;
-    width: 3px;
-    height: calc(100% + 20px);
-    background: #dc3545;
-    transition: left 0.05s linear;
-    pointer-events: none;
-    z-index: 100;
-  `;
-  
-  const playheadArrow = document.createElement('div');
-  playheadArrow.style.cssText = `
-    position: absolute;
-    top: -18px;
-    left: -7px;
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 10px solid #dc3545;
-  `;
-  playhead.appendChild(playheadArrow);
-  
-    // Add tooltip to playhead
-  const playheadTooltip = document.createElement('div');
-  playheadTooltip.id = 'timeline-playhead-tooltip';
-  playheadTooltip.className = 'timeline-playhead-tooltip';
-  playheadTooltip.textContent = '0:00';
-  playheadTooltip.style.cssText = `
-    position: absolute;
-    top: -1px;
-    left: 8px;
-    background: #333;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
-    white-space: nowrap;
-    pointer-events: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  `;
-  playhead.appendChild(playheadTooltip);
-
-
-    
-    progressContainer.appendChild(progressBar);
-    progressContainer.appendChild(playhead);
-    
-    console.log('✅ Progress container created');
-    
-    const endLabel = document.createElement('span');
-    endLabel.id = 'timeline-max-time';
-    endLabel.textContent = maxTimeFormatted;
-    endLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
-    
-    timelineInfo.appendChild(startLabel);
-    timelineInfo.appendChild(progressContainer);
-    timelineInfo.appendChild(endLabel);
-    
-    masterTimelineBar.appendChild(timelineInfo);
-    timelineContainer.appendChild(masterTimelineBar);
-
-    
-    console.log('✅ Master timeline bar fully created and appended!');
-    
-  } catch (error) {
-    console.error('❌ ERROR creating master timeline bar:', error);
-    console.error('   Error message:', error.message);
-    console.error('   Error stack:', error.stack);
-  }
-
-  // 5. Create content area with voice rows
-  const content = document.createElement('div');
-  content.className = 'timeline-content';
-  content.style.cssText = `
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-  `;
-  
-  // Calculate master timeline length
-  const maxTimeMs = calculateMasterTimelineLength();
-  
-  // Count enabled voices
-  const enabledVoices = voiceData.filter(v => v.enabled);
-  
-  if (enabledVoices.length === 0) {
-    const noVoices = document.createElement('div');
-    noVoices.style.cssText = `
-      text-align: center;
-      padding: 40px;
-      color: #dc3545;
-      font-size: 16px;
-    `;
-    noVoices.innerHTML = `
-      <p style="margin: 0 0 10px 0;">⚠️ No Enabled Voices</p>
-      <p style="margin: 0; font-size: 14px;">Please enable at least one voice to use Timeline View.</p>
-    `;
-    content.appendChild(noVoices);
-  } else {
-    console.log(`📊 Generating timeline for ${enabledVoices.length} voices`);
-    
-    // Generate a row for each enabled voice
-    for (let i = 0; i < 16; i++) {
-      if (!voiceData[i].enabled) continue;
-      
-      const voiceRow = createTimelineVoiceRow(i, maxTimeMs);
-      content.appendChild(voiceRow);
-    }
-  }
-  
-  timelineContainer.appendChild(content);
-
-  
-  // 6. Inject into main content
-  const mainContent = document.getElementById('main-content');
-  if (!mainContent) {
-    console.error('❌ Main content area not found');
-    return;
-  }
-  mainContent.appendChild(timelineContainer);
-  
-  console.log('✅ Timeline View opened successfully');
-  console.log('   Enabled voices:', voiceData.filter(v => v.enabled).map((v, i) => `Voice ${i + 1}`).join(', '));
-
-// NEW: Connect all timeline sliders to voiceData
-  setTimeout(() => {
-    connectTimelineSliders();
-  }, 100);
-}
-
-function closeTimelineView() {
-  console.log('🔙 Closing Timeline View...');
-  
-  // 1. Mark timeline as inactive
-  timelineViewActive = false;
-  
-  // 2. Remove timeline container
-  const timeline = document.getElementById('timeline-view-container');
-  if (timeline) {
-    timeline.remove();
-    console.log('✅ Timeline container removed');
-  }
-  
-  // 3. Restore parameter section
-  const paramSection = document.getElementById('parameter-section');
-  if (paramSection) {
-    paramSection.style.display = 'flex';
-    console.log('✅ Parameter section restored');
-  }
-  
-    // 4. Refresh parameter view to show updated values
-  setTimeout(() => {
-    console.log('🔄 Refreshing parameter view for Voice', currentVoice + 1);
-    
-    // Simple approach: just re-render the entire parameter section
-    renderParameters();
-    
-    // Then reconnect all sliders
-    setTimeout(() => {
-      connectAllSliders();
-      console.log('✅ Parameter view refreshed and reconnected');
-    }, 100);
-  }, 100);
-
-}
 function calculateMasterTimelineLength() {
-  let maxTime = 0;
+  let maxTimeMs = 0;
+  
+  console.log('📏 Calculating master timeline length...');
   
   for (let i = 0; i < 16; i++) {
     if (!voiceData[i].enabled) continue;
@@ -1155,207 +977,24 @@ function calculateMasterTimelineLength() {
     const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
     if (!lifeSpan) continue;
     
-    // USE VOICE'S DECLARED MAX TIME (Total Time Length setting)
-    // This is the authoritative value for timeline scale
-    if (lifeSpan.maxTimeMs && lifeSpan.maxTimeMs > maxTime) {
-      maxTime = lifeSpan.maxTimeMs;
+    // Convert voice's max BEATS to milliseconds
+    const maxBeats = lifeSpan.maxTimeBeats || 600;
+    const beatUnit = lifeSpan.beatUnit || 7;
+    const tempo = getCurrentTempoForVoice(i);
+    
+    const voiceMaxMs = beatsToMs(maxBeats, beatUnit, tempo);
+    
+    console.log(`   Voice ${i + 1}: ${maxBeats} beats = ${formatMsToMMSS(voiceMaxMs)} @ ${tempo} BPM`);
+    
+    if (voiceMaxMs > maxTimeMs) {
+      maxTimeMs = voiceMaxMs;
     }
   }
   
   // Fallback to 5 minutes if nothing set
-  const finalTime = maxTime > 0 ? maxTime : 300000;
-  console.log(`📏 Master timeline length: ${formatMsToMMSS(finalTime)} (${finalTime}ms)`);
-  return finalTime;
-}
-
-
-// ===== ADVANCED TIMELINE VIEW FUNCTIONS =====
-function createTimelineVoiceRow(voiceIndex, maxTimeMs) {
-  const row = document.createElement('div');
-  row.className = 'voice-timeline-row';
-  row.dataset.voiceIndex = voiceIndex;
-  row.style.cssText = `
-    border-bottom: 1px solid #dee2e6;
-    padding: 15px 20px;
-    background: white;
-    position: relative;
-  `;
-  
-  // Voice header
-  const header = document.createElement('div');
-  header.className = 'voice-timeline-header';
-  header.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 12px;
-  `;
-  
-  const voiceLabel = document.createElement('div');
-  voiceLabel.className = 'voice-timeline-label';
-  const instrumentIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
-  const instrumentName = gmSounds[instrumentIndex] || 'Unknown';
-  voiceLabel.innerHTML = `
-    <strong style="font-size: 16px; color: #333;">Voice ${voiceIndex + 1}</strong>
-    <span style="font-size: 14px; color: #666; margin-left: 8px;">(${instrumentName})</span>
-  `;
-  
-  header.appendChild(voiceLabel);
-  row.appendChild(header);
-  
-  // Get Life Span data
-  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  const beatUnit = lifeSpan.beatUnit;
-  const storedMaxTimeMs = lifeSpan.maxTimeMs || 300000;
-  const storedMaxTimeFormatted = formatMsToMMSS(storedMaxTimeMs);
-  
-  // Create parameter content container (standard size)
-  const paramContentContainer = document.createElement('div');
-  paramContentContainer.className = 'row-container-content';
-  paramContentContainer.style.cssText = `
-    display: flex;
-    width: 100%;
-    gap: 20px;
-  `;
-  
-  // Left side: Sliders container
-  const slidersContainer = document.createElement('div');
-  slidersContainer.className = 'range-container';
-  slidersContainer.style.cssText = `
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-    min-width: 0;
-  `;
-  
-  // Create 3 entrance sliders (vertically compressed)
-  for (let i = 1; i <= 3; i++) {
-    const entranceContainer = createTimelineEntranceSlider(voiceIndex, i, storedMaxTimeMs, beatUnit);
-    slidersContainer.appendChild(entranceContainer);
-  }
-  
-  paramContentContainer.appendChild(slidersContainer);
-  
-  // Right side: Behavior container (standard)
-  const behaviorContainer = document.createElement('div');
-  behaviorContainer.className = 'behavior-container';
-  behaviorContainer.style.cssText = `
-    width: 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 15px;
-    background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
-    border-radius: 8px;
-  `;
-  
-    // Total Time Length - READ ONLY DISPLAY
-  const timeContainer = document.createElement('div');
-  timeContainer.style.cssText = `
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  `;
-  const timeLabel = document.createElement('label');
-  timeLabel.textContent = 'Total Time Length:';
-  timeLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
-  
-  const timeDisplay = document.createElement('div');
-  timeDisplay.className = 'timeline-max-time-display';
-  timeDisplay.textContent = storedMaxTimeFormatted;
-  timeDisplay.style.cssText = `
-    width: 100%;
-    padding: 6px 8px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #495057;
-    text-align: center;
-    font-family: 'Courier New', monospace;
-  `;
-  
-  timeContainer.appendChild(timeLabel);
-  timeContainer.appendChild(timeDisplay);
-  behaviorContainer.appendChild(timeContainer);
-
-  
-  // Beat Unit - READ ONLY DISPLAY
-  const beatContainer = document.createElement('div');
-  beatContainer.style.cssText = `
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  `;
-  const beatLabel = document.createElement('label');
-  beatLabel.textContent = 'Beat Unit:';
-  beatLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
-  
-  const beatDisplay = document.createElement('div');
-  beatDisplay.className = 'timeline-beat-unit-display';
-  beatDisplay.textContent = rhythmOptions[beatUnit] || 'Quarter Notes';
-  beatDisplay.style.cssText = `
-    width: 100%;
-    padding: 6px 8px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #495057;
-    text-align: center;
-  `;
-  
-  beatContainer.appendChild(beatLabel);
-  beatContainer.appendChild(beatDisplay);
-  behaviorContainer.appendChild(beatContainer);
-
-  
-  // Repeat checkbox
-  const repeatContainer = document.createElement('div');
-  repeatContainer.style.cssText = `
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding-top: 10px;
-    border-top: 1px solid #dee2e6;
-  `;
-  
-  const repeatLabel = document.createElement('label');
-  repeatLabel.textContent = 'Repeat';
-  repeatLabel.style.cssText = 'font-size: 14px; font-weight: bold; color: #333;';
-  
-  const repeatCheckbox = document.createElement('input');
-  repeatCheckbox.type = 'checkbox';
-  repeatCheckbox.className = 'timeline-repeat-checkbox';
-  repeatCheckbox.dataset.voiceIndex = voiceIndex;
-  repeatCheckbox.checked = lifeSpan.repeat;
-  repeatCheckbox.style.cssText = `
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    transform: scale(1.2);
-  `;
-  
-  // Connect to voiceData
-  repeatCheckbox.onchange = function(e) {
-    voiceData[voiceIndex].parameters['LIFE SPAN'].repeat = e.target.checked;
-    console.log(`✅ Voice ${voiceIndex + 1} Repeat = ${e.target.checked}`);
-  };
-  
-  repeatContainer.appendChild(repeatLabel);
-  repeatContainer.appendChild(repeatCheckbox);
-  behaviorContainer.appendChild(repeatContainer);
-  
-  paramContentContainer.appendChild(behaviorContainer);
-  row.appendChild(paramContentContainer);
-  
-  console.log(`✅ Created timeline row for Voice ${voiceIndex + 1}`);
-  
-  return row;
+  const finalTimeMs = maxTimeMs > 0 ? maxTimeMs : 300000;
+  console.log(`📏 Master timeline length: ${formatMsToMMSS(finalTimeMs)} (${finalTimeMs}ms)`);
+  return finalTimeMs;
 }
 
 function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUnit) {
@@ -1365,7 +1004,8 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
     margin-bottom: 8px;
     width: 100%;
   `;
-
+  
+  console.log(`      Creating slider for Entrance ${entranceNum}...`);
   
   const label = document.createElement('div');
   label.className = 'timeline-entrance-label';
@@ -1388,7 +1028,7 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
     position: relative;
     box-sizing: border-box;
   `;
-
+  
   const sliderDiv = document.createElement('div');
   sliderDiv.className = 'timeline-nouislider';
   sliderDiv.style.cssText = `
@@ -1398,51 +1038,91 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
   `;
   sliderWrapper.appendChild(sliderDiv);
   container.appendChild(sliderWrapper);
-
- 
-  // Get Life Span data for this entrance
-  const lifeSpanData = voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`];
-  const startEnter = lifeSpanData.enter || 0;
-  const startExit = lifeSpanData.exit >= 999999999 ? maxTimeMs : (lifeSpanData.exit || 0);
   
-  // Calculate beat-based step size
-  const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
+  console.log(`      Slider div created and appended`);
   
-  // Create formatter for beat-based tooltips
-  const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
+  // Get Life Span data (BEAT-BASED)
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpan) {
+    console.error(`❌ Voice ${voiceIndex + 1}: No LIFE SPAN parameter!`);
+    const errorMsg = document.createElement('div');
+    errorMsg.style.cssText = 'padding: 10px; background: #fff3cd; color: #856404;';
+    errorMsg.textContent = '⚠️ Life Span parameter missing';
+    container.appendChild(errorMsg);
+    return container;
+  }
+  
+  let spanData = lifeSpan[`lifeSpan${entranceNum}`];
+  
+  // CREATE MISSING DATA if needed
+  if (!spanData) {
+    console.warn(`      ⚠️ Creating missing lifeSpan${entranceNum} data...`);
+    lifeSpan[`lifeSpan${entranceNum}`] = {
+      enterBeats: 0,
+      exitBeats: entranceNum === 1 ? 999999 : 0
+    };
+    spanData = lifeSpan[`lifeSpan${entranceNum}`];
+  }
+  
+  const enterBeats = spanData.enterBeats || 0;
+  const exitBeats = spanData.exitBeats || 0;
+  
+  console.log(`      Entrance ${entranceNum} data: ${enterBeats}-${exitBeats} beats`);
+  
+  // Convert to milliseconds for timeline display
+  const tempo = getCurrentTempoForVoice(voiceIndex);
+  const enterMs = beatsToMs(enterBeats, beatUnit, tempo);
+  const exitMs = (exitBeats >= 999999) ? maxTimeMs : beatsToMs(exitBeats, beatUnit, tempo);
+  
+  console.log(`      Timeline range: ${formatMsToMMSS(enterMs)} - ${formatMsToMMSS(exitMs)}`);
+  
+  // Calculate step size (1 beat in ms)
+  const beatStepMs = beatsToMs(1, beatUnit, tempo);
+  
+  // Create formatter
+  const formatter = {
+    to: function(timeMs) {
+      const beats = Math.round(msToBeats(timeMs, beatUnit, tempo));
+      const timeStr = formatMsToMMSS(timeMs);
+      return `${beats} beats (${timeStr})`;
+    },
+    from: function(value) {
+      const beatsMatch = value.match(/^(\d+) beats/);
+      if (beatsMatch) {
+        const beats = parseInt(beatsMatch[1]);
+        return beatsToMs(beats, beatUnit, tempo);
+      }
+      return parseFloat(value) || 0;
+    }
+  };
+  
+  console.log(`      Creating noUiSlider: range 0-${maxTimeMs}ms, step ${beatStepMs}ms`);
   
   try {
     noUiSlider.create(sliderDiv, {
-      start: [startEnter, Math.min(startExit, maxTimeMs)],
+      start: [enterMs, Math.min(exitMs, maxTimeMs)],
       connect: true,
       range: { min: 0, max: maxTimeMs },
-      step: beatStepMs,
+      step: Math.max(1, Math.round(beatStepMs)),
       tooltips: [true, true],
       format: formatter
     });
-   
-   // Force timeline sliders to full width - aggressive override
+    
+    console.log(`      ✅ noUiSlider created successfully`);
+    
+    // Force width
     setTimeout(() => {
       sliderDiv.style.setProperty('width', '100%', 'important');
-      sliderDiv.style.setProperty('min-width', '0', 'important');
-      sliderDiv.style.setProperty('max-width', '100%', 'important');
-      
       const base = sliderDiv.querySelector('.noUi-base');
-      if (base) {
-        base.style.setProperty('width', '100%', 'important');
-      }
-      
+      if (base) base.style.setProperty('width', '100%', 'important');
       const connects = sliderDiv.querySelector('.noUi-connects');
-      if (connects) {
-        connects.style.setProperty('width', '100%', 'important');
-      }
+      if (connects) connects.style.setProperty('width', '100%', 'important');
     }, 0);
-
-
-    console.log(`✅ Created slider for Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
     
-    // NEW: Add visual boundary line at voice's max time (if less than master max)
-    const voiceMaxTimeMs = voiceData[voiceIndex].parameters['LIFE SPAN'].maxTimeMs || 300000;
+    // Add voice boundary if applicable
+    const voiceMaxBeats = lifeSpan.maxTimeBeats || 600;
+    const voiceMaxTimeMs = beatsToMs(voiceMaxBeats, beatUnit, tempo);
     
     if (voiceMaxTimeMs < maxTimeMs) {
       const boundaryPercentage = (voiceMaxTimeMs / maxTimeMs) * 100;
@@ -1479,76 +1159,1051 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
       boundaryLine.appendChild(boundaryLabel);
       sliderWrapper.appendChild(boundaryLine);
       
-      console.log(`🚧 Voice ${voiceIndex + 1}: Boundary at ${formatMsToMMSS(voiceMaxTimeMs)} (${boundaryPercentage.toFixed(1)}%)`);
+      console.log(`      🚧 Boundary at ${formatMsToMMSS(voiceMaxTimeMs)} (${boundaryPercentage.toFixed(1)}%)`);
     }
+    
   } catch (error) {
-    console.error(`❌ Error creating timeline slider for Voice ${voiceIndex + 1}, Entrance ${entranceNum}:`, error);
+    console.error(`      ❌ Error creating noUiSlider:`, error);
+    console.error(`         Message:`, error.message);
+    
+    // Add visible error
+    const errorMsg = document.createElement('div');
+    errorMsg.style.cssText = `
+      padding: 10px;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      color: #856404;
+      font-size: 12px;
+      margin-top: 5px;
+    `;
+    errorMsg.innerHTML = `
+      <strong>⚠️ Slider Error:</strong><br>
+      ${error.message}
+    `;
+    container.appendChild(errorMsg);
   }
   
   return container;
 }
 
-// ===== END TIMELINE VIEW FUNCTIONS =====
+function createTimelineVoiceRow(voiceIndex, maxTimeMs) {
+  const row = document.createElement('div');
+  row.className = 'voice-timeline-row';
+  row.dataset.voiceIndex = voiceIndex;
+  row.style.cssText = `
+    border-bottom: 1px solid #dee2e6;
+    padding: 15px 20px;
+    background: white;
+    position: relative;
+  `;
+  
+  console.log(`🎬 Creating timeline row for Voice ${voiceIndex + 1}`);
+  
+  // Voice header
+  const header = document.createElement('div');
+  header.className = 'voice-timeline-header';
+  header.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 12px;
+  `;
+  
+  const voiceLabel = document.createElement('div');
+  voiceLabel.className = 'voice-timeline-label';
+  const instrumentIndex = voiceData[voiceIndex].parameters['INSTRUMENT'];
+  const instrumentName = gmSounds[instrumentIndex] || 'Unknown';
+  voiceLabel.innerHTML = `
+    <strong style="font-size: 16px; color: #333;">Voice ${voiceIndex + 1}</strong>
+    <span style="font-size: 14px; color: #666; margin-left: 8px;">(${instrumentName})</span>
+  `;
+  
+  header.appendChild(voiceLabel);
+  row.appendChild(header);
+  
+  // Get Life Span data (BEAT-BASED)
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpan) {
+    console.error(`❌ Voice ${voiceIndex + 1}: No LIFE SPAN parameter found!`);
+    const errorMsg = document.createElement('div');
+    errorMsg.style.cssText = 'padding: 20px; color: #dc3545; text-align: center;';
+    errorMsg.textContent = '⚠️ Life Span parameter missing - cannot create timeline';
+    row.appendChild(errorMsg);
+    return row;
+  }
+  
+  const beatUnit = lifeSpan.beatUnit || 7;
+  const maxBeats = lifeSpan.maxTimeBeats || 600;
+  
+  // Calculate time for display
+  const tempo = getCurrentTempoForVoice(voiceIndex);
+  const voiceMaxTimeMs = beatsToMs(maxBeats, beatUnit, tempo);
+  const voiceMaxTimeFormatted = formatMsToMMSS(voiceMaxTimeMs);
+  
+  console.log(`   Max: ${maxBeats} beats = ${voiceMaxTimeFormatted} @ ${tempo} BPM`);
+  
+  // Create parameter content container
+  const paramContentContainer = document.createElement('div');
+  paramContentContainer.className = 'row-container-content';
+  paramContentContainer.style.cssText = `
+    display: flex;
+    width: 100%;
+    gap: 20px;
+  `;
+  
+  // Left side: Sliders container
+  const slidersContainer = document.createElement('div');
+  slidersContainer.className = 'range-container';
+  slidersContainer.style.cssText = `
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  `;
+  
+  // Create 3 entrance sliders
+  for (let i = 1; i <= 3; i++) {
+    console.log(`   Creating Entrance ${i} slider...`);
+    try {
+      const entranceContainer = createTimelineEntranceSlider(voiceIndex, i, maxTimeMs, beatUnit);
+      slidersContainer.appendChild(entranceContainer);
+      console.log(`   ✅ Entrance ${i} slider created`);
+    } catch (sliderError) {
+      console.error(`   ❌ Error creating Entrance ${i} slider:`, sliderError);
+      
+      // Add visible error
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'padding: 10px; background: #fff3cd; color: #856404; border-radius: 4px;';
+      errorDiv.textContent = `⚠️ Error creating slider ${i}: ${sliderError.message}`;
+      slidersContainer.appendChild(errorDiv);
+    }
+  }
+  
+  paramContentContainer.appendChild(slidersContainer);
+  
+  // Right side: Behavior container
+  const behaviorContainer = document.createElement('div');
+  behaviorContainer.className = 'behavior-container';
+  behaviorContainer.style.cssText = `
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px;
+    background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
+    border-radius: 8px;
+  `;
+  
+  // Total Time Length - READ ONLY DISPLAY
+  const timeContainer = document.createElement('div');
+  timeContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  `;
+  const timeLabel = document.createElement('label');
+  timeLabel.textContent = 'Total Time Length:';
+  timeLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
+  
+  const timeDisplay = document.createElement('div');
+  timeDisplay.className = 'timeline-max-time-display';
+  timeDisplay.textContent = voiceMaxTimeFormatted;
+  timeDisplay.style.cssText = `
+    width: 100%;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+  `;
+  
+  timeContainer.appendChild(timeLabel);
+  timeContainer.appendChild(timeDisplay);
+  behaviorContainer.appendChild(timeContainer);
+  
+  // Beat Unit - READ ONLY DISPLAY
+  const beatContainer = document.createElement('div');
+  beatContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  `;
+  const beatLabel = document.createElement('label');
+  beatLabel.textContent = 'Beat Unit:';
+  beatLabel.style.cssText = 'font-size: 12px; font-weight: bold; color: #333; text-align: center;';
+  
+  const beatDisplay = document.createElement('div');
+  beatDisplay.className = 'timeline-beat-unit-display';
+  beatDisplay.textContent = rhythmOptions[beatUnit] || 'Quarter Notes';
+  beatDisplay.style.cssText = `
+    width: 100%;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #495057;
+    text-align: center;
+  `;
+  
+  beatContainer.appendChild(beatLabel);
+  beatContainer.appendChild(beatDisplay);
+  behaviorContainer.appendChild(beatContainer);
+  
+  // Repeat checkbox
+  const repeatContainer = document.createElement('div');
+  repeatContainer.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #dee2e6;
+  `;
+  
+  const repeatLabel = document.createElement('label');
+  repeatLabel.textContent = 'Repeat';
+  repeatLabel.style.cssText = 'font-size: 14px; font-weight: bold; color: #333;';
+  
+  const repeatCheckbox = document.createElement('input');
+  repeatCheckbox.type = 'checkbox';
+  repeatCheckbox.className = 'timeline-repeat-checkbox';
+  repeatCheckbox.dataset.voiceIndex = voiceIndex;
+  repeatCheckbox.checked = lifeSpan.repeat || false;
+  repeatCheckbox.style.cssText = `
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    transform: scale(1.2);
+  `;
+  
+  // Connect to voiceData
+  repeatCheckbox.onchange = function(e) {
+    voiceData[voiceIndex].parameters['LIFE SPAN'].repeat = e.target.checked;
+    console.log(`✅ Voice ${voiceIndex + 1} Repeat = ${e.target.checked}`);
+  };
+  
+  repeatContainer.appendChild(repeatLabel);
+  repeatContainer.appendChild(repeatCheckbox);
+  behaviorContainer.appendChild(repeatContainer);
+  
+  paramContentContainer.appendChild(behaviorContainer);
+  row.appendChild(paramContentContainer);
+  
+  console.log(`✅ Created timeline row for Voice ${voiceIndex + 1}`);
+  
+  return row;
+}
 
 function connectTimelineSliders() {
   console.log('🔗 Connecting timeline sliders to voiceData...');
   
   const timelineSliders = document.querySelectorAll('.timeline-slider-wrapper');
   
-  timelineSliders.forEach((wrapper) => {
+  console.log(`   Found ${timelineSliders.length} timeline slider wrappers`);
+  
+  timelineSliders.forEach((wrapper, index) => {
     const voiceIndex = parseInt(wrapper.dataset.voiceIndex);
     const entranceNum = parseInt(wrapper.dataset.entranceNum);
     
+    console.log(`   [${index + 1}/${timelineSliders.length}] Connecting Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
+    
     const sliderDiv = wrapper.querySelector('.timeline-nouislider');
     
-    if (!sliderDiv || !sliderDiv.noUiSlider) {
-      console.warn(`⚠️ Timeline slider not found for Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
+    if (!sliderDiv) {
+      console.warn(`      ⚠️ Slider div not found`);
       return;
     }
     
+    if (!sliderDiv.noUiSlider) {
+      console.warn(`      ⚠️ noUiSlider instance not found`);
+      return;
+    }
+    
+    console.log(`      ✅ Slider instance found`);
+    
     // Remove any existing handlers
     sliderDiv.noUiSlider.off('update');
+    sliderDiv.noUiSlider.off('set');
     
-       // Connect to voiceData with clamping
-    sliderDiv.noUiSlider.on('update', function(values) {
-      const enterValue = values[0];
-      const exitValue = values[1];
+    // Use 'set' event - ONLY fires on user interaction (not on slider creation)
+    sliderDiv.noUiSlider.on('set', function(values) {
+      console.log(`      🖱️ User edited Entrance ${entranceNum}`);
       
-      let enterMs = parseLifeSpanValue(enterValue);
-      let exitMs = parseLifeSpanValue(exitValue);
+      const enterMs = parseFloat(values[0]);
+      const exitMs = parseFloat(values[1]);
       
-      // NEW: Clamp to voice's individual max time
-      const voiceMaxTimeMs = voiceData[voiceIndex].parameters['LIFE SPAN'].maxTimeMs || 300000;
+      console.log(`         Raw values: ${enterMs}ms - ${exitMs}ms`);
       
-      let clamped = false;
+      // Convert milliseconds to beats
+      const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+      const beatUnit = lifeSpan.beatUnit || 7;
+      const tempo = getCurrentTempoForVoice(voiceIndex);
       
-      if (enterMs > voiceMaxTimeMs) {
-        enterMs = voiceMaxTimeMs;
-        clamped = true;
+      const enterBeats = msToBeats(enterMs, beatUnit, tempo);
+      const exitBeats = (exitMs >= 999999999) ? 999999 : msToBeats(exitMs, beatUnit, tempo);
+      
+      console.log(`         Converted: ${enterBeats} - ${exitBeats} beats`);
+      
+      // Clamp to voice's max beats
+      const voiceMaxBeats = lifeSpan.maxTimeBeats || 600;
+      
+      const clampedEnterBeats = Math.min(enterBeats, voiceMaxBeats);
+      const clampedExitBeats = (exitBeats >= 999999) ? exitBeats : Math.min(exitBeats, voiceMaxBeats);
+      
+      console.log(`         Clamped: ${clampedEnterBeats} - ${clampedExitBeats} beats (max: ${voiceMaxBeats})`);
+      
+      // Update PRIMARY storage (beats)
+      lifeSpan[`lifeSpan${entranceNum}`].enterBeats = clampedEnterBeats;
+      lifeSpan[`lifeSpan${entranceNum}`].exitBeats = clampedExitBeats;
+      
+      // Update LEGACY storage (ms)
+      if (!lifeSpan[`lifeSpan${entranceNum}Legacy`]) {
+        lifeSpan[`lifeSpan${entranceNum}Legacy`] = {};
       }
       
-      if (exitMs > voiceMaxTimeMs && exitMs < 999999999) { // Don't clamp infinity
-        exitMs = voiceMaxTimeMs;
-        clamped = true;
-      }
+      lifeSpan[`lifeSpan${entranceNum}Legacy`].enter = beatsToMs(clampedEnterBeats, beatUnit, tempo);
+      lifeSpan[`lifeSpan${entranceNum}Legacy`].exit = beatsToMs(clampedExitBeats, beatUnit, tempo);
       
-      // If clamped, update slider to show clamped values
-      if (clamped) {
-        sliderDiv.noUiSlider.set([enterMs, exitMs]);
-        console.log(`🚧 Voice ${voiceIndex + 1}, Entrance ${entranceNum}: Clamped to max ${formatMsToMMSS(voiceMaxTimeMs)}`);
-      }
-      
-      // Update voiceData
-      voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`].enter = enterMs;
-      voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${entranceNum}`].exit = exitMs;
-      
-      console.log(`✅ Voice ${voiceIndex + 1}, Entrance ${entranceNum}: ${formatMsToMMSS(enterMs)} → ${formatMsToMMSS(exitMs)}`);
+      console.log(`✅ Stored Voice ${voiceIndex + 1}, Entrance ${entranceNum}: ${clampedEnterBeats}-${clampedExitBeats} beats`);
     });
-
+    
+    console.log(`      ✅ 'set' handler connected (fires on user edit only)`);
   });
   
   console.log(`✅ Connected ${timelineSliders.length} timeline sliders`);
 }
+
+
+// ===== END TIMELINE VIEW HELPER FUNCTIONS =====
+
+
+
+// ===== TIMELINE VIEW FUNCTIONS =====
+
+function showTimelineView() {
+  console.log('🎬 Opening Timeline View...');
+  console.log('   Current voice:', currentVoice + 1);
+  console.log('   Enabled voices:', voiceData.filter(v => v.enabled).map((v, i) => i + 1));
+  
+  try {
+    // 1. Mark timeline as active
+    timelineViewActive = true;
+    console.log('✅ Timeline marked as active');
+    
+    // 2. Hide parameter section
+    const paramSection = document.getElementById('parameter-section');
+    if (!paramSection) {
+      console.error('❌ Parameter section not found');
+      alert('Error: Could not find parameter section. Please refresh the page.');
+      return;
+    }
+    paramSection.style.display = 'none';
+    console.log('✅ Parameter section hidden');
+    
+    // 3. Create timeline view container
+    const timelineContainer = document.createElement('div');
+    timelineContainer.id = 'timeline-view-container';
+    timelineContainer.className = 'timeline-view-container';
+    timelineContainer.style.cssText = `
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      overflow-y: auto;
+    `;
+    console.log('✅ Timeline container created');
+    
+    // 4. Create header
+    const header = document.createElement('div');
+    header.className = 'timeline-view-header';
+    header.style.cssText = `
+      background: linear-gradient(to bottom, #f7f8f8, #c0def7);
+      border-bottom: 2px solid #4a90e2;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    `;
+    
+    const title = document.createElement('h2');
+    title.textContent = 'LIFE SPAN TIMELINE VIEW';
+    title.style.cssText = 'margin: 0; font-size: 20px; color: #333;';
+    
+    const backButton = document.createElement('button');
+    backButton.textContent = 'BACK TO VOICE CONTROLS';
+    backButton.className = 'timeline-back-button';
+    backButton.style.cssText = `
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    `;
+    backButton.onclick = closeTimelineView;
+    
+    header.appendChild(title);
+    header.appendChild(backButton);
+    timelineContainer.appendChild(header);
+    console.log('✅ Header created');
+    
+    // 5. Create master timeline bar
+    try {
+      const masterTimelineBar = document.createElement('div');
+      masterTimelineBar.className = 'master-timeline-bar';
+      masterTimelineBar.style.cssText = `
+        background: linear-gradient(to bottom, #f7f8f8, #e9ecef);
+        border-bottom: 2px solid #dee2e6;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      `;
+      
+      console.log('✅ Master timeline bar div created');
+      
+      const maxTimeMs = calculateMasterTimelineLength();
+      const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
+      
+      console.log('✅ Max time calculated:', maxTimeFormatted, '(', maxTimeMs, 'ms)');
+      
+      const timelineInfo = document.createElement('div');
+      timelineInfo.className = 'timeline-info';
+      timelineInfo.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex: 1;
+      `;
+      
+      const startLabel = document.createElement('span');
+      startLabel.textContent = '0:00';
+      startLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
+      
+      const progressContainer = document.createElement('div');
+      progressContainer.className = 'timeline-progress-container';
+      progressContainer.style.cssText = `
+        position: relative;
+        flex: 1;
+        height: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: visible;
+      `;
+      
+      const progressBar = document.createElement('div');
+      progressBar.id = 'timeline-progress-bar';
+      progressBar.className = 'timeline-progress-bar';
+      progressBar.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 0%;
+        background: #4a90e2;
+        border-radius: 4px;
+        transition: width 0.05s linear;
+      `;
+      
+      const playhead = document.createElement('div');
+      playhead.id = 'timeline-playhead';
+      playhead.className = 'timeline-playhead';
+      playhead.style.cssText = `
+        position: absolute;
+        top: -10px;
+        left: 0%;
+        width: 3px;
+        height: calc(100% + 20px);
+        background: #dc3545;
+        transition: left 0.05s linear;
+        pointer-events: none;
+        z-index: 100;
+      `;
+      
+      const playheadArrow = document.createElement('div');
+      playheadArrow.style.cssText = `
+        position: absolute;
+        top: -18px;
+        left: -7px;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-top: 10px solid #dc3545;
+      `;
+      playhead.appendChild(playheadArrow);
+      
+      const playheadTooltip = document.createElement('div');
+      playheadTooltip.id = 'timeline-playhead-tooltip';
+      playheadTooltip.className = 'timeline-playhead-tooltip';
+      playheadTooltip.textContent = '0:00';
+      playheadTooltip.style.cssText = `
+        position: absolute;
+        top: -1px;
+        left: 8px;
+        background: #333;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+        pointer-events: none;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      `;
+      playhead.appendChild(playheadTooltip);
+      
+      progressContainer.appendChild(progressBar);
+      progressContainer.appendChild(playhead);
+      
+      console.log('✅ Progress container created');
+      
+      const endLabel = document.createElement('span');
+      endLabel.id = 'timeline-max-time';
+      endLabel.textContent = maxTimeFormatted;
+      endLabel.style.cssText = 'font-weight: 600; color: #495057; font-size: 14px;';
+      
+      timelineInfo.appendChild(startLabel);
+      timelineInfo.appendChild(progressContainer);
+      timelineInfo.appendChild(endLabel);
+      
+      masterTimelineBar.appendChild(timelineInfo);
+      timelineContainer.appendChild(masterTimelineBar);
+      
+      console.log('✅ Master timeline bar fully created and appended!');
+      
+    } catch (error) {
+      console.error('❌ ERROR creating master timeline bar:', error);
+      console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
+      throw error; // Re-throw to catch in outer try-catch
+    }
+    
+    // 6. Create content area with voice rows
+    const content = document.createElement('div');
+    content.className = 'timeline-content';
+    content.style.cssText = `
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    `;
+    
+    // Calculate master timeline length
+    const maxTimeMs = calculateMasterTimelineLength();
+    
+    // Count enabled voices
+    const enabledVoices = voiceData.filter(v => v.enabled);
+    
+    if (enabledVoices.length === 0) {
+      const noVoices = document.createElement('div');
+      noVoices.style.cssText = `
+        text-align: center;
+        padding: 40px;
+        color: #dc3545;
+        font-size: 16px;
+      `;
+      noVoices.innerHTML = `
+        <p style="margin: 0 0 10px 0;">⚠️ No Enabled Voices</p>
+        <p style="margin: 0; font-size: 14px;">Please enable at least one voice to use Timeline View.</p>
+      `;
+      content.appendChild(noVoices);
+      console.log('⚠️ No enabled voices - showing warning message');
+    } else {
+      console.log(`📊 Generating timeline for ${enabledVoices.length} voices`);
+      
+      // Generate a row for each enabled voice
+      for (let i = 0; i < 16; i++) {
+        if (!voiceData[i].enabled) continue;
+        
+        console.log(`   Creating row for Voice ${i + 1}...`);
+        try {
+          const voiceRow = createTimelineVoiceRow(i, maxTimeMs);
+          content.appendChild(voiceRow);
+          console.log(`   ✅ Voice ${i + 1} row created`);
+        } catch (rowError) {
+          console.error(`   ❌ Error creating Voice ${i + 1} row:`, rowError);
+        }
+      }
+      // DIAGNOSTIC: Check content area after all rows added
+console.log(`📊 Content area has ${content.children.length} child elements`);
+    }
+    
+    timelineContainer.appendChild(content);
+    console.log('✅ Content area created and appended');
+    
+    // 7. Inject into main content
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) {
+      console.error('❌ Main content area not found');
+      alert('Error: Could not find main content area. Please refresh the page.');
+      return;
+    }
+    
+    mainContent.appendChild(timelineContainer);
+    console.log('✅ Timeline container injected into main-content');
+    
+    console.log('✅ Timeline View opened successfully');
+    console.log('   Enabled voices:', voiceData.filter(v => v.enabled).map((v, i) => `Voice ${i + 1}`).join(', '));
+    
+    // 8. Connect all timeline sliders
+    setTimeout(() => {
+      console.log('🔗 About to connect timeline sliders...');
+      console.log('   Timeline sliders in DOM:', document.querySelectorAll('.timeline-slider-wrapper').length);
+      
+      try {
+        connectTimelineSliders();
+        console.log('✅ Timeline sliders connected');
+        
+        // DEBUG: Verify they're actually connected
+        setTimeout(() => {
+          const wrappers = document.querySelectorAll('.timeline-slider-wrapper');
+          console.log('🔍 Post-connection check:');
+          wrappers.forEach((wrapper, idx) => {
+            const slider = wrapper.querySelector('.timeline-nouislider');
+            console.log(`   Slider ${idx + 1}: hasNoUiSlider=${!!(slider && slider.noUiSlider)}`);
+          });
+        }, 50);
+        
+      } catch (connectError) {
+        console.error('❌ Error connecting timeline sliders:', connectError);
+      }
+    }, 100);
+    
+  } catch (error) {
+    console.error('❌ CRITICAL ERROR in showTimelineView():', error);
+    console.error('   Error message:', error.message);
+    console.error('   Error stack:', error.stack);
+    
+    // Try to restore parameter section
+    const paramSection = document.getElementById('parameter-section');
+    if (paramSection) {
+      paramSection.style.display = 'flex';
+    }
+    
+    timelineViewActive = false;
+    
+    alert(`Error opening Timeline View: ${error.message}\n\nPlease check the console for details.`);
+  }
+}
+
+function closeTimelineView() {
+  console.log('🔙 Closing Timeline View...');
+
+  // DEBUG: Check data before closing
+  debugLifeSpanData(currentVoice, 'Before closing Timeline View');
+  
+  // DEBUG: Log current Life Span data BEFORE closing
+  console.log('📊 Life Span data before closing Timeline View:');
+  for (let i = 0; i < 16; i++) {
+    if (!voiceData[i].enabled) continue;
+    
+    const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+    if (lifeSpan) {
+      console.log(`   Voice ${i + 1}:`);
+      for (let j = 1; j <= 3; j++) {
+        const span = lifeSpan[`lifeSpan${j}`];
+        if (span) {
+          console.log(`      Entrance ${j}: ${span.enterBeats}-${span.exitBeats} beats`);
+        }
+      }
+    }
+  }
+  
+  // 1. Mark timeline as inactive
+  timelineViewActive = false;
+  
+  // 2. Remove timeline container
+  const timeline = document.getElementById('timeline-view-container');
+  if (timeline) {
+    timeline.remove();
+    console.log('✅ Timeline container removed');
+  }
+  
+  // 3. Restore parameter section
+  const paramSection = document.getElementById('parameter-section');
+  if (paramSection) {
+    paramSection.style.display = 'flex';
+    console.log('✅ Parameter section restored');
+  }
+  
+  // 4. Refresh parameter view to show updated values
+  setTimeout(() => {
+    console.log('🔄 Refreshing parameter view for Voice', currentVoice + 1);
+    
+    // DEBUG: Log data right before render
+    const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+    if (lifeSpan) {
+      console.log('   Life Span data at render time:');
+      for (let j = 1; j <= 3; j++) {
+        const span = lifeSpan[`lifeSpan${j}`];
+        if (span) {
+          console.log(`      Entrance ${j}: ${span.enterBeats}-${span.exitBeats} beats`);
+        }
+      }
+    }
+    
+    renderParameters();
+    
+    setTimeout(() => {
+      connectAllSliders();
+      console.log('✅ Parameter view refreshed and reconnected');
+    }, 100);
+  }, 100);
+}
+
+
+function calculateMasterTimelineLength() {
+  let maxTimeMs = 0;
+  
+  console.log('📏 Calculating master timeline length...');
+  
+  for (let i = 0; i < 16; i++) {
+    if (!voiceData[i].enabled) continue;
+    
+    const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+    if (!lifeSpan) continue;
+    
+    // Convert voice's max BEATS to milliseconds
+    const maxBeats = lifeSpan.maxTimeBeats || 600;
+    const beatUnit = lifeSpan.beatUnit || 7;
+    const tempo = getCurrentTempoForVoice(i);
+    
+    const voiceMaxMs = beatsToMs(maxBeats, beatUnit, tempo);
+    
+    console.log(`   Voice ${i + 1}: ${maxBeats} beats = ${formatMsToMMSS(voiceMaxMs)} @ ${tempo} BPM`);
+    
+    if (voiceMaxMs > maxTimeMs) {
+      maxTimeMs = voiceMaxMs;
+    }
+  }
+  
+  // Fallback to 5 minutes if nothing set
+  const finalTimeMs = maxTimeMs > 0 ? maxTimeMs : 300000;
+  console.log(`📏 Master timeline length: ${formatMsToMMSS(finalTimeMs)} (${finalTimeMs}ms)`);
+  return finalTimeMs;
+}
+// ===== ADVANCED TIMELINE VIEW FUNCTIONS =====
+
+function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUnit) {
+  const container = document.createElement('div');
+  container.className = 'timeline-entrance-slider';
+  container.style.cssText = `
+    margin-bottom: 8px;
+    width: 100%;
+  `;
+  
+  console.log(`      Creating slider for Entrance ${entranceNum}...`);
+  
+  const label = document.createElement('div');
+  label.className = 'timeline-entrance-label';
+  label.textContent = `Entrance & Exit ${entranceNum}`;
+  label.style.cssText = `
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 5px;
+    font-weight: 600;
+  `;
+  container.appendChild(label);
+  
+  const sliderWrapper = document.createElement('div');
+  sliderWrapper.className = 'timeline-slider-wrapper';
+  sliderWrapper.dataset.voiceIndex = voiceIndex;
+  sliderWrapper.dataset.entranceNum = entranceNum;
+  sliderWrapper.style.cssText = `
+    width: 100%;
+    height: 40px;
+    position: relative;
+    box-sizing: border-box;
+  `;
+  
+  const sliderDiv = document.createElement('div');
+  sliderDiv.className = 'timeline-nouislider';
+  sliderDiv.style.cssText = `
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  `;
+  sliderWrapper.appendChild(sliderDiv);
+  container.appendChild(sliderWrapper);
+  
+  console.log(`      Slider div created and appended`);
+  
+  // Get Life Span data (BEAT-BASED)
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpan) {
+    console.error(`❌ Voice ${voiceIndex + 1}: No LIFE SPAN parameter!`);
+    return container;
+  }
+  
+  const spanData = lifeSpan[`lifeSpan${entranceNum}`];
+  
+if (!spanData) {
+  console.error(`❌ Voice ${voiceIndex + 1}: No lifeSpan${entranceNum} data!`);
+  
+  // CREATE MISSING DATA
+  console.log(`   🔧 Creating missing lifeSpan${entranceNum} data...`);
+  lifeSpan[`lifeSpan${entranceNum}`] = {
+    enterBeats: 0,
+    exitBeats: entranceNum === 1 ? 999999 : 0 // First entrance defaults to infinity
+  };
+  spanData = lifeSpan[`lifeSpan${entranceNum}`];
+  console.log(`   ✅ Created with defaults: ${spanData.enterBeats}-${spanData.exitBeats} beats`);
+}
+  
+  const enterBeats = spanData.enterBeats || 0;
+  const exitBeats = spanData.exitBeats || 0;
+  
+  console.log(`      Entrance ${entranceNum} data: ${enterBeats}-${exitBeats} beats`);
+  
+  // Convert to milliseconds for timeline display
+  const tempo = getCurrentTempoForVoice(voiceIndex);
+  const enterMs = beatsToMs(enterBeats, beatUnit, tempo);
+  const exitMs = (exitBeats >= 999999) ? maxTimeMs : beatsToMs(exitBeats, beatUnit, tempo);
+  
+  console.log(`      Converting to timeline: ${formatMsToMMSS(enterMs)} - ${formatMsToMMSS(exitMs)}`);
+  
+  // Calculate step size (1 beat in ms)
+  const beatStepMs = beatsToMs(1, beatUnit, tempo);
+  
+  // Create formatter
+  const formatter = {
+    to: function(timeMs) {
+      // Convert timeline position (ms) to beats for tooltip
+      const beats = Math.round(msToBeats(timeMs, beatUnit, tempo));
+      const timeStr = formatMsToMMSS(timeMs);
+      return `${beats} beats (${timeStr})`;
+    },
+    from: function(value) {
+      // Parse "80 beats (1:20)" format
+      const beatsMatch = value.match(/^(\d+) beats/);
+      if (beatsMatch) {
+        const beats = parseInt(beatsMatch[1]);
+        return beatsToMs(beats, beatUnit, tempo);
+      }
+      
+      // Fallback: parse as ms
+      return parseFloat(value) || 0;
+    }
+  };
+  
+  console.log(`      Creating noUiSlider with range: 0-${maxTimeMs}ms, step: ${beatStepMs}ms`);
+  
+  try {
+    noUiSlider.create(sliderDiv, {
+      start: [enterMs, Math.min(exitMs, maxTimeMs)],
+      connect: true,
+      range: { min: 0, max: maxTimeMs },
+      // NO STEP - allow free positioning, quantize on user release
+      tooltips: [true, true],
+      format: formatter
+    });
+    
+    console.log(`      ✅ noUiSlider created successfully`);
+    
+    // Force timeline sliders to full width
+    setTimeout(() => {
+      sliderDiv.style.setProperty('width', '100%', 'important');
+      sliderDiv.style.setProperty('min-width', '0', 'important');
+      sliderDiv.style.setProperty('max-width', '100%', 'important');
+      
+      const base = sliderDiv.querySelector('.noUi-base');
+      if (base) {
+        base.style.setProperty('width', '100%', 'important');
+      }
+      
+      const connects = sliderDiv.querySelector('.noUi-connects');
+      if (connects) {
+        connects.style.setProperty('width', '100%', 'important');
+      }
+      
+      console.log(`      ✅ Slider width forced to 100%`);
+    }, 0);
+    
+    // Add visual boundary line at voice's max time (if less than master max)
+    const voiceMaxBeats = lifeSpan.maxTimeBeats || 600;
+    const voiceMaxTimeMs = beatsToMs(voiceMaxBeats, beatUnit, tempo);
+    
+    if (voiceMaxTimeMs < maxTimeMs) {
+      const boundaryPercentage = (voiceMaxTimeMs / maxTimeMs) * 100;
+      
+      const boundaryLine = document.createElement('div');
+      boundaryLine.className = 'voice-max-boundary';
+      boundaryLine.style.cssText = `
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: ${boundaryPercentage}%;
+        width: 2px;
+        background: #dc3545;
+        z-index: 50;
+        pointer-events: none;
+      `;
+      
+      const boundaryLabel = document.createElement('div');
+      boundaryLabel.style.cssText = `
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: #dc3545;
+        font-weight: 600;
+        white-space: nowrap;
+        background: white;
+        padding: 2px 4px;
+        border-radius: 2px;
+      `;
+      boundaryLabel.textContent = `Max: ${voiceMaxTimeFormatted}`;
+      
+      boundaryLine.appendChild(boundaryLabel);
+      sliderWrapper.appendChild(boundaryLine);
+      
+      console.log(`      🚧 Boundary at ${voiceMaxTimeFormatted} (${boundaryPercentage.toFixed(1)}%)`);
+    }
+    
+  } catch (error) {
+    console.error(`      ❌ Error creating slider:`, error);
+    console.error(`         Error message:`, error.message);
+    console.error(`         Error stack:`, error.stack);
+    
+    // Add error message to container
+    const errorMsg = document.createElement('div');
+    errorMsg.style.cssText = `
+      padding: 10px;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      color: #856404;
+      font-size: 12px;
+    `;
+    errorMsg.textContent = `Error creating slider: ${error.message}`;
+    container.appendChild(errorMsg);
+  }
+  
+  return container;
+}
+
+function connectTimelineSliders() {
+  console.log('🔗 Connecting timeline sliders to voiceData...');
+  
+  const timelineSliders = document.querySelectorAll('.timeline-slider-wrapper');
+  
+  console.log(`   Found ${timelineSliders.length} timeline slider wrappers`);
+  
+  timelineSliders.forEach((wrapper, index) => {
+    const voiceIndex = parseInt(wrapper.dataset.voiceIndex);
+    const entranceNum = parseInt(wrapper.dataset.entranceNum);
+    
+    console.log(`   [${index + 1}/${timelineSliders.length}] Connecting Voice ${voiceIndex + 1}, Entrance ${entranceNum}`);
+    
+    const sliderDiv = wrapper.querySelector('.timeline-nouislider');
+    
+    if (!sliderDiv) {
+      console.warn(`      ⚠️ Slider div not found`);
+      return;
+    }
+    
+    if (!sliderDiv.noUiSlider) {
+      console.warn(`      ⚠️ noUiSlider instance not found`);
+      return;
+    }
+    
+    console.log(`      ✅ Slider instance found`);
+    
+    // Remove any existing handlers
+    sliderDiv.noUiSlider.off('update');
+    sliderDiv.noUiSlider.off('set');
+    
+    // Use 'set' event - ONLY fires when user releases slider handle
+    // This prevents initial slider position from overwriting stored data
+    sliderDiv.noUiSlider.on('set', function(values) {
+      console.log(`      🖱️ User SET Entrance ${entranceNum} slider`);
+      
+      let enterMs = parseFloat(values[0]);
+      let exitMs = parseFloat(values[1]);
+      
+      console.log(`         Raw ms values: ${enterMs} - ${exitMs}`);
+      
+      // Get voice parameters
+      const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+      const beatUnit = lifeSpan.beatUnit || 7;
+      const tempo = getCurrentTempoForVoice(voiceIndex);
+      
+      // Quantize to beat boundaries
+      const beatStepMs = beatsToMs(1, beatUnit, tempo);
+      enterMs = Math.round(enterMs / beatStepMs) * beatStepMs;
+      
+      if (exitMs < 999999999) {
+        exitMs = Math.round(exitMs / beatStepMs) * beatStepMs;
+      }
+      
+      console.log(`         Quantized ms: ${enterMs} - ${exitMs} (step: ${beatStepMs}ms)`);
+      
+      // Convert milliseconds to beats
+      const enterBeats = msToBeats(enterMs, beatUnit, tempo);
+      const exitBeats = (exitMs >= 999999999) ? 999999 : msToBeats(exitMs, beatUnit, tempo);
+      
+      console.log(`         Converted to beats: ${enterBeats} - ${exitBeats}`);
+      
+      // Clamp to voice's max beats
+      const voiceMaxBeats = lifeSpan.maxTimeBeats || 600;
+      
+      const clampedEnterBeats = Math.min(enterBeats, voiceMaxBeats);
+      const clampedExitBeats = (exitBeats >= 999999) ? exitBeats : Math.min(exitBeats, voiceMaxBeats);
+      
+      if (clampedEnterBeats !== enterBeats || clampedExitBeats !== exitBeats) {
+        console.log(`         Clamped to: ${clampedEnterBeats} - ${clampedExitBeats} (max: ${voiceMaxBeats})`);
+      }
+      
+      // Update PRIMARY storage (beats)
+      lifeSpan[`lifeSpan${entranceNum}`].enterBeats = clampedEnterBeats;
+      lifeSpan[`lifeSpan${entranceNum}`].exitBeats = clampedExitBeats;
+      
+      // Update LEGACY storage (ms)
+      if (!lifeSpan[`lifeSpan${entranceNum}Legacy`]) {
+        lifeSpan[`lifeSpan${entranceNum}Legacy`] = {};
+      }
+      
+      lifeSpan[`lifeSpan${entranceNum}Legacy`].enter = beatsToMs(clampedEnterBeats, beatUnit, tempo);
+      lifeSpan[`lifeSpan${entranceNum}Legacy`].exit = beatsToMs(clampedExitBeats, beatUnit, tempo);
+      
+      console.log(`✅ STORED Voice ${voiceIndex + 1}, Entrance ${entranceNum}: ${clampedEnterBeats}-${clampedExitBeats} beats`);
+      
+      // Update the slider to show quantized position (if it changed)
+      const quantizedEnterMs = beatsToMs(clampedEnterBeats, beatUnit, tempo);
+      const quantizedExitMs = beatsToMs(clampedExitBeats, beatUnit, tempo);
+      
+      if (Math.abs(quantizedEnterMs - enterMs) > 1 || Math.abs(quantizedExitMs - exitMs) > 1) {
+        sliderDiv.noUiSlider.set([quantizedEnterMs, quantizedExitMs]);
+        console.log(`         Slider updated to show quantized position`);
+      }
+    });
+    
+    console.log(`      ✅ 'set' handler connected (fires on user release only)`);
+  });
+  
+  console.log(`✅ Connected ${timelineSliders.length} timeline sliders`);
+}
+
+// ===== END TIMELINE VIEW FUNCTIONS =====
+
 function updateTimelinePlayhead() {
   // Check 1: Is timeline active?
   if (!timelineViewActive) {
@@ -1610,115 +2265,176 @@ function updateTimelinePlayhead() {
 
 // ===== END TIMELINE VIEW FUNCTIONS =====
 
-
 function rebuildLifeSpanSliders(container, voiceIndex) {
+  console.log(`🔄 Rebuilding Life Span sliders for Voice ${voiceIndex + 1}`);
+
+  // DEBUG: Check data at start of rebuild
+  debugLifeSpanData(voiceIndex, 'Start of rebuildLifeSpanSliders');
   
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  const maxTimeMs = lifeSpanParam.maxTimeMs;
-  const beatUnit = lifeSpanParam.beatUnit;
   
+  if (!lifeSpanParam) {
+    console.error(`❌ No LIFE SPAN parameter for Voice ${voiceIndex + 1}`);
+    return;
+  }
   
-  // Find all Life Span sliders in this container
+  const maxBeats = lifeSpanParam.maxTimeBeats || 600;
+  const beatUnit = lifeSpanParam.beatUnit || 7;
+  
+  console.log(`📏 Max: ${maxBeats} beats, Unit: ${rhythmOptions[beatUnit]}`);
+  
+  // DEBUG: Log current stored values
+  console.log('📊 Current stored beat values:');
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpanParam[`lifeSpan${i}`];
+    if (span) {
+      console.log(`   Entrance ${i}: enterBeats=${span.enterBeats}, exitBeats=${span.exitBeats}`);
+    }
+  }
+  
+  // Find all Life Span sliders
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
   
   spanSliders.forEach((sliderContainer) => {
     const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
     
-    // Get current values before destroying
-    let currentEnter = 0;
-    let currentExit = 0;
+    console.log(`🔄 Rebuilding slider ${spanNumber}...`);
     
-    // Find ALL existing slider instances in this container
+    // Get current BEAT values from PRIMARY storage
+    const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
+    
+    if (!spanData) {
+      console.error(`   ❌ No data for lifeSpan${spanNumber}`);
+      return;
+    }
+    
+    let currentEnterBeats = spanData.enterBeats || 0;
+    let currentExitBeats = spanData.exitBeats || 0;
+    
+    console.log(`   📖 Reading from storage: ${currentEnterBeats}-${currentExitBeats} beats`);
+    
+    // Find ALL existing slider instances
     const existingSliders = sliderContainer.querySelectorAll('.noUi-target');
     
     if (existingSliders.length > 0) {
-      // Get values from the FIRST slider (the most recent valid one)
+      console.log(`   🗑️ Found ${existingSliders.length} existing sliders, destroying...`);
+      
+      // Try to read current values from first slider BEFORE destroying
       const firstSlider = existingSliders[0];
       
       if (firstSlider.noUiSlider) {
         try {
           const values = firstSlider.noUiSlider.get();
-          currentEnter = parseLifeSpanValue(values[0]);
-          currentExit = parseLifeSpanValue(values[1]);
+          const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
+          
+          const sliderEnterBeats = Math.round(formatter.from(values[0]));
+          const sliderExitBeats = Math.round(formatter.from(values[1]));
+          
+          console.log(`   📊 Slider currently shows: ${sliderEnterBeats}-${sliderExitBeats} beats`);
+          
+          // Use slider values if they're different (user just edited)
+          if (sliderEnterBeats !== currentEnterBeats || sliderExitBeats !== currentExitBeats) {
+            console.log(`   🔀 Using slider values (user edited)`);
+            currentEnterBeats = sliderEnterBeats;
+            currentExitBeats = sliderExitBeats;
+            
+            // UPDATE storage with slider values
+            spanData.enterBeats = currentEnterBeats;
+            spanData.exitBeats = currentExitBeats;
+          }
           
         } catch (e) {
-          console.warn(`Warning reading Life Span ${spanNumber} values:`, e);
+          console.warn(`   ⚠️ Could not read slider values:`, e);
         }
       }
       
-      // Destroy and remove ALL existing sliders
-      existingSliders.forEach((slider, index) => {
+      // Destroy ALL existing sliders
+      existingSliders.forEach((slider) => {
         try {
           if (slider.noUiSlider) {
             slider.noUiSlider.destroy();
           }
           slider.remove();
         } catch (e) {
-          console.warn(`Warning removing slider:`, e);
+          console.warn(`   ⚠️ Error destroying slider:`, e);
         }
       });
-    } else {
-      // Get values from data if no existing slider
-      const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
-      currentEnter = spanData.enter || 0;
-      currentExit = spanData.exit || 0;
+      
+      console.log(`   ✅ Destroyed ${existingSliders.length} sliders`);
     }
     
-    // Clamp existing values to new range
-    currentEnter = Math.min(currentEnter, maxTimeMs);
-    currentExit = Math.min(currentExit, maxTimeMs);
+    // Clamp beat values to new range
+    currentEnterBeats = Math.min(currentEnterBeats, maxBeats);
     
-    // Handle infinity case
-    if (currentExit >= 999999999) {
-      currentExit = maxTimeMs;
+    if (currentExitBeats < 999999) {
+      currentExitBeats = Math.min(currentExitBeats, maxBeats);
     }
     
-    // Update data with clamped values
-    lifeSpanParam[`lifeSpan${spanNumber}`].enter = currentEnter;
-    lifeSpanParam[`lifeSpan${spanNumber}`].exit = currentExit;
+    // Update storage with clamped values
+    spanData.enterBeats = currentEnterBeats;
+    spanData.exitBeats = currentExitBeats;
     
-    // Create NEW slider div (container should now be empty)
+    console.log(`   💾 Storing: ${currentEnterBeats}-${currentExitBeats} beats`);
+    
+    // Update legacy milliseconds
+    const tempo = getCurrentTempoForVoice(voiceIndex);
+    if (!lifeSpanParam[`lifeSpan${spanNumber}Legacy`]) {
+      lifeSpanParam[`lifeSpan${spanNumber}Legacy`] = {};
+    }
+    lifeSpanParam[`lifeSpan${spanNumber}Legacy`].enter = beatsToMs(currentEnterBeats, beatUnit, tempo);
+    lifeSpanParam[`lifeSpan${spanNumber}Legacy`].exit = beatsToMs(currentExitBeats, beatUnit, tempo);
+    
+    // Create NEW slider
     const newSliderDiv = document.createElement('div');
     sliderContainer.appendChild(newSliderDiv);
     
-    // Calculate beat-based step size
-    const beatStepMs = calculateBeatDurationMs(voiceIndex, beatUnit);
-    
-    // Create new formatter with updated beat unit
+    // Create formatter
     const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
     
+    // Check infinity
+    const isInfinity = (currentExitBeats >= 999999);
+    
     try {
-      
       noUiSlider.create(newSliderDiv, {
-        start: [currentEnter, currentExit],
+        start: [currentEnterBeats, isInfinity ? maxBeats : currentExitBeats],
         connect: true,
-        range: { min: 0, max: maxTimeMs },
-        step: beatStepMs,
+        range: { min: 0, max: maxBeats },
+        step: 1,
         tooltips: [true, true],
         format: formatter
       });
       
-      // NEW: Force immediate tooltip update with new formatter
-      newSliderDiv.noUiSlider.set([currentEnter, currentExit]);
+      console.log(`   ✅ Created new slider: ${currentEnterBeats}-${currentExitBeats} beats (max: ${maxBeats})`);
       
-      // Reconnect the update handler
+      // Reconnect update handler
       newSliderDiv.noUiSlider.on('update', function(values) {
-        const enterValue = values[0];
-        const exitValue = values[1];
+        const enterBeats = Math.round(formatter.from(values[0]));
+        const exitBeats = Math.round(formatter.from(values[1]));
         
-        const enterMs = parseLifeSpanValue(enterValue);
-        const exitMs = parseLifeSpanValue(exitValue);
+        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enterBeats = enterBeats;
+        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exitBeats = exitBeats;
         
-        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
-        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
+        // Update legacy
+        const tempo = getCurrentTempoForVoice(voiceIndex);
+        const beatUnit = voiceData[voiceIndex].parameters['LIFE SPAN'].beatUnit;
         
-      });      
+        if (!voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`]) {
+          voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`] = {};
+        }
+        
+        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`].enter = beatsToMs(enterBeats, beatUnit, tempo);
+        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`].exit = beatsToMs(exitBeats, beatUnit, tempo);
+      });
+      
     } catch (error) {
-      console.error(`❌ Error creating Life Span ${spanNumber} slider:`, error);
+      console.error(`   ❌ Error creating slider ${spanNumber}:`, error);
     }
   });
   
+  console.log(`✅ Rebuilt all sliders for Voice ${voiceIndex + 1}`);
 }
+
+
 
 function updateLifeSpanSlidersForTempoChange(voiceIndex) {
   
@@ -3129,10 +3845,9 @@ function midiToFrequency(midiNote) {
 }
 
 window.selectMidiNote = function(voiceIndex) {
-    
+      
     const melodicParam = voiceData[voiceIndex].parameters['MELODIC RANGE'];
     const polyphonyParam = voiceData[voiceIndex].parameters['POLYPHONY'];
-    
     
     let noteCount = 1;
     
@@ -3150,7 +3865,6 @@ window.selectMidiNote = function(voiceIndex) {
             noteCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
         }
     }
-    
     
     const selectedNotes = [];
     
@@ -3940,9 +4654,6 @@ class InteractivePiano {
     };
 
     
-    console.log(`🎵 Voice ${this.voiceIndex + 1} filters: Root=${noteNames[rootNote]}, Scale=${finalScale}, Chord=${finalChord}`);
-
-    
     // Get current selection range
     if (this.selectedNotes.size === 0) {
       resultDiv.textContent = 'Select notes on keyboard first';
@@ -3974,19 +4685,15 @@ class InteractivePiano {
       resultDiv.textContent = `Filtered: ${filteredNotes.length} notes (${noteNamesList}${suffix})`;
       resultDiv.style.color = '#6c757d';
     }
-    
-    console.log(`✅ Filtered to ${filteredNotes.length} notes:`, filteredNotes.map(n => midiNoteNames[n]).join(', '));
   }
   
-    filterNotesToScaleAndChord(minNote, maxNote, rootNote, scaleName, chordName) {
-    // If no filtering selected, return all notes in range
+  filterNotesToScaleAndChord(minNote, maxNote, rootNote, scaleName, chordName) {
+    // If no filtering selected, return ACTUAL selected notes (not filled range)
     if (scaleName === 'None' && chordName === 'none') {
-      const allNotes = [];
-      for (let midi = minNote; midi <= maxNote; midi++) {
-        allNotes.push(midi);
-      }
-      return allNotes;
+      // Return the notes user actually clicked, don't fill the range
+      return Array.from(this.selectedNotes).sort((a, b) => a - b);
     }
+
     
     const filteredNotes = [];
     
@@ -3997,7 +4704,6 @@ class InteractivePiano {
     let normalizedChordIntervals = null;
     if (chordName !== 'none' && chordQualities[chordName]) {
       normalizedChordIntervals = chordQualities[chordName].map(interval => interval % 12);
-      console.log(`🎵 Chord intervals for ${chordName}:`, chordQualities[chordName], '→ normalized:', normalizedChordIntervals);
     }
     
     // Iterate through range
@@ -4380,21 +5086,28 @@ if (this.lookaheadScheduler) {
     return this.isInLifeSpan(elapsedMs);
   }
   
-  isInLifeSpan(elapsedMs) {
+isInLifeSpan(elapsedMs) {
   const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   
   if (!lifeSpanParam) {
-    return true; // No Life Span parameter - play continuously
+    return true; // No Life Span parameter
   }
+  
+  // Get current tempo and beat unit
+  const tempo = this.currentTempo || getCurrentTempoForVoice(this.voiceIndex);
+  const beatUnit = lifeSpanParam.beatUnit || 7;
+  
+  // Convert elapsed time to beats ONCE
+  const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
   
   // Collect all active spans
   let activeSpans = [];
   for (let i = 1; i <= 3; i++) {
     const span = lifeSpanParam[`lifeSpan${i}`];
-    if (span && span.exit > 0) {
+    if (span && span.exitBeats > 0) {
       activeSpans.push({
-        enter: span.enter || 0,
-        exit: span.exit >= 999999999 ? Infinity : span.exit,
+        enterBeats: span.enterBeats || 0,
+        exitBeats: span.exitBeats >= 999999 ? Infinity : span.exitBeats,
         number: i
       });
     }
@@ -4404,15 +5117,14 @@ if (this.lookaheadScheduler) {
     return false; // No active spans
   }
   
-  // CORRECTED REPEAT LOGIC: Use maxTimeMs as cycle length
+  // Handle REPEAT mode
   if (lifeSpanParam.repeat) {
-    // Get the total cycle length from maxTimeMs
-    const cycleLength = lifeSpanParam.maxTimeMs || 300000; // Fallback to 5 minutes
+    const maxBeats = lifeSpanParam.maxTimeBeats || 600;
     
     // Check for infinite spans
     let hasInfiniteSpan = false;
     for (const span of activeSpans) {
-      if (span.exit === Infinity) {
+      if (span.exitBeats === Infinity) {
         hasInfiniteSpan = true;
         break;
       }
@@ -4423,13 +5135,12 @@ if (this.lookaheadScheduler) {
       return true;
     }
     
-    // Calculate position within current cycle (using maxTimeMs, not exit time!)
-    const cyclePosition = elapsedMs % cycleLength;
-    const cycleNumber = Math.floor(elapsedMs / cycleLength) + 1;
+    // Calculate position within current cycle (using maxBeats!)
+    const cyclePosition = elapsedBeats % maxBeats;
     
     // Check if we're in any active span at this cycle position
     for (const span of activeSpans) {
-      if (cyclePosition >= span.enter && cyclePosition < span.exit) {
+      if (cyclePosition >= span.enterBeats && cyclePosition < span.exitBeats) {
         return true;
       }
     }
@@ -4439,14 +5150,13 @@ if (this.lookaheadScheduler) {
   
   // NON-REPEAT: Check spans once
   for (const span of activeSpans) {
-    if (elapsedMs >= span.enter && (elapsedMs < span.exit || span.exit === Infinity)) {
+    if (elapsedBeats >= span.enterBeats && (elapsedBeats < span.exitBeats || span.exitBeats === Infinity)) {
       return true;
     }
   }
   
   return false;
 }
-
 
    
   isTimeForNextNote() {
@@ -6390,62 +7100,33 @@ resetPreviewButton(voiceIndex) {
   }
 }
 
-
-// hasVoiceCompletedLifeSpan(voiceIndex) {
-//   const elapsedMs = this.masterClock.getElapsedTime();
-//   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  
-//   if (!lifeSpanParam) return false;
-  
-//   // CRITICAL CHECK: If repeat is enabled, NEVER complete
-//   if (lifeSpanParam.repeat) {
-//     return false;
-//   }
-  
-//   let hasAnyActiveSpan = false;
-//   let hasPassedAllSpans = true;
-  
-//   // Check all 3 Life Spans
-//   for (let i = 1; i <= 3; i++) {
-//     const span = lifeSpanParam[`lifeSpan${i}`];
-    
-//     if (!span || span.exit <= 0) continue; // Skip disabled spans
-    
-//     hasAnyActiveSpan = true;
-    
-//     const exitTime = span.exit >= 999999999 ? Infinity : span.exit;
-    
-//     // If we haven't passed this span's exit time, we haven't completed everything
-//     if (elapsedMs < exitTime) {
-//       hasPassedAllSpans = false;
-//     }
-//   }
-  
-//   const completed = hasAnyActiveSpan && hasPassedAllSpans;
-  
-  
-//   return completed;
-// }
-
 hasVoiceCompletedLifeSpan(voiceIndex) {
   const elapsedMs = this.masterClock.getElapsedTime();
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
   
   if (!lifeSpanParam) return false;
   
-  // CRITICAL CHECK: If repeat is enabled, NEVER complete
+  // If repeat is enabled, NEVER complete
   if (lifeSpanParam.repeat) {
     return false;
   }
   
-  // NEW LOGIC: Voice completes when elapsed time reaches Total Time Length
-  const voiceMaxTimeMs = lifeSpanParam.maxTimeMs || 300000;
+  // Get voice's max time in beats
+  const maxBeats = lifeSpanParam.maxTimeBeats || 600;
+  const beatUnit = lifeSpanParam.beatUnit || 7;
   
-  // Check if we've reached the voice's declared total time
-  const completed = elapsedMs >= voiceMaxTimeMs;
+  // Get current tempo
+  const voiceClock = this.getVoiceClock(voiceIndex);
+  const tempo = voiceClock ? voiceClock.currentTempo : getCurrentTempoForVoice(voiceIndex);
+  
+  // Convert elapsed time to beats
+  const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
+  
+  // Voice completes when elapsed beats reaches max beats
+  const completed = elapsedBeats >= maxBeats;
   
   if (completed) {
-    console.log(`✅ Voice ${voiceIndex + 1} completed its Total Time Length: ${formatMsToMMSS(voiceMaxTimeMs)}`);
+    console.log(`✅ Voice ${voiceIndex + 1} completed: ${elapsedBeats}/${maxBeats} beats`);
   }
   
   return completed;
@@ -7230,8 +7911,7 @@ generatePhrase(maxNotes) {
   
   
   scheduleNoteAtTime(midiNote, scheduleTime) {
-
-    // Get voice clock for access to audio methods
+      // Get voice clock for access to audio methods
     const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
     if (!voiceClock) return;
     
@@ -7251,20 +7931,42 @@ generatePhrase(maxNotes) {
       noteName: midiNoteNames[midiNote] || `MIDI${midiNote}`
     }];
     
-    // If polyphony > 1, add additional notes (use existing chord generation)
+        // If polyphony > 1, add additional notes
     if (polyphonyCount > 1) {
       const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
-      const behaviorSetting = melodicParam.behavior || 50;
       
-      // Generate chord from base note
-      const baseNote = noteInfoArray[0];
-      const minNote = Math.round(melodicParam.min);
-      const maxNote = Math.round(melodicParam.max);
-      
-      const chord = generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting);
-      noteInfoArray.length = 0; // Clear
-      noteInfoArray.push(...chord);
+      // NEW: Check if user has specific notes selected
+      if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 1) {
+        // User has specific notes selected - pick randomly from them
+                
+        noteInfoArray.length = 0; // Clear the single note
+        
+        const availableNotes = [...melodicParam.selectedNotes];
+        const notesToPick = Math.min(polyphonyCount, availableNotes.length);
+        
+        for (let i = 0; i < notesToPick; i++) {
+          const randomIndex = Math.floor(Math.random() * availableNotes.length);
+          const selectedMidi = availableNotes.splice(randomIndex, 1)[0];
+          
+          noteInfoArray.push({
+            midiNote: selectedMidi,
+            frequency: midiToFrequency(selectedMidi),
+            noteName: midiNoteNames[selectedMidi] || `MIDI${selectedMidi}`
+          });
+        }
+      } else {
+        // No specific notes - use chord generation
+        const behaviorSetting = melodicParam.behavior || 50;
+        const baseNote = noteInfoArray[0];
+        const minNote = Math.round(melodicParam.min);
+        const maxNote = Math.round(melodicParam.max);
+        
+        const chord = generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting);
+        noteInfoArray.length = 0; // Clear
+        noteInfoArray.push(...chord);
+      }
     }
+
     
     // Schedule using existing audio infrastructure
     voiceClock.triggerNote(noteInfoArray, noteDuration * 1000, scheduleTime); // Pass schedule time!
@@ -7539,8 +8241,6 @@ function connectPhraseStylesControls(container, voiceIndex) {
   }
 }
 
-
-
 function connectAllSliders() {
   
   const parameterSection = document.getElementById('parameter-section');
@@ -7812,7 +8512,9 @@ function connectAllSliders() {
     connectPhraseStylesControls(container, currentVoice);
   });
 
-  // 7. Connect Life Span Controls - UPDATED for new layout
+// Inside connectAllSliders(), update Life Span section:
+
+// 7. Connect Life Span Controls
 const lifeSpanContainers = parameterSection.querySelectorAll('.life-span-settings');
 const actualContainers = [];
 lifeSpanContainers.forEach(settings => {
@@ -7821,26 +8523,22 @@ lifeSpanContainers.forEach(settings => {
 });
 
 actualContainers.forEach((container) => {
-  
-  // Find the behavior container for this Life Span parameter
   const parameterRollup = container.closest('.parameter-rollup');
   const behaviorContainer = parameterRollup ? parameterRollup.querySelector('.life-span-behavior') : null;
-  
-  // Connect Max Time input
+
   // Connect Max Time input
   const maxTimeInput = container.querySelector('.max-time-input');
+  
   if (maxTimeInput) {
     maxTimeInput.oninput = function(e) {
       const value = e.target.value;
       
-      // Check for missing leading zero (e.g., ":30", ":15")
+      // Check for missing leading zero
       if (value.match(/^:\d{2}$/)) {
-        // Visual feedback - format error
         e.target.style.borderColor = '#ffc107';
         e.target.style.backgroundColor = '#fffbf0';
         console.warn(`❌ Missing leading zero: ${value} → should be "0${value}"`);
         
-        // Show helpful message
         let messageDiv = container.querySelector('.format-hint');
         if (!messageDiv) {
           messageDiv = document.createElement('div');
@@ -7859,7 +8557,6 @@ actualContainers.forEach((container) => {
         }
         messageDiv.textContent = `Please use MM:SS format - try "0${value}" instead`;
         
-        // Clear message after 4 seconds
         setTimeout(() => {
           if (messageDiv && messageDiv.parentElement) {
             messageDiv.parentElement.removeChild(messageDiv);
@@ -7868,32 +8565,53 @@ actualContainers.forEach((container) => {
           e.target.style.backgroundColor = '';
         }, 4000);
         
-        return; // Exit early, don't process further
+        return;
       }
       
-      // Remove any existing format hint when user types correctly
+      // Remove existing format hint
       const existingHint = container.querySelector('.format-hint');
       if (existingHint) {
         existingHint.parentElement.removeChild(existingHint);
       }
       
       const parsedMs = parseMMSSToMs(value);
-      const MINIMUM_TIME_MS = 5000; // 5 seconds minimum
-      const MAXIMUM_TIME_MS = 3600000; // 60 minutes maximum
+      const MINIMUM_TIME_MS = 5000;
+      const MAXIMUM_TIME_MS = 3600000;
       
       if (parsedMs !== null && parsedMs >= MINIMUM_TIME_MS && parsedMs <= MAXIMUM_TIME_MS) {
-        // Update the data with milliseconds
+        // CONVERT TO BEATS (primary storage)
+        const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+        const beatUnit = lifeSpan.beatUnit;
+        const tempo = getCurrentTempoForVoice(currentVoice);
+        
+        const newMaxBeats = msToBeats(parsedMs, beatUnit, tempo);
+        
+        // Update PRIMARY storage (beats)
+        voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeBeats = newMaxBeats;
+        
+        // Update LEGACY storage (milliseconds)
         voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = parsedMs;
+        
+        // Calculate actual time after beat quantization
+        const quantizedMs = beatsToMs(newMaxBeats, beatUnit, tempo);
+        const quantizedFormatted = formatMsToMMSS(quantizedMs);
+        
+        // Update input to show quantized value if different
+        if (quantizedMs !== parsedMs) {
+          e.target.value = quantizedFormatted;
+          console.log(`📏 Quantized ${formatMsToMMSS(parsedMs)} → ${quantizedFormatted} (${newMaxBeats} beats)`);
+        }
         
         // Visual feedback - valid input
         e.target.style.borderColor = '#28a745';
         e.target.style.backgroundColor = '#f8fff8';
         
+        console.log(`✅ Max Time updated: ${newMaxBeats} beats = ${quantizedFormatted} @ ${tempo} BPM`);
         
         // IMMEDIATELY rebuild all sliders with new range
         rebuildLifeSpanSliders(container, currentVoice);
         
-        // Clear visual feedback after 2 seconds
+        // Clear visual feedback
         setTimeout(() => {
           e.target.style.borderColor = '';
           e.target.style.backgroundColor = '';
@@ -7909,10 +8627,9 @@ actualContainers.forEach((container) => {
         } else if (parsedMs !== null && parsedMs > MAXIMUM_TIME_MS) {
           console.warn(`❌ Time too long: ${value} (maximum: 60:00)`);
         } else {
-          console.warn(`❌ Invalid time format: ${value} - use MM:SS format`);
+          console.warn(`❌ Invalid time format: ${value}`);
         }
         
-        // Clear invalid feedback after 3 seconds
         setTimeout(() => {
           e.target.style.borderColor = '';
           e.target.style.backgroundColor = '';
@@ -7920,42 +8637,46 @@ actualContainers.forEach((container) => {
       }
     };
     
-    // Also trigger on Enter key for immediate feedback
     maxTimeInput.onkeypress = function(e) {
       if (e.key === 'Enter') {
-        e.target.blur(); // Trigger the oninput handler
+        e.target.blur();
       }
     };
     
-    // Set placeholder to show minimum time
     maxTimeInput.placeholder = "0:05";
     maxTimeInput.title = "Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)";
   }
 
-  
   // Connect Beat Unit dropdown
-
-const beatUnitSelect = container.querySelector('.beat-unit-select');
-if (beatUnitSelect) {
-  beatUnitSelect.onchange = function(e) {
-    const value = parseInt(e.target.value);
-    voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = value;
-    
-    // Rebuild sliders to update tooltips with new beat unit
-    rebuildLifeSpanSliders(container, currentVoice);
-  };
-}
-
+  const beatUnitSelect = container.querySelector('.beat-unit-select');
+  if (beatUnitSelect) {
+    beatUnitSelect.onchange = function(e) {
+      const oldBeatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
+      const newBeatUnit = parseInt(e.target.value);
+      
+      console.log(`🎵 Changing beat unit: ${rhythmOptions[oldBeatUnit]} → ${rhythmOptions[newBeatUnit]}`);
+      
+      // Update beat unit
+      voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = newBeatUnit;
+      
+      // Beat counts stay the same! Only the display changes.
+      // Example: 80 quarter notes = 80 eighth notes (but different durations)
+      
+      // Rebuild sliders to update tooltips with new time calculations
+      rebuildLifeSpanSliders(container, currentVoice);
+    };
+  }
   
-  // Connect Repeat checkbox (now in behavior area)
+  // Connect Repeat checkbox
   const repeatCheckbox = behaviorContainer ? behaviorContainer.querySelector('.repeat-checkbox') : null;
   if (repeatCheckbox) {
     repeatCheckbox.onchange = function(e) {
       voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
+      console.log(`✅ Voice ${currentVoice + 1} Repeat = ${e.target.checked}`);
     };
   }
   
-  // Connect existing Life Span sliders (they should already exist now)
+  // Connect Life Span sliders
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
   
   spanSliders.forEach((sliderContainer) => {
@@ -7963,25 +8684,40 @@ if (beatUnitSelect) {
     const slider = sliderContainer.querySelector('.noUi-target');
     
     if (slider && slider.noUiSlider) {
+      console.log(`🔗 Connecting Life Span ${spanNumber} slider for Voice ${currentVoice + 1}`);
       
       slider.noUiSlider.off('update');
       slider.noUiSlider.on('update', function(values) {
         const enterValue = values[0];
         const exitValue = values[1];
         
-        // Parse values (could be in format "120 beats (2:00)" or "∞ (∞)")
-        const enterMs = parseLifeSpanValue(enterValue);
-        const exitMs = parseLifeSpanValue(exitValue);
+        // Parse beat counts from formatter
+        const formatter = createLifeSpanBeatFormatter(currentVoice, voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit);
+        const enterBeats = Math.round(formatter.from(enterValue));
+        const exitBeats = Math.round(formatter.from(exitValue));
         
-        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enter = enterMs;
-        voiceData[currentVoice].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exit = exitMs;
+        // Store BEATS directly (primary storage)
+        const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+        lifeSpan[`lifeSpan${spanNumber}`].enterBeats = enterBeats;
+        lifeSpan[`lifeSpan${spanNumber}`].exitBeats = exitBeats;
         
+        // Update LEGACY milliseconds storage (for backward compatibility)
+        const tempo = getCurrentTempoForVoice(currentVoice);
+        const beatUnit = lifeSpan.beatUnit;
+        
+        lifeSpan[`lifeSpan${spanNumber}Legacy`] = {
+          enter: beatsToMs(enterBeats, beatUnit, tempo),
+          exit: beatsToMs(exitBeats, beatUnit, tempo)
+        };
+        
+        console.log(`✅ Life Span ${spanNumber}: ${enterBeats}-${exitBeats} beats`);
       });
     } else {
-      console.warn(`❌ Life Span ${spanNumber} slider not found or not initialized`);
+      console.warn(`❌ Life Span ${spanNumber} slider not found`);
     }
   });
-}); 
+});
+
 
 } 
 
@@ -8326,7 +9062,28 @@ class PresetManager {
             console.error('❌ Error loading preset:', error);
             return false;
         }
+    
+        // Apply voice data
+    for (let i = 0; i < 16; i++) {
+      if (preset.voices[i]) {
+        voiceData[i].enabled = preset.voices[i].enabled;
+        voiceData[i].locked = preset.voices[i].locked;
+        voiceData[i].parameters = this.deepClone(preset.voices[i].parameters);
+      }
     }
+    
+    // NEW: Migrate legacy data if needed
+    migrateLegacyLifeSpanData();
+    
+    // ... rest of existing code ...
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Error loading preset:', error);
+    return false;
+  }
+
 
     savePreset(preset) {
         this.presetLibrary.set(preset.name, preset);
@@ -9101,3 +9858,102 @@ setTimeout(() => {
 }, 2000);
 
 
+
+/**
+ * Load legacy file format and convert to beat-based storage
+ * Call this after loading a composition file
+ */
+function migrateLegacyLifeSpanData() {
+  console.log('🔄 Checking for legacy Life Span data...');
+  
+  let migrationCount = 0;
+  
+  for (let i = 0; i < 16; i++) {
+    const lifeSpan = voiceData[i].parameters['LIFE SPAN'];
+    
+    if (!lifeSpan) continue;
+    
+    // Check if this is legacy data (has ms but not beats)
+    const isLegacy = (
+      lifeSpan.maxTimeMs !== undefined && 
+      lifeSpan.maxTimeBeats === undefined
+    );
+    
+    if (isLegacy) {
+      console.log(`📦 Migrating Voice ${i + 1} from legacy format...`);
+      
+      const tempo = getCurrentTempoForVoice(i);
+      const beatUnit = lifeSpan.beatUnit || 7;
+      
+      // Convert max time
+      lifeSpan.maxTimeBeats = msToBeats(lifeSpan.maxTimeMs, beatUnit, tempo);
+      
+      // Convert entrance/exit times
+      for (let j = 1; j <= 3; j++) {
+        const legacySpan = lifeSpan[`lifeSpan${j}`];
+        
+        if (legacySpan && legacySpan.enter !== undefined) {
+          lifeSpan[`lifeSpan${j}`] = {
+            enterBeats: msToBeats(legacySpan.enter, beatUnit, tempo),
+            exitBeats: msToBeats(legacySpan.exit, beatUnit, tempo)
+          };
+          
+          // Keep legacy data
+          lifeSpan[`lifeSpan${j}Legacy`] = {
+            enter: legacySpan.enter,
+            exit: legacySpan.exit
+          };
+        }
+      }
+      
+      migrationCount++;
+      console.log(`✅ Migrated Voice ${i + 1}: ${lifeSpan.maxTimeBeats} beats`);
+    }
+  }
+  
+  if (migrationCount > 0) {
+    console.log(`✅ Migrated ${migrationCount} voices from legacy format`);
+  } else {
+    console.log(`✅ No legacy data found (already using beat-based storage)`);
+  }
+}
+
+
+
+// Add anywhere in scripts.js (around line ~5500)
+function debugLifeSpanData(voiceIndex, context) {
+  console.log(`\n🔍 LIFE SPAN DEBUG [${context}] - Voice ${voiceIndex + 1}:`);
+  console.log('================================');
+  
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  
+  if (!lifeSpan) {
+    console.error('❌ LIFE SPAN parameter missing!');
+    return;
+  }
+  
+  console.log(`Max: ${lifeSpan.maxTimeBeats || 'MISSING'} beats`);
+  console.log(`Beat Unit: ${lifeSpan.beatUnit} (${rhythmOptions[lifeSpan.beatUnit]})`);
+  console.log(`Repeat: ${lifeSpan.repeat}`);
+  
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpan[`lifeSpan${i}`];
+    
+    if (!span) {
+      console.warn(`   Entrance ${i}: MISSING DATA`);
+      continue;
+    }
+    
+    console.log(`   Entrance ${i}:`);
+    console.log(`      enterBeats: ${span.enterBeats} (type: ${typeof span.enterBeats})`);
+    console.log(`      exitBeats: ${span.exitBeats} (type: ${typeof span.exitBeats})`);
+    
+    // Check legacy data
+    const legacy = lifeSpan[`lifeSpan${i}Legacy`];
+    if (legacy) {
+      console.log(`      Legacy: enter=${legacy.enter}ms, exit=${legacy.exit}ms`);
+    }
+  }
+  
+  console.log('================================\n');
+}

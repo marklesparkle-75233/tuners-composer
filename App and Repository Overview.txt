@@ -5,15 +5,13 @@ description: Repository Information Overview
 # Tuner's Composer - Phase 1
 
 ## Summary
-A 16-voice algorithmic music composition tool built with vanilla JavaScript and the Web Audio API. The application provides an interactive interface for creating evolving musical landscapes with parametric control over multiple instrumental voices, effects processing, and real-time audio synthesis.
+A 16-voice algorithmic music composition tool built with vanilla JavaScript and the Web Audio API. The application provides an interactive interface for creating evolving musical landscapes with parametric control over multiple instrumental voices, effects processing, real-time audio synthesis, and multi-voice timing coordination through an integrated timeline view.
 
 ## Structure
 - **index.html**: Main application entry point with responsive UI layout
-- **src/js/scripts.js**: Core application logic (300KB+) containing parameter definitions, voice management, UI controllers, and audio event handlers
-- **src/js/audio/**: Web Audio API implementation modules for audio synthesis and processing
-  - **AudioManager.js**: Audio context initialization, oscillator management, and real-time audio control
-  - **Voice.js**: Individual voice implementation and MIDI synthesis
-- **src/css/styles.css**: Responsive styling for desktop, tablet, and mobile layouts (~1700 lines)
+- **scripts.js**: Core application logic (400KB+) containing parameter definitions, voice management, UI controllers, audio event handlers, timeline coordinator, and melodic filtering
+- **styles.css**: Responsive styling for desktop, tablet, and mobile layouts (~1700 lines)
+- **user-guide.html**: Comprehensive user documentation with parameter explanations and workflow examples
 - **assets/**: Resource files and multimedia assets
 
 ## Language & Runtime
@@ -24,14 +22,14 @@ A 16-voice algorithmic music composition tool built with vanilla JavaScript and 
 
 ## Dependencies
 **External Libraries**:
-- nouislider v15.6.1 (CSS framework from CDN) - Slider UI components
+- nouislider v15.6.1 (from CDN) - Dual-handle slider UI components for parameter control
 
 **No Package Manager**: Project uses vanilla JavaScript without npm/yarn dependency management
 
 ## Build & Installation
 No build process required. Direct execution via HTTP server:
 
-\\\ash
+```bash
 # Clone and navigate to repository
 git clone https://github.com/[username]/tuners-composer.git
 cd tuners-composer
@@ -41,38 +39,399 @@ python -m http.server 8000
 
 # Access application
 # Navigate to http://localhost:8000 in browser
-\\\
 
-## Main Entry Points
-**Application Start**: \index.html\ loads the UI framework and initializes JavaScript modules
-**Primary Logic**: \src/js/scripts.js\ contains:
-- Parameter definitions and GM sound instrument mappings
-- Voice data management (16 voices)
-- Master Clock system for parameter evolution
-- Real-time audio parameter controls
-- UI event handlers and state management
 
-**Audio Synthesis**: \src/js/audio/AudioManager.js\ handles:
-- Web Audio API context initialization
-- Oscillator creation and control
-- Gain node and effects processing
-- Real-time audio parameter updates
+Main Entry Points
+Application Start: index.html loads the UI framework and initializes JavaScript modules
 
-## Key Features
-- **16-Voice Architecture**: Independent polyphonic voice management
-- **Parameter System**: Hierarchical parameter organization (Instrument, Rhythm, Mixing, Modulation, Spatial)
-- **Real-Time Effects**: Tremolo, Chorus, Phaser, Reverb, Delay processing
-- **Master Clock**: 1ms resolution update loop for smooth parameter evolution
-- **Responsive UI**: Adaptive layouts for desktop, tablet, and mobile devices
-- **GM Sound Support**: Access to General MIDI instrument palette (Piano, Guitar, Strings, Brass, Woodwinds, etc.)
+Primary Logic: scripts.js contains:
 
-16-voice polyphonic system
-✅ 20 parameters per voice
-✅ Interactive piano keyboard with scale/chord filtering
-✅ Phrase Styles system (6 patterns + breathe)
-✅ Life Span with 3 entrances per voice
-✅ Timeline View for multi-voice coordination
-✅ Real-time parameter evolution
-✅ Professional effects (Tremolo, Chorus, Phaser, Reverb, Delay)
-✅ Save/Load compositions
-✅ Comprehensive user guide
+Parameter definitions and GM sound instrument mappings (32 instruments)
+Voice data management (16 independent voices)
+Master Clock system (1ms resolution) for parameter evolution
+Voice Clock Manager for coordinated multi-voice playback
+Timeline View coordinator for visual timing orchestration
+Real-time audio parameter controls with bidirectional sync
+UI event handlers and state management
+Interactive piano keyboard with scale/chord filtering
+Phrase Styles system with 6 melodic patterns
+Life Span timing with 3 entrance windows per voice
+Audio Synthesis: Web Audio API implementation handles:
+
+Audio context initialization and management
+Oscillator pool system (50-node pre-allocation)
+Gain, filter, pan, and effects node routing
+Real-time parameter updates during playback
+Performance monitoring and health checking
+Core Architecture
+Voice System
+16 Independent Voices: Each with complete parameter set
+Voice Clock per Voice: Individual timing and tempo control
+Polyphonic Rendering: 1-16 simultaneous notes per voice
+Real-Time Updates: Parameters evolve during playback
+Parameter System (20 Parameters per Voice)
+🎵 Instrument & Sound (7 parameters)
+
+Instrument selection (32 GM sounds)
+Melodic Range with interactive 88-key piano keyboard
+Scale/Chord filtering (17 scales, 30+ chord qualities)
+Phrase Styles (6 melodic patterns + breathe)
+Polyphony (1-16 notes)
+Attack Velocity (MIDI 0-127)
+Detuning (±50 cents)
+Portamento Glide Time (0-1000ms)
+🎯 Rhythm & Timing (4 parameters)
+
+Tempo (40-240 BPM, independent per voice)
+Rhythms (15 note durations, checkbox selection)
+Rests (15 rest durations + "No Rests" option)
+Life Span (3 entrance/exit windows, repeat cycling, timeline coordination)
+🎚️ Mixing & Levels (2 parameters)
+
+Volume (0-100%)
+Stereo Balance (-100 to +100, left-center-right)
+🌀 Modulation Effects (3 parameters)
+
+Tremolo (Speed: 0.5-12 Hz, Depth: 0-100%)
+Chorus (Speed: 0.2-3 Hz, Depth: 0-100%, 3-voice design)
+Phaser (Speed: 0.1-2 Hz, Depth: 0-100%, 4-stage cascade)
+🏛️ Spatial Effects (2 parameters)
+
+Reverb (Time: 0.5-6s, Mix: 0-100%, convolution-based)
+Delay (Time: 100-2000ms, Mix: 0-100%, Feedback: 0-100%, tempo-synced)
+Behavior System
+Every parameter (except dropdowns) includes a Behavior Slider (0-100%):
+
+0%: Static (no evolution)
+1-50%: Smooth, gradual changes
+51-100%: Dynamic, dramatic variation
+Controls interpolation speed and range exploration
+
+Key Features
+Timeline View System
+Multi-Voice Coordinator: Visualize all enabled voices simultaneously
+Aligned Time Scale: All sliders share unified master timeline
+Real-Time Playhead: Red vertical line with elapsed time tooltip (20 FPS)
+Progress Visualization: Blue progress bar fills during playback
+Editable Interface: Drag slider handles to adjust entrance/exit times
+Bidirectional Sync: Changes persist between Timeline View ↔ Controls View
+Voice-Specific Boundaries: Visual indicators for individual voice max times
+Read-Only Config: Total Time Length and Beat Unit displayed (edit in Controls View)
+Melodic Range Filtering
+Scale Filtering: 17 scale types (Major, modes, minor variations, pentatonic, blues, etc.)
+Chord Filtering: 30+ chord qualities (triads, 7ths, 9ths, 11ths, 13ths, altered dominants)
+Root Transposition: Apply any scale/chord from any of 12 roots
+Mutual Exclusivity: Scale OR Chord filtering, not both (prevents confusing intersections)
+Extended Chord Support: Proper normalization for 9th, 11th, 13th chords
+Visual Feedback: Piano keyboard highlights filtered notes in real-time
+Default State: "None Selected" allows pure random selection (no filtering)
+Phrase Styles System
+6 Melodic Patterns: Random, Ascending, Descending, Pendulum, Wave, Spiral
+Configurable Length: 2-24 notes per phrase
+Breathe Between Phrases: Probabilistic silence insertion (2-24 rhythm units)
+Pattern Switching: Behavior slider controls variety vs. repetition
+History Avoidance: Low behavior prevents immediate pattern repetition
+Life Span Timing
+3 Entrance Windows: Independent enter/exit times per voice
+Repeat Cycling: Continuous looping based on Total Time Length
+Beat Unit Display: Tooltips show time in chosen rhythm notation
+Flexible Duration: 5 seconds to 60 minutes per voice
+Visual Coordination: Timeline View shows all voice timing relationships
+Performance Optimization
+Oscillator Pool: Pre-allocated 50-node pool with 95%+ hit rate
+Performance Monitor: Real-time CPU usage tracking
+Audio Health Monitor: Detects dropouts and timing issues
+Memory Monitor: Leak detection and heap usage tracking
+Lookahead Scheduler: Intelligent note scheduling with adaptive buffer
+Audio Quality
+ADSR Envelopes: Velocity-sensitive attack, decay, sustain, release
+Filter Modulation: Dynamic lowpass filtering based on velocity
+Waveform Selection: Instrument-appropriate oscillator types
+Effect Tail Management: Proper cleanup for reverb/delay tails
+Real-Time Updates: Volume, pan, and effects adjust during sustained notes
+File Management
+Native Save/Load: Browser file picker integration
+JSON Format: Human-readable composition files
+Complete State Capture: All 16 voices, all parameters, all settings
+Preset System: Save/load/export preset library
+Local Storage: Auto-save preset library
+User Interface
+Responsive Design: Three-tier layout (desktop 1200px+, tablet 769-1199px, mobile ≤768px)
+Parameter Rollups: Collapsible sections for organized workflow
+Interactive Piano: 88-key keyboard with drag selection
+Real-Time Feedback: Tooltips, visual indicators, console logging
+Voice Tab System: Quick switching between 16 voices
+Preview System: Test individual voices in isolation
+Technical Implementation
+Class Architecture
+MasterClock: 1ms resolution timing system with elapsed time tracking
+VoiceClockManager: Coordinates all 16 voice clocks
+VoiceClock: Individual voice timing, tempo, and Life Span management (16 instances)
+LookaheadScheduler: Adaptive note scheduling with phrase generation (per voice)
+MelodicPhraseGenerator: Pattern-based melody generation (per voice)
+InteractivePiano: 88-key keyboard UI with scale/chord filtering
+PresetManager: Composition save/load/export system
+AudioManager: Web Audio API context and node management
+PerformanceMonitor: CPU usage and frame rate tracking
+AudioHealthMonitor: Audio system health and dropout detection
+MemoryMonitor: Heap usage and leak detection
+OscillatorPool: Node reuse system for performance optimization
+Data Structures
+voiceData Array (16 voices):
+
+javascript
+{
+  enabled: boolean,
+  locked: boolean,
+  parameters: {
+    'INSTRUMENT': number (0-31),
+    'MELODIC RANGE': {
+      min: number,
+      max: number,
+      behavior: number,
+      selectedNotes: array,
+      filterSettings: {
+        rootNote: number (-1 to 11),
+        scale: string,
+        chord: string
+      }
+    },
+    'PHRASE STYLES': {
+      patterns: { random, ascending, descending, pendulum, wave, spiral },
+      breathe: { enabled, length },
+      behavior: number
+    },
+    'LIFE SPAN': {
+      maxTimeMs: number,
+      beatUnit: number,
+      lifeSpan1: { enter, exit },
+      lifeSpan2: { enter, exit },
+      lifeSpan3: { enter, exit },
+      repeat: boolean
+    },
+    // ... 16 more parameters
+  }
+}
+Open in CodePen 
+Global State Management
+currentVoice: Active voice index (0-15)
+voiceData: Array of 16 voice objects
+masterClock: Global timing coordinator
+voiceClockManager: Multi-voice orchestrator
+audioManager: Audio system controller
+presetManager: File management system
+timelineViewActive: Timeline view state flag
+parameterRollupState: UI expansion state
+Update Loops
+Master Clock: 1ms interval, parameter interpolation
+Voice Clock Manager: 50ms interval, voice status updates
+Lookahead Scheduler: 25ms interval per voice, note scheduling
+Timeline Playhead: 50ms interval, visual position updates
+Musical Intelligence
+Chord Generation Algorithm
+Music Theory Based: Creates musically pleasing harmonies
+Adaptive Complexity: Chord types match polyphony setting
+1-2 notes: Intervals
+3-4 notes: Triads and 7th chords
+5-8 notes: Extended harmonies (9ths, 11ths, 13ths)
+9+ notes: Cluster chords and complex voicings
+Inversion Handling: Automatically transposes chords to fit melodic range
+30+ Chord Types: Major, minor, diminished, augmented, suspended, extended, altered
+Phrase Pattern Generation
+6 Algorithmic Patterns: Each with unique melodic character
+Random: Pure unpredictability
+Ascending: Upward motion with configurable step sizes
+Descending: Downward motion
+Pendulum: Oscillating up/down
+Wave: Sine-wave contours
+Spiral: Expanding outward from center
+Pattern History: Low behavior avoids recent pattern repetition
+Breathe Insertion: Probabilistic silence between phrases
+Configurable Length: 2-24 notes per pattern
+Scale and Chord Filtering
+17 Scale Types: Major, all modes, minor variations, pentatonic, blues, whole tone, etc.
+30+ Chord Qualities: Triads through 13th chords, altered dominants, quartal, clusters
+Root Transposition: Apply any scale/chord from any chromatic root
+Interval Normalization: Proper handling of extended chord intervals (14, 17, 21)
+Mutual Exclusivity: Scale OR Chord filtering (prevents empty intersections)
+Performance Characteristics
+Optimization Strategies
+Oscillator Pooling: Pre-allocated 50-node pool, 95%+ reuse rate
+Adaptive Lookahead: Buffer size adjusts to melodic complexity (150ms-2s)
+Lazy Rendering: Parameters only render when voice tab selected
+Event Debouncing: Slider updates throttled during drag operations
+DOM Minimization: Timeline view replaces parameter section (not overlay)
+Resource Usage
+Typical Load (4 voices): ~50-70% CPU, smooth performance
+Heavy Load (12 voices): ~85-95% CPU, acceptable performance
+Maximum Load (16 voices): May see occasional dropouts on slower systems
+Memory Baseline: ~30-50 MB heap usage
+Memory Growth: ~2-5 MB per minute during playback (monitored)
+Audio Quality
+Sample Rate: System default (typically 44.1kHz or 48kHz)
+Latency: ~10-50ms (browser-dependent)
+Polyphony Limit: 256 simultaneous notes (16 voices × 16 notes)
+Effect Tail Time: Calculated per-note (up to 60s for long reverb/delay)
+User Interface
+View Modes
+1. Controls View (Default)
+
+Voice-specific parameter editing
+Full access to all 20 parameters
+Individual voice preview
+LOCK/SYNC controls
+Configuration fields editable
+2. Timeline View
+
+Multi-voice timing coordinator
+Visual entrance/exit orchestration
+Real-time playback visualization
+Aligned time scales across all voices
+Configuration fields read-only (timing focus)
+Interactive Components
+88-Key Piano Keyboard: Click/drag selection, scale/chord filtering
+Dual-Handle Sliders: Min/max range definition with behavior control
+Checkbox Groups: Multi-select for rhythms/rests
+Pattern Grid: 2×3 layout for phrase style selection
+Timeline Sliders: Horizontally aligned entrance/exit controls
+Moving Playhead: Real-time position indicator with tooltip
+Responsive Breakpoints
+Desktop (1200px+): Full horizontal layout, all controls visible
+Tablet (769-1199px): Adjusted spacing, maintained functionality
+Mobile (≤768px): Vertical stacking, piano keyboard hidden (slider fallback)
+Advanced Features
+Timeline View Capabilities
+Visual Coordination: See all voice timing relationships simultaneously
+Aligned Sliders: Unified timeline scale (longest voice sets maximum)
+Voice Boundaries: Red visual indicators for individual voice max times
+Hard Clamping: Sliders can't exceed voice-specific Total Time Length
+Playhead Tracking: 20 FPS animation with elapsed time tooltip
+Sticky Data: Changes sync bidirectionally between views
+Playback Integration: Open/close during playback without interruption
+Life Span System
+3 Entrance Windows: Independent enter/exit times per voice
+Repeat Cycling: Loops based on Total Time Length (not exit time)
+Beat Unit Display: Tooltips show time in musical notation (e.g., "120 beats (2:00)")
+Flexible Duration: 5 seconds to 60 minutes
+Infinity Support: Exit time can be set to ∞ (play until manually stopped)
+Natural Completion: Voices stop at Total Time Length (with or without repeat)
+Melodic Intelligence
+Scale Filtering: Constrain to 17 diatonic/chromatic scales
+Chord Filtering: Constrain to 30+ chord qualities
+Root Transposition: Any scale/chord from any root
+Extended Chord Support: 9th, 11th, 13th chords include all extensions
+Mutual Exclusivity: Scale OR Chord (not both) prevents empty results
+Visual Feedback: Piano updates in real-time as filters change
+Phrase Composition
+Pattern-Based Generation: 6 algorithmic melodic shapes
+Configurable Lengths: 2-24 notes per pattern type
+Behavior Control: Pattern switching frequency and interval sizes
+Breathe Insertion: Probabilistic silence between phrases (separate from rests)
+History Tracking: Avoids repetitive patterns at low behavior settings
+Real-Time Parameter Evolution
+Interpolation Engine: Smooth transitions between min/max values
+Behavior-Driven Speed: Higher behavior = faster, more dramatic changes
+Boundary Respect: Never exceeds user-defined min/max
+Per-Parameter Control: Each parameter evolves independently
+Live Updates: Changes apply to currently playing notes (volume, pan, effects)
+Workflow Features
+Multi-Voice Composition Tools
+SYNC Button: Copy tempo settings from one voice to all others
+PREVIEW Mode: Test individual voices in isolation
+Voice Enable/Disable: Checkbox control for ensemble mixing
+Timeline Coordination: Visual orchestration of entrance/exit timing
+Preset Management: Save/load complete 16-voice states
+File Operations
+Native Save Dialog: Choose location and filename
+Native Open Dialog: Browse local filesystem
+JSON Format: Human-readable, portable composition files
+Complete State: All voices, parameters, settings captured
+Backward Compatible: Old files load without errors
+Performance Monitoring
+CPU Usage Tracking: Average and current percentages
+Audio Dropout Detection: Counts timing gaps during playback
+Memory Leak Detection: Monitors heap growth trends
+Oscillator Pool Stats: Efficiency and reuse metrics
+Console Dashboard: showPerformanceStats() function for detailed analysis
+Data Specifications
+MIDI Implementation
+Note Range: MIDI 21 (A0) to 108 (C8) - full 88-key piano
+Velocity Range: MIDI 0-127 with velocity-sensitive envelopes
+Frequency Calculation: Standard MIDI-to-frequency conversion (A4 = 440 Hz)
+Note Names: Complete chromatic naming with enharmonic equivalents
+Rhythm System
+15 Duration Types: Thirty-second notes through four whole notes
+Triplet Support: Thirty-second, sixteenth, eighth, quarter, half, whole triplets
+Tempo-Synced: All durations calculated from current voice tempo
+Beat Unit Display: Tooltips show musical notation (e.g., "1/8T" for eighth triplet)
+Time Format
+Display Format: MM:SS (minutes:seconds)
+Internal Format: Milliseconds (integer)
+Parsing: Validates MM:SS input (00:05 to 60:00 range)
+Beat Conversion: Bidirectional conversion between beats and clock time
+System Requirements
+Browser Compatibility
+Chrome/Edge: 90+ (recommended)
+Firefox: 88+
+Safari: 14+
+Opera: 76+
+Hardware Recommendations
+Minimum RAM: 4 GB
+Recommended RAM: 8 GB+
+Processor: Modern multi-core CPU
+Audio: Any audio output device (speakers/headphones)
+Required Browser APIs
+Web Audio API (audio synthesis)
+Local Storage API (preset saving)
+File System Access API (optional, for native save/load dialogs)
+Performance API (monitoring)
+Known Limitations
+By Design
+Timeline View: Static voice list (close/reopen to refresh if voices enabled/disabled)
+Configuration Editing: Total Time Length and Beat Unit read-only in Timeline View
+Mobile Piano: Hidden on small screens (slider fallback provided)
+Simultaneous Notes: 256 maximum (16 voices × 16 polyphony)
+Performance Constraints
+16 Active Voices: May strain older hardware
+Long Reverb: 6s reverb time with high mix can build up
+High Delay Feedback: 90%+ feedback with long delay creates extended tails
+Oscillator Pool: Can exhaust on dense polyphonic passages (auto-creates new nodes)
+Development Notes
+Code Organization
+Single File: All logic in scripts.js (no module bundler)
+Class-Based: OOP approach for major systems (Clock, Voice, Piano, etc.)
+Functional: Helper functions for utilities and formatting
+Inline Styles: Timeline View uses inline CSS (future: extract to styles.css)
+Debugging Features
+Console Logging: Comprehensive status messages
+Performance Dashboard: showPerformanceStats() global function
+Debug Flags: PHRASE_STYLES_DEBUG toggle for pattern tracing
+Visual Feedback: Color-coded buttons, tooltips, validation messages
+Future Enhancement Opportunities
+Time Marker Grid: Vertical lines at regular intervals in Timeline View
+Click-to-Seek: Jump playback to timeline position
+Zoom Controls: For compositions >10 minutes
+Custom Scales: User-defined interval patterns
+MIDI Export: Save compositions as MIDI files
+Audio Recording: Capture output to WAV/MP3
+Preset Tagging: Categorize and search saved compositions
+Version History
+Phase 1 (Current)
+Core 16-voice engine
+20 parameters per voice
+Real-time effects processing
+Save/load system
+Timeline View coordinator
+Scale/chord filtering
+Phrase Styles system
+Interactive piano keyboard
+Performance monitoring
+Comprehensive user guide
+Planned Future Phases
+Phase 2: Cloud storage, user accounts, community sharing
+Phase 3: Professional sample library integration
+Phase 4: MIDI input/output, hardware controller support
+Phase 5: Advanced visualization, spectrum analyzer, waveform display
+Last Updated: December 16, 2025
+Version: 1.0.0
+Status: Feature-complete for Phase 1
