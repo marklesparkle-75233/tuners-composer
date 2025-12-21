@@ -37,6 +37,28 @@ const DEFAULT_LIFE_SPAN_MS = 300000;  // 5 minutes default
 // Phrase Styles Debug Logging
 const PHRASE_STYLES_DEBUG = false;  // Set to true for detailed pattern debugging
 
+// ===== DEBUG FLAGS =====
+const DEBUG = {
+  LIFE_SPAN: false,        // Life Span slider creation, updates, view switching
+  TIMELINE: false,         // Timeline View operations
+  BEAT_CONVERSION: false,  // beatsToMs, msToBeats calculations
+  SLIDER_CONNECTION: false, // Slider event handler connections
+  VOICE_CLOCK: true,      // Voice clock timing and scheduling
+  MASTER_CLOCK: false,     // Master clock updates
+  AUDIO: false,            // Audio node creation and cleanup
+  PERFORMANCE: false,      // CPU, memory, oscillator pool stats
+  PHRASE_STYLES: false,    // Phrase pattern generation (uses PHRASE_STYLES_DEBUG)
+  ALL: false               // Master override - enables all logging
+};
+
+// Master override
+if (DEBUG.ALL) {
+  Object.keys(DEBUG).forEach(key => {
+    if (key !== 'ALL') DEBUG[key] = true;
+  });
+}
+// ===== END DEBUG FLAGS =====
+
 // Life Span Helper Functions
 function formatMsToMMSS(ms) {
   const totalSeconds = Math.floor(ms / 1000);
@@ -604,7 +626,7 @@ function initializeVoices() {
         // Initialize Phrase Styles parameter with defaults
         voice.parameters[param.name] = {
           patterns: {
-            random: { enabled: true, length: 2 },        // DEFAULT ENABLED
+            random: { enabled: true, length: 1 },        // DEFAULT ENABLED
             ascending: { enabled: false, length: 12 },   // 50% of 24
             descending: { enabled: false, length: 12 },
             pendulum: { enabled: false, length: 12 },
@@ -3200,7 +3222,7 @@ function createLengthSlider(initialValue, className, voiceIndex, patternName) {
   
   const slider = document.createElement('input');
   slider.type = 'range';
-  slider.min = 2;
+  slider.min = 1;
   slider.max = 24;
   slider.value = initialValue;
   slider.className = className;
@@ -5086,7 +5108,7 @@ if (this.lookaheadScheduler) {
     return this.isInLifeSpan(elapsedMs);
   }
   
-isInLifeSpan(elapsedMs) {
+  isInLifeSpan(elapsedMs) {
   const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   
   if (!lifeSpanParam) {
@@ -5104,7 +5126,8 @@ isInLifeSpan(elapsedMs) {
   let activeSpans = [];
   for (let i = 1; i <= 3; i++) {
     const span = lifeSpanParam[`lifeSpan${i}`];
-    if (span && span.exitBeats > 0) {
+    
+    if (span && typeof span.exitBeats === 'number' && span.exitBeats > 0) {
       activeSpans.push({
         enterBeats: span.enterBeats || 0,
         exitBeats: span.exitBeats >= 999999 ? Infinity : span.exitBeats,
@@ -5119,28 +5142,22 @@ isInLifeSpan(elapsedMs) {
   
   // Handle REPEAT mode
   if (lifeSpanParam.repeat) {
-    const maxBeats = lifeSpanParam.maxTimeBeats || 600;
+    const maxBeats = lifeSpanParam.maxTimeBeats || 700;
     
     // Check for infinite spans
-    let hasInfiniteSpan = false;
     for (const span of activeSpans) {
       if (span.exitBeats === Infinity) {
-        hasInfiniteSpan = true;
-        break;
+        return true;
       }
     }
     
-    // If any span is infinite, always play
-    if (hasInfiniteSpan) {
-      return true;
-    }
-    
-    // Calculate position within current cycle (using maxBeats!)
+    // Calculate position within current cycle
     const cyclePosition = elapsedBeats % maxBeats;
     
     // Check if we're in any active span at this cycle position
     for (const span of activeSpans) {
-      if (cyclePosition >= span.enterBeats && cyclePosition < span.exitBeats) {
+      // FIXED: Use <= to include the exit beat
+      if (cyclePosition >= span.enterBeats && cyclePosition <= span.exitBeats) {
         return true;
       }
     }
@@ -5150,13 +5167,16 @@ isInLifeSpan(elapsedMs) {
   
   // NON-REPEAT: Check spans once
   for (const span of activeSpans) {
-    if (elapsedBeats >= span.enterBeats && (elapsedBeats < span.exitBeats || span.exitBeats === Infinity)) {
+    // FIXED: Use <= to include the exit beat
+    if (elapsedBeats >= span.enterBeats && elapsedBeats <= span.exitBeats) {
       return true;
     }
   }
   
   return false;
 }
+
+
 
    
   isTimeForNextNote() {
@@ -7206,6 +7226,7 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
   }
 }
 // ===== MELODIC PHRASE GENERATOR CLASS (UPDATED FOR PHRASE STYLES) =====
+// ===== MELODIC PHRASE GENERATOR CLASS (UPDATED FOR PHRASE STYLES) =====
 
 class MelodicPhraseGenerator {
   constructor(voiceIndex) {
@@ -7228,7 +7249,7 @@ class MelodicPhraseGenerator {
     
     if (!phraseStyles) {
       console.warn(`Voice ${this.voiceIndex + 1}: No PHRASE STYLES parameter, using Random`);
-      return { name: 'random', length: 2 };
+      return { name: 'random', length: 1 };
     }
     
     const enabledPatterns = [];
@@ -7242,17 +7263,12 @@ class MelodicPhraseGenerator {
         });
       }
     });
-        // NOTE: Breathe is NOT included in pattern selection
-    // It will be inserted separately based on probability
-
-
 
     // NEW: Validation - ensure at least one enabled pattern
     if (enabledPatterns.length === 0) {
       if (PHRASE_STYLES_DEBUG) {
         console.warn(`Voice ${this.voiceIndex + 1}: No patterns enabled, auto-enabling Random`);
       }
-
       
       // Auto-enable Random pattern in the data
       phraseStyles.patterns.random.enabled = true;
@@ -7266,14 +7282,7 @@ class MelodicPhraseGenerator {
         }
       }
       
-      return { name: 'random', length: 2 };
-    }
-
-    
-    // Fallback if nothing enabled
-    if (enabledPatterns.length === 0) {
-      console.warn(`Voice ${this.voiceIndex + 1}: No patterns enabled, using Random`);
-      return { name: 'random', length: 2 };
+      return { name: 'random', length: 1 };
     }
     
     // Pattern selection based on Behavior slider
@@ -7289,7 +7298,7 @@ class MelodicPhraseGenerator {
     }
   }
   
-    selectWithHistoryAvoidance(enabledPatterns) {
+  selectWithHistoryAvoidance(enabledPatterns) {
     // Filter out patterns used in last 2 phrases
     const available = enabledPatterns.filter(p => 
       !this.patternHistory.slice(-2).includes(p.name)
@@ -7311,11 +7320,6 @@ class MelodicPhraseGenerator {
       return false; // Breathe not enabled
     }
     
-    // Use Behavior slider to control breathe frequency
-    // 0% behavior = breathe rarely (10% chance)
-    // 50% behavior = breathe sometimes (50% chance)  
-    // 100% behavior = breathe often (90% chance)
-    
     const behaviorSetting = phraseStyles.behavior || 50;
     const breatheProbability = 0.1 + (behaviorSetting / 100) * 0.8; // 10% to 90%
     
@@ -7336,9 +7340,20 @@ class MelodicPhraseGenerator {
   generate(notePool, maxNotes, behaviorSetting) {
     const selectedPattern = this.selectActivePattern();
     
-    // Use the pattern's configured length (from UI slider)
-    // Only limit by notePool size (can't generate more notes than available)
-    const actualLength = Math.min(selectedPattern.length, notePool.length);
+    // Use the pattern's configured length BUT respect maxNotes (boundary limit)
+    let actualLength = selectedPattern.length;
+    
+    // NEW: Respect boundary limit if provided
+    if (maxNotes < 100) {
+      actualLength = Math.min(actualLength, maxNotes);
+      
+      if (PHRASE_STYLES_DEBUG && actualLength < selectedPattern.length) {
+        console.log(`✂️ Voice ${this.voiceIndex + 1}: Pattern ${selectedPattern.name} truncated: ${selectedPattern.length} → ${actualLength} notes (boundary limit)`);
+      }
+    }
+    
+    // Also can't exceed available notes in pool
+    actualLength = Math.min(actualLength, notePool.length);
     
     if (PHRASE_STYLES_DEBUG) {
       console.log(`🎵 Voice ${this.voiceIndex + 1}: ${selectedPattern.name} pattern, length=${selectedPattern.length}, actual=${actualLength} notes`);
@@ -7346,7 +7361,6 @@ class MelodicPhraseGenerator {
     
     // Generate phrase
     const phrase = this.patterns[selectedPattern.name](notePool, actualLength);
-
     
     // NEW: Validate generated phrase
     if (!Array.isArray(phrase)) {
@@ -7356,7 +7370,6 @@ class MelodicPhraseGenerator {
     
     // Breathe returns empty array - this is valid
     if (phrase.length === 0 && selectedPattern.name === 'breathe') {
-      // Valid breathe phrase - skip history update
       return phrase;
     }
     
@@ -7365,6 +7378,7 @@ class MelodicPhraseGenerator {
       console.error(`Voice ${this.voiceIndex + 1}: Empty phrase from ${selectedPattern.name}`);
       return [notePool[0]]; // Fallback
     }
+    
     // Update history
     this.patternHistory.push(selectedPattern.name);
     if (this.patternHistory.length > 3) {
@@ -7377,6 +7391,12 @@ class MelodicPhraseGenerator {
   // ===== PATTERN GENERATORS =====
   
   generateRandom(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      const randomNote = notePool[Math.floor(Math.random() * notePool.length)];
+      return [randomNote];
+    }
+    
     // Pure randomization - each note independent
     const phrase = [];
     for (let i = 0; i < noteCount; i++) {
@@ -7387,6 +7407,11 @@ class MelodicPhraseGenerator {
   }
   
   generateAscending(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      return [notePool[Math.floor(Math.random() * notePool.length)]];
+    }
+    
     const sorted = [...notePool].sort((a, b) => a - b);
     
     // Pick random starting note from pool
@@ -7412,36 +7437,30 @@ class MelodicPhraseGenerator {
   }
   
   calculateAscendingStepSize(behaviorSetting, poolSize) {
-    // 0% behavior = step by 1 (scalar)
-    // 50% behavior = step by 1-3 (mix)
-    // 100% behavior = step by 1-6 (large leaps)
-    
-    const maxStep = Math.max(1, Math.floor(poolSize / 4)); // Cap based on pool size
+    const maxStep = Math.max(1, Math.floor(poolSize / 4));
     
     if (behaviorSetting <= 25) {
-      // Mostly scalar
       return Math.random() < 0.8 ? 1 : 2;
     } else if (behaviorSetting <= 50) {
-      // Mix of scalar and small leaps
-      return Math.floor(Math.random() * 3) + 1; // 1-3
+      return Math.floor(Math.random() * 3) + 1;
     } else if (behaviorSetting <= 75) {
-      // More leaps
-      return Math.floor(Math.random() * 4) + 1; // 1-4
+      return Math.floor(Math.random() * 4) + 1;
     } else {
-      // Large intervals
-      return Math.floor(Math.random() * Math.min(6, maxStep)) + 1; // 1-6
+      return Math.floor(Math.random() * Math.min(6, maxStep)) + 1;
     }
   }
 
-  
   generateDescending(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      return [notePool[Math.floor(Math.random() * notePool.length)]];
+    }
+    
     const sorted = [...notePool].sort((a, b) => b - a); // Descending order
     
-    // Pick random starting note from pool
     const startIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
-    // Get behavior setting for interval control
     const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
     const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
     
@@ -7450,7 +7469,6 @@ class MelodicPhraseGenerator {
     for (let i = 0; i < noteCount; i++) {
       phrase.push(sorted[currentIndex]);
       
-      // Determine step size based on behavior
       const stepSize = this.calculateAscendingStepSize(behaviorSetting, sorted.length);
       
       currentIndex = (currentIndex + stepSize) % sorted.length;
@@ -7459,25 +7477,26 @@ class MelodicPhraseGenerator {
     return phrase;
   }
 
-  
   generatePendulum(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      return [notePool[Math.floor(Math.random() * notePool.length)]];
+    }
+    
     const sorted = [...notePool].sort((a, b) => a - b);
     
-    // Get behavior setting
     const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
     const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
     
-    // Pick random starting note
     const startIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
-    let direction = Math.random() > 0.5 ? 1 : -1; // Random initial direction
+    let direction = Math.random() > 0.5 ? 1 : -1;
     let currentIndex = startIndex;
     
     for (let i = 0; i < noteCount; i++) {
       phrase.push(sorted[currentIndex]);
       
-      // Behavior controls step size (like ascending/descending)
       const stepSize = this.calculateAscendingStepSize(behaviorSetting, sorted.length);
       
       currentIndex += (stepSize * direction);
@@ -7497,23 +7516,20 @@ class MelodicPhraseGenerator {
     return phrase;
   }
 
-
-
-  
   generateWave(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      return [notePool[Math.floor(Math.random() * notePool.length)]];
+    }
+    
     const sorted = [...notePool].sort((a, b) => a - b);
     
-    // Get behavior setting
     const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
     const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
     
-    // Pick random phase offset for variety
     const phaseOffset = Math.random() * Math.PI * 2;
     const phrase = [];
     
-    // Behavior controls wave smoothness
-    // 0% = smooth sine wave (many cycles, small steps)
-    // 100% = jagged wave (few cycles, large jumps)
     const cycleCount = behaviorSetting <= 25 ? 6 : 
                        behaviorSetting <= 50 ? 4 : 
                        behaviorSetting <= 75 ? 2 : 1;
@@ -7523,11 +7539,9 @@ class MelodicPhraseGenerator {
       const sineValue = Math.sin(phase);
       const normalized = (sineValue + 1) / 2;
       
-      // Add randomness at high behavior
       let indexFloat = normalized * (sorted.length - 1);
       
       if (behaviorSetting > 75) {
-        // Add jitter for jagged effect
         const jitter = (Math.random() - 0.5) * (sorted.length * 0.2);
         indexFloat += jitter;
       }
@@ -7539,22 +7553,20 @@ class MelodicPhraseGenerator {
     return phrase;
   }
 
-
-  
   generateSpiral(notePool, noteCount) {
+    // Handle single note case
+    if (noteCount <= 1) {
+      return [notePool[Math.floor(Math.random() * notePool.length)]];
+    }
+    
     const sorted = [...notePool].sort((a, b) => a - b);
     
-    // Get behavior setting
     const phraseStyles = voiceData[this.voiceIndex].parameters['PHRASE STYLES'];
     const behaviorSetting = phraseStyles ? phraseStyles.behavior : 50;
     
-    // Pick random center point
     const centerIndex = Math.floor(Math.random() * sorted.length);
     const phrase = [];
     
-    // Behavior controls expansion rate
-    // 0% = slow expansion (gradual)
-    // 100% = fast expansion (dramatic)
     const expansionRate = behaviorSetting <= 25 ? 0.5 : 
                           behaviorSetting <= 50 ? 1.0 : 
                           behaviorSetting <= 75 ? 1.5 : 2.0;
@@ -7564,7 +7576,6 @@ class MelodicPhraseGenerator {
       const maxRange = Math.floor(sorted.length / 2);
       const range = Math.floor(expansion * maxRange);
       
-      // Add randomness at high behavior
       let offset = (i % 2 === 0) ? range : -range;
       
       if (behaviorSetting > 75) {
@@ -7578,14 +7589,13 @@ class MelodicPhraseGenerator {
     
     return phrase;
   }
-
-
   
   generateBreathe(notePool, noteCount) {
     // Return empty array - signals "no notes" to scheduler
     return [];
   }
 }
+
 
 
 
@@ -7909,70 +7919,80 @@ generatePhrase(maxNotes) {
     return rhythmInfo.beats * beatDuration; // Returns seconds
   }
   
-  
   scheduleNoteAtTime(midiNote, scheduleTime) {
-      // Get voice clock for access to audio methods
-    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
-    if (!voiceClock) return;
-    
-    // Get rhythm duration
-    const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
-    const rhythmIndex = this.selectValueFromParam(rhythmParam);
-    const noteDuration = this.getRhythmDuration(rhythmIndex);
-    
-    // Get polyphony setting
-    const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
-    const polyphonyCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
-    
-    // Create note info array
-    const noteInfoArray = [{
-      midiNote: midiNote,
-      frequency: midiToFrequency(midiNote),
-      noteName: midiNoteNames[midiNote] || `MIDI${midiNote}`
-    }];
-    
-        // If polyphony > 1, add additional notes
-    if (polyphonyCount > 1) {
-      const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+  // NEW: Check boundary BEFORE scheduling to audio buffer
+  const noteWillPlayAt = (scheduleTime - this.audioContext.currentTime) * 1000 + 
+                         this.masterClock.getElapsedTime();
+  
+  const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+  if (!voiceClock) return;
+  
+  const willBeInLifeSpan = voiceClock.isInLifeSpan(noteWillPlayAt);
+  
+  if (!willBeInLifeSpan) {
+    if (DEBUG.VOICE_CLOCK) {
+      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+      const beatUnit = lifeSpan.beatUnit || 7;
+      const tempo = voiceClock.currentTempo || getCurrentTempoForVoice(this.voiceIndex);
+      const beatPos = msToBeats(noteWillPlayAt, beatUnit, tempo);
       
-      // NEW: Check if user has specific notes selected
-      if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 1) {
-        // User has specific notes selected - pick randomly from them
-                
-        noteInfoArray.length = 0; // Clear the single note
-        
-        const availableNotes = [...melodicParam.selectedNotes];
-        const notesToPick = Math.min(polyphonyCount, availableNotes.length);
-        
-        for (let i = 0; i < notesToPick; i++) {
-          const randomIndex = Math.floor(Math.random() * availableNotes.length);
-          const selectedMidi = availableNotes.splice(randomIndex, 1)[0];
-          
-          noteInfoArray.push({
-            midiNote: selectedMidi,
-            frequency: midiToFrequency(selectedMidi),
-            noteName: midiNoteNames[selectedMidi] || `MIDI${selectedMidi}`
-          });
-        }
-      } else {
-        // No specific notes - use chord generation
-        const behaviorSetting = melodicParam.behavior || 50;
-        const baseNote = noteInfoArray[0];
-        const minNote = Math.round(melodicParam.min);
-        const maxNote = Math.round(melodicParam.max);
-        
-        const chord = generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting);
-        noteInfoArray.length = 0; // Clear
-        noteInfoArray.push(...chord);
-      }
+      console.log(`⏭️ Voice ${this.voiceIndex + 1}: BLOCKED note at beat ${beatPos.toFixed(1)}`);
     }
-
-    
-    // Schedule using existing audio infrastructure
-    voiceClock.triggerNote(noteInfoArray, noteDuration * 1000, scheduleTime); // Pass schedule time!
-
-    
+    return; // Exit early - don't schedule
   }
+  
+  // Get rhythm duration
+  const rhythmParam = voiceData[this.voiceIndex].parameters['RHYTHMS'];
+  const rhythmIndex = this.selectValueFromParam(rhythmParam);
+  const noteDuration = this.getRhythmDuration(rhythmIndex);
+  
+  // Get polyphony setting
+  const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
+  const polyphonyCount = Math.round((polyphonyParam.min + polyphonyParam.max) / 2);
+  
+  // Create note info array
+  const noteInfoArray = [{
+    midiNote: midiNote,
+    frequency: midiToFrequency(midiNote),
+    noteName: midiNoteNames[midiNote] || `MIDI${midiNote}`
+  }];
+  
+  // If polyphony > 1, add additional notes
+  if (polyphonyCount > 1) {
+    const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+    
+    if (melodicParam.selectedNotes && melodicParam.selectedNotes.length > 1) {
+      noteInfoArray.length = 0;
+      
+      const availableNotes = [...melodicParam.selectedNotes];
+      const notesToPick = Math.min(polyphonyCount, availableNotes.length);
+      
+      for (let i = 0; i < notesToPick; i++) {
+        const randomIndex = Math.floor(Math.random() * availableNotes.length);
+        const selectedMidi = availableNotes.splice(randomIndex, 1)[0];
+        
+        noteInfoArray.push({
+          midiNote: selectedMidi,
+          frequency: midiToFrequency(selectedMidi),
+          noteName: midiNoteNames[selectedMidi] || `MIDI${selectedMidi}`
+        });
+      }
+    } else {
+      const behaviorSetting = melodicParam.behavior || 50;
+      const baseNote = noteInfoArray[0];
+      const minNote = Math.round(melodicParam.min);
+      const maxNote = Math.round(melodicParam.max);
+      
+      const chord = generateMusicalChord(baseNote, polyphonyCount, minNote, maxNote, behaviorSetting);
+      noteInfoArray.length = 0;
+      noteInfoArray.push(...chord);
+    }
+  }
+  
+  // Schedule using existing audio infrastructure
+  voiceClock.triggerNote(noteInfoArray, noteDuration * 1000, scheduleTime);
+}
+
 }
 
 function createParameterRollup(param, voiceIndex) {
