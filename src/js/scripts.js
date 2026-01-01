@@ -48,8 +48,10 @@ const DEBUG = {
   AUDIO: false,            // Audio node creation and cleanup
   PERFORMANCE: false,      // CPU, memory, oscillator pool stats
   PHRASE_STYLES: false,    // Phrase pattern generation (uses PHRASE_STYLES_DEBUG)
+  UNDO_REDO: true,        // NEW: Undo/redo operations and state capture
   ALL: false               // Master override - enables all logging
 };
+
 
 // Master override
 if (DEBUG.ALL) {
@@ -2662,6 +2664,13 @@ function createCheckboxGroup(optionsType, paramName, voiceIndex) {
 }
 
 function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
+
+  // NEW: Capture state before checkbox change
+  if (undoManager && undoManager.isCapturing && voiceIndex === currentVoice) {
+    const rhythmName = (paramName === 'RHYTHMS' ? rhythmOptions : restOptions)[index];
+    undoManager.captureState(`${paramName}: ${isChecked ? 'checked' : 'unchecked'} ${rhythmName}`, true);
+  }
+
   const param = voiceData[voiceIndex].parameters[paramName];
   
   if (!param.selectedValues) {
@@ -3320,19 +3329,27 @@ function renderParameters() {
     }
   });
   
-  parameterSection.innerHTML = '';
+    parameterSection.innerHTML = '';
   
   const voiceControls = document.createElement('div');
   voiceControls.className = 'voice-controls';
   voiceControls.innerHTML = `
     <div class="voice-label">Voice ${currentVoice + 1}</div>
     <div class="control-buttons">
+      <button id="undo-btn" class="control-btn" onclick="performUndo()" title="Undo last change (Ctrl+Z)" disabled style="opacity: 0.5;">⮪ UNDO</button>
+      <button id="redo-btn" class="control-btn" onclick="performRedo()" title="Redo last undo (Ctrl+Y)" disabled style="opacity: 0.5;">⮫ REDO</button>
       <button class="control-btn" onclick="previewVoice(${currentVoice})">PREVIEW</button>
       <button class="control-btn sync-btn" onclick="syncVoiceToOthers(${currentVoice})" title="Copy this voice's tempo to all other voices">SYNC</button>
       <button class="control-btn" onclick="toggleLockVoice(${currentVoice})">${voiceData[currentVoice].locked ? 'UNLOCK' : 'LOCK'}</button>
     </div>
   `;
   parameterSection.appendChild(voiceControls);
+  
+  // NEW: Update undo/redo button states immediately after creating them
+  setTimeout(() => {
+    updateUndoRedoButtons();
+  }, 50);
+
   
   parameterDefinitions.forEach(param => {
     const parameterRollup = createParameterRollup(param, currentVoice);
@@ -4366,6 +4383,13 @@ class InteractivePiano {
   }
   
   toggleNote(midiNote) {
+    // NEW: Capture state before piano keyboard change
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      const noteName = midiNoteNames[midiNote] || `MIDI${midiNote}`;
+      const action = this.selectedNotes.has(midiNote) ? 'deselected' : 'selected';
+      undoManager.captureState(`Piano: ${action} ${noteName}`, true);
+    }
+    
     if (this.selectedNotes.has(midiNote)) {
       this.selectedNotes.delete(midiNote);
     } else {
@@ -4376,6 +4400,7 @@ class InteractivePiano {
     this.updateVoiceData();
     this.updateInfoDisplay();
   }
+
   
   selectRange(startNote, endNote, select = true) {
     const minNote = Math.min(startNote, endNote);
@@ -4630,6 +4655,22 @@ class InteractivePiano {
     const rootNote = parseInt(rootSelect.value);
     const scaleName = scaleSelect.value;
     const chordName = chordSelect.value;
+    
+    // NEW: Capture state before filter change
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
+      const oldSettings = melodicParam.filterSettings || {};
+      
+      // Only capture if something actually changed
+      if (oldSettings.rootNote !== rootNote || oldSettings.scale !== scaleName || oldSettings.chord !== chordName) {
+        let actionDesc = 'Filter: ';
+        if (rootNote !== -1) actionDesc += noteNames[rootNote] + ' ';
+        if (scaleName !== 'None') actionDesc += scaleName;
+        if (chordName !== 'none') actionDesc += chordQualityNames[chordName];
+        
+        undoManager.captureState(actionDesc.trim(), true);
+      }
+    }
     
     // Check if root is selected when scale/chord is active
     if (rootNote === -1 && (scaleName !== 'None' || chordName !== 'none')) {
@@ -5107,7 +5148,7 @@ if (this.lookaheadScheduler) {
     // Check Life Span timing
     return this.isInLifeSpan(elapsedMs);
   }
-  
+
   isInLifeSpan(elapsedMs) {
   const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   
@@ -5156,8 +5197,11 @@ if (this.lookaheadScheduler) {
     
     // Check if we're in any active span at this cycle position
     for (const span of activeSpans) {
-      // FIXED: Use <= to include the exit beat
-      if (cyclePosition >= span.enterBeats && cyclePosition <= span.exitBeats) {
+      // FIXED: Use < (not <=) to EXCLUDE the exit beat
+      if (cyclePosition >= span.enterBeats && cyclePosition < span.exitBeats) {
+        if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) { // Log 1% of checks
+          console.log(`✓ Voice ${this.voiceIndex + 1} in span ${span.number}: beat ${cyclePosition.toFixed(1)} (${span.enterBeats}-${span.exitBeats})`);
+        }
         return true;
       }
     }
@@ -5167,10 +5211,17 @@ if (this.lookaheadScheduler) {
   
   // NON-REPEAT: Check spans once
   for (const span of activeSpans) {
-    // FIXED: Use <= to include the exit beat
-    if (elapsedBeats >= span.enterBeats && elapsedBeats <= span.exitBeats) {
+    // FIXED: Use < (not <=) to EXCLUDE the exit beat - prevents extra note
+    if (elapsedBeats >= span.enterBeats && elapsedBeats < span.exitBeats) {
+      if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) {
+        console.log(`✓ Voice ${this.voiceIndex + 1} in span ${span.number}: beat ${elapsedBeats.toFixed(1)} (${span.enterBeats}-${span.exitBeats})`);
+      }
       return true;
     }
+  }
+  
+  if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) {
+    console.log(`✗ Voice ${this.voiceIndex + 1} outside all spans at beat ${elapsedBeats.toFixed(1)}`);
   }
   
   return false;
@@ -7596,9 +7647,6 @@ class MelodicPhraseGenerator {
   }
 }
 
-
-
-
 // ===== LOOKAHEAD SCHEDULER CLASS =====
 class LookaheadScheduler {
   constructor(voiceIndex, audioContext, masterClock) {
@@ -8200,6 +8248,13 @@ function connectPhraseStylesControls(container, voiceIndex) {
   const patternCheckboxes = container.querySelectorAll('.pattern-checkbox');
   patternCheckboxes.forEach(checkbox => {
     checkbox.onchange = (e) => {
+      // NEW: Capture state before pattern change
+      if (undoManager && undoManager.isCapturing && voiceIndex === currentVoice) {
+        const patternName = e.target.dataset.pattern;
+        const action = e.target.checked ? 'enabled' : 'disabled';
+        undoManager.captureState(`Pattern ${patternName} ${action}`, true);
+      }
+      
       const patternName = e.target.dataset.pattern;
       const isChecked = e.target.checked;
       
@@ -8208,6 +8263,7 @@ function connectPhraseStylesControls(container, voiceIndex) {
       console.log(`Voice ${voiceIndex + 1}: ${patternName} pattern = ${isChecked ? 'ENABLED' : 'DISABLED'}`);
     };
   });
+
   
   // Connect pattern length sliders
   const patternSliders = container.querySelectorAll('.pattern-length-slider');
@@ -8228,10 +8284,17 @@ function connectPhraseStylesControls(container, voiceIndex) {
     };
   });
   
-  // Connect breathe checkbox
+    // Connect breathe checkbox
   const breatheCheckbox = container.querySelector('.breathe-checkbox');
   if (breatheCheckbox) {
     breatheCheckbox.onchange = (e) => {
+      
+      // NEW: Capture state before breathe change
+      if (undoManager && undoManager.isCapturing && voiceIndex === currentVoice) {
+        const action = e.target.checked ? 'enabled' : 'disabled';
+        undoManager.captureState(`Breathe ${action}`, true);
+      }
+      
       const isChecked = e.target.checked;
       phraseStylesParam.breathe.enabled = isChecked;
       
@@ -8276,9 +8339,24 @@ function connectAllSliders() {
       const paramName = rollupTitle ? rollupTitle.textContent.trim() : `Unknown ${index}`;
 
       
-      slider.noUiSlider.off('update');
+            slider.noUiSlider.off('update');
+      slider.noUiSlider.off('set');
+      slider.noUiSlider.off('start'); // NEW: Also remove old 'start' handler
+      
+      // NEW: Capture state when user STARTS dragging (before any changes)
+      slider.noUiSlider.on('start', function(values) {
+        if (undoManager && undoManager.isCapturing) {
+          undoManager.captureState(`${paramName} range (before change)`, true);
+          
+          if (DEBUG.UNDO_REDO) {
+            console.log(`📸 Pre-captured ${paramName} before slider drag`);
+          }
+        }
+      });
       
       slider.noUiSlider.on('update', function(values) {
+
+
         if (paramName === 'MELODIC RANGE') {
           const minMidi = convertNoteNameToMidi(values[0]);
           const maxMidi = convertNoteNameToMidi(values[1]);
@@ -8394,10 +8472,19 @@ function connectAllSliders() {
     dropdown.onchange = null;
     
     dropdown.onchange = function(e) {
+    
+      // NEW: Capture state BEFORE change
+      if (undoManager) {
+        const dropdownLabel = dropdown.closest('.dropdown-container')?.querySelector('.dropdown-label')?.textContent;
+        const actionName = `${paramName} ${dropdownLabel || 'changed'}`;
+        undoManager.captureState(actionName, true);
+      }
+      
       const value = parseInt(e.target.value);
       
       if (paramName === 'INSTRUMENT') {
         voiceData[currentVoice].parameters[paramName] = value;
+
         
         const soundName = gmSounds[value];
         const waveType = getOscillatorTypeForGMSound(soundName);
@@ -8457,9 +8544,25 @@ function connectAllSliders() {
         const labelText = label ? label.textContent.trim().toLowerCase() : '';
         
         
-        slider.noUiSlider.off('update');
+                slider.noUiSlider.off('update');
+        slider.noUiSlider.off('set');
+        slider.noUiSlider.off('start'); // NEW: Also remove old 'start' handler
+        
+        // NEW: Capture state when user STARTS dragging (before any changes)
+        slider.noUiSlider.on('start', function(values) {
+          if (undoManager && undoManager.isCapturing) {
+            const subParam = labelText || `slider ${sliderIndex}`;
+            undoManager.captureState(`${paramName} ${subParam} (before change)`, true);
+            
+            if (DEBUG.UNDO_REDO) {
+              console.log(`📸 Pre-captured ${paramName} ${subParam} before slider drag`);
+            }
+          }
+        });
         
         slider.noUiSlider.on('update', function(values) {
+
+
           let min, max;
           
           if (values[0].includes('ms') || values[0].includes('s')) {
@@ -8691,10 +8794,17 @@ actualContainers.forEach((container) => {
   const repeatCheckbox = behaviorContainer ? behaviorContainer.querySelector('.repeat-checkbox') : null;
   if (repeatCheckbox) {
     repeatCheckbox.onchange = function(e) {
+      // NEW: Capture state before repeat change
+      if (undoManager && undoManager.isCapturing) {
+        const action = e.target.checked ? 'enabled' : 'disabled';
+        undoManager.captureState(`Repeat ${action}`, true);
+      }
+      
       voiceData[currentVoice].parameters['LIFE SPAN'].repeat = e.target.checked;
       console.log(`✅ Voice ${currentVoice + 1} Repeat = ${e.target.checked}`);
     };
   }
+
   
   // Connect Life Span sliders
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
@@ -9045,7 +9155,12 @@ class PresetManager {
     }
     
     async applyPreset(preset) {
-        
+      
+      // NEW: Disable undo capturing during preset load
+        if (undoManager) {
+          undoManager.isCapturing = false;
+        }
+
         try {
             if (masterClock && masterClock.isActive()) {
                 toggleMasterPlayback();
@@ -9076,6 +9191,18 @@ class PresetManager {
             this.currentPreset = preset;
             this.isModified = false;
             
+          // NEW: Re-enable undo and clear history after preset load
+            if (undoManager) {
+              undoManager.isCapturing = true;
+              undoManager.clear();
+              updateUndoRedoButtons();
+              
+              if (DEBUG.UNDO_REDO) {
+                console.log('🔓 Undo re-enabled after preset load');
+                console.log('   History cleared for fresh start');
+              }
+            }    
+
             return true;
             
         } catch (error) {
@@ -9492,6 +9619,477 @@ class OscillatorPool {
    }
 }
 
+// ===== UNDO/REDO MANAGER CLASS =====
+class UndoManager {
+  constructor() {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.maxStates = 50;
+    this.isCapturing = true;
+    this.lastCaptureTime = 0;
+    this.captureThrottleMs = 500; // Don't capture more than once per 500ms
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log('🔄 UndoManager initialized');
+      console.log(`   Max states: ${this.maxStates}`);
+      console.log(`   Throttle: ${this.captureThrottleMs}ms`);
+    }
+  }
+  
+  /**
+   * Capture current application state
+   * @param {string} actionName - Description of the action being performed
+   * @param {boolean} force - Bypass throttle if true
+   */
+  captureState(actionName, force = false) {
+    if (!this.isCapturing) {
+      if (DEBUG.UNDO_REDO) {
+        console.log(`⏸️ Capture disabled, skipping: ${actionName}`);
+      }
+      return;
+    }
+    
+    // Throttle captures to prevent duplicate states during drag operations
+    const now = Date.now();
+    if (!force && (now - this.lastCaptureTime) < this.captureThrottleMs) {
+      if (DEBUG.UNDO_REDO) {
+        console.log(`⏭️ Throttled capture: ${actionName} (${now - this.lastCaptureTime}ms since last)`);
+      }
+      return;
+    }
+    
+    try {
+      const state = {
+        timestamp: now,
+        action: actionName,
+        voiceData: JSON.parse(JSON.stringify(voiceData)), // Deep clone
+        currentVoice: currentVoice,
+        timelineViewActive: timelineViewActive
+      };
+      
+      this.undoStack.push(state);
+      
+      // Limit stack size
+      if (this.undoStack.length > this.maxStates) {
+        this.undoStack.shift();
+        if (DEBUG.UNDO_REDO) {
+          console.log(`   Stack trimmed to ${this.maxStates} states`);
+        }
+      }
+      
+      // Clear redo stack when new action performed
+      this.redoStack = [];
+      
+      this.lastCaptureTime = now;
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log(`📸 Captured state: "${actionName}"`);
+        console.log(`   Stack size: ${this.undoStack.length} undo, ${this.redoStack.length} redo`);
+        console.log(`   Current voice: ${currentVoice + 1}`);
+      }
+      
+      // NEW: Update button states
+      updateUndoRedoButtons();
+
+    } catch (error) {
+      console.error('❌ Error capturing state:', error);
+    }
+  }
+  
+  /**
+   * Undo the last action
+   * @returns {boolean} True if undo was performed
+   */
+  undo() {
+    if (this.undoStack.length === 0) {
+      if (DEBUG.UNDO_REDO) {
+        console.log('⚠️ Nothing to undo');
+      }
+      return false;
+    }
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`⮪ UNDO requested (stack: ${this.undoStack.length})`);
+    }
+    
+    // Save current state to redo stack BEFORE undoing
+    const currentState = {
+      timestamp: Date.now(),
+      action: 'Current State (before undo)',
+      voiceData: JSON.parse(JSON.stringify(voiceData)),
+      currentVoice: currentVoice,
+      timelineViewActive: timelineViewActive
+    };
+    this.redoStack.push(currentState);
+    
+    // Restore previous state
+    const previousState = this.undoStack.pop();
+    this.restoreState(previousState, 'UNDO');
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`✅ Undid: "${previousState.action}"`);
+      console.log(`   New stack: ${this.undoStack.length} undo, ${this.redoStack.length} redo`);
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Redo the last undone action
+   * @returns {boolean} True if redo was performed
+   */
+  redo() {
+    if (this.redoStack.length === 0) {
+      if (DEBUG.UNDO_REDO) {
+        console.log('⚠️ Nothing to redo');
+      }
+      return false;
+    }
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`⮫ REDO requested (stack: ${this.redoStack.length})`);
+    }
+    
+    // Save current state to undo stack BEFORE redoing
+    const currentState = {
+      timestamp: Date.now(),
+      action: 'Current State (before redo)',
+      voiceData: JSON.parse(JSON.stringify(voiceData)),
+      currentVoice: currentVoice,
+      timelineViewActive: timelineViewActive
+    };
+    this.undoStack.push(currentState);
+    
+    // Restore next state
+    const nextState = this.redoStack.pop();
+    this.restoreState(nextState, 'REDO');
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`✅ Redid: "${nextState.action}"`);
+      console.log(`   New stack: ${this.undoStack.length} undo, ${this.redoStack.length} redo`);
+    }
+    
+    return true;
+  }
+  
+    /**
+   * Restore a saved state
+   * @param {object} state - State object to restore
+   * @param {string} operation - 'UNDO' or 'REDO' for logging
+   */
+  restoreState(state, operation) {
+    if (DEBUG.UNDO_REDO) {
+      console.log(`🔄 Restoring state from ${operation}: "${state.action}"`);
+    }
+    
+    // Disable capturing during restoration
+    this.isCapturing = false;
+    
+    try {
+      // Restore voice data
+      voiceData = JSON.parse(JSON.stringify(state.voiceData));
+      currentVoice = state.currentVoice;
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log(`   ✓ voiceData restored`);
+        console.log(`   ✓ currentVoice = ${currentVoice + 1}`);
+      }
+      
+      // Close timeline view if it was open
+      if (timelineViewActive && !state.timelineViewActive) {
+        closeTimelineView();
+      }
+      
+      // Refresh UI
+      createVoiceTabs();
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log(`   ✓ Voice tabs refreshed`);
+      }
+      
+      renderParameters();
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log(`   ✓ Parameters rendered`);
+        console.log(`   ⏱️ Waiting 200ms for sliders to initialize...`);
+      }
+      
+      // Wait for sliders to be created and ready
+      const self = this; // Capture 'this' for use in setTimeout
+      
+      setTimeout(() => {
+        if (DEBUG.UNDO_REDO) {
+          console.log(`   🔌 Connecting sliders...`);
+        }
+        
+        connectAllSliders();
+        
+        if (DEBUG.UNDO_REDO) {
+          console.log(`   ✓ connectAllSliders() completed`);
+          console.log(`   ⏱️ Waiting 200ms more for slider connections...`);
+        }
+        
+        // Additional delay for sliders to fully connect
+        setTimeout(() => {
+          if (DEBUG.UNDO_REDO) {
+            console.log(`   🔧 About to force-update sliders...`);
+            console.log(`   'this' context:`, self);
+            console.log(`   forceUpdateAllSliders exists:`, typeof self.forceUpdateAllSliders);
+          }
+          
+          self.forceUpdateAllSliders();
+          
+          // Re-enable capturing
+          self.isCapturing = true;
+          
+          if (DEBUG.UNDO_REDO) {
+            console.log(`✅ State restoration complete`);
+            console.log(`   Active voice: ${currentVoice + 1}`);
+            console.log(`   Capturing re-enabled`);
+          }
+          
+        }, 200); // Increased delay
+        
+      }, 200); // Increased delay
+      
+    } catch (error) {
+      console.error(`❌ Error restoring state:`, error);
+      console.error(`   Error details:`, error.message);
+      console.error(`   Stack trace:`, error.stack);
+      this.isCapturing = true; // Re-enable even on error
+    }
+  }
+
+  
+    /**
+   * Force all sliders to update to current voiceData values
+   * Called after state restoration to ensure visual sync
+   */
+  forceUpdateAllSliders() {
+    const parameterSection = document.getElementById('parameter-section');
+    if (!parameterSection) {
+      if (DEBUG.UNDO_REDO) {
+        console.error(`   ❌ parameterSection not found!`);
+      }
+      return;
+    }
+    
+    const allSliders = parameterSection.querySelectorAll('.noUi-target');
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`🔧 Force-updating ${allSliders.length} sliders...`);
+    }
+    
+    let updatedCount = 0;
+    let skippedCount = 0;
+    
+    allSliders.forEach((slider, index) => {
+      if (DEBUG.UNDO_REDO) {
+        console.log(`   [${index + 1}/${allSliders.length}] Checking slider...`);
+      }
+      
+      if (!slider.noUiSlider) {
+        if (DEBUG.UNDO_REDO) {
+          console.log(`      ⚠️ No noUiSlider instance`);
+        }
+        skippedCount++;
+        return;
+      }
+      
+      try {
+        const row = slider.closest('.row-container-content');
+        const rollup = row ? row.closest('.parameter-rollup') : null;
+        const rollupTitle = rollup ? rollup.querySelector('.parameter-rollup-title') : null;
+        const paramName = rollupTitle ? rollupTitle.textContent.trim() : null;
+        
+        if (DEBUG.UNDO_REDO) {
+          console.log(`      Parameter: ${paramName || 'UNKNOWN'}`);
+        }
+        
+        if (!paramName) {
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      ⚠️ Could not determine parameter name`);
+          }
+          skippedCount++;
+          return;
+        }
+        
+        if (!voiceData[currentVoice].parameters[paramName]) {
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      ⚠️ Parameter not found in voiceData`);
+          }
+          skippedCount++;
+          return;
+        }
+        
+        const paramData = voiceData[currentVoice].parameters[paramName];
+        
+        if (DEBUG.UNDO_REDO) {
+          console.log(`      Data:`, paramData);
+        }
+        
+        // Handle different parameter types
+        if (paramName === 'MELODIC RANGE') {
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      ⏭️ Skipping (piano keyboard handles this)`);
+          }
+          skippedCount++;
+          return;
+        } else if (typeof paramData.min === 'number' && typeof paramData.max === 'number') {
+          // Single-dual parameter
+          const oldValues = slider.noUiSlider.get();
+          slider.noUiSlider.set([paramData.min, paramData.max]);
+          const newValues = slider.noUiSlider.get();
+          updatedCount++;
+          
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      ✓ ${paramName}: [${oldValues[0]}, ${oldValues[1]}] → [${paramData.min}, ${paramData.max}]`);
+            console.log(`         Slider now shows: [${newValues[0]}, ${newValues[1]}]`);
+          }
+        } else if (paramData.speed || paramData.depth || paramData.feedback) {
+          // Multi-dual parameter
+          const sliderWrapper = slider.closest('.slider-wrapper');
+          const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label')?.textContent.trim().toLowerCase() : '';
+          
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      Multi-dual slider label: "${label}"`);
+          }
+          
+          if (label.includes('speed') || label.includes('time')) {
+            if (paramData.speed) {
+              slider.noUiSlider.set([paramData.speed.min, paramData.speed.max]);
+              updatedCount++;
+              if (DEBUG.UNDO_REDO) {
+                console.log(`      ✓ Speed: [${paramData.speed.min}, ${paramData.speed.max}]`);
+              }
+            }
+          } else if (label.includes('depth') || label.includes('mix')) {
+            if (paramData.depth) {
+              slider.noUiSlider.set([paramData.depth.min, paramData.depth.max]);
+              updatedCount++;
+              if (DEBUG.UNDO_REDO) {
+                console.log(`      ✓ Depth: [${paramData.depth.min}, ${paramData.depth.max}]`);
+              }
+            }
+          } else if (label.includes('feedback')) {
+            if (paramData.feedback) {
+              slider.noUiSlider.set([paramData.feedback.min, paramData.feedback.max]);
+              updatedCount++;
+              if (DEBUG.UNDO_REDO) {
+                console.log(`      ✓ Feedback: [${paramData.feedback.min}, ${paramData.feedback.max}]`);
+              }
+            }
+          }
+        } else {
+          if (DEBUG.UNDO_REDO) {
+            console.log(`      ⚠️ Unknown parameter structure`);
+          }
+          skippedCount++;
+        }
+        
+      } catch (error) {
+        // Slider might not be ready, skip it
+        if (DEBUG.UNDO_REDO) {
+          console.error(`      ❌ Error updating slider:`, error.message);
+        }
+        skippedCount++;
+      }
+    });
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log(`✅ Slider update complete: ${updatedCount} updated, ${skippedCount} skipped`);
+    }
+    
+    // Update behavior sliders
+    this.forceUpdateBehaviorSliders();
+  }
+
+  
+  /**
+   * Force behavior sliders to update to current values
+   */
+  forceUpdateBehaviorSliders() {
+    const parameterSection = document.getElementById('parameter-section');
+    if (!parameterSection) return;
+    
+    const behaviorSliders = parameterSection.querySelectorAll('.behavior-slider-wrapper input[type="range"]');
+    
+    behaviorSliders.forEach((slider) => {
+      const row = slider.closest('.row-container') || 
+                slider.closest('.parameter-rollup-content')?.closest('.parameter-rollup');
+      const label = row ? (row.querySelector('.parameter-rollup-title') || row.querySelector('.label-container')) : null;
+      const paramName = label ? label.textContent.trim() : null;
+      
+      if (!paramName || !voiceData[currentVoice].parameters[paramName]) return;
+      
+      try {
+        const paramData = voiceData[currentVoice].parameters[paramName];
+        let behaviorValue;
+        
+        if (paramName === 'PHRASE STYLES') {
+          behaviorValue = paramData.behavior || 50;
+        } else {
+          behaviorValue = paramData.behavior || 50;
+        }
+        
+        slider.value = behaviorValue;
+        
+        // Update tooltip
+        const tooltip = slider.parentElement.querySelector('.behavior-tooltip');
+        if (tooltip) {
+          tooltip.textContent = behaviorValue + '%';
+          
+          const percentage = (behaviorValue - parseInt(slider.min)) / (parseInt(slider.max) - parseInt(slider.min));
+          const sliderWidth = slider.offsetWidth;
+          const thumbWidth = 16;
+          const offset = percentage * (sliderWidth - thumbWidth) + (thumbWidth / 2);
+          tooltip.style.left = `${offset}px`;
+        }
+        
+        if (DEBUG.UNDO_REDO) {
+          console.log(`   ✓ ${paramName} behavior: ${behaviorValue}%`);
+        }
+        
+      } catch (error) {
+        // Skip on error
+      }
+    });
+  }
+
+  
+  /**
+   * Clear all undo/redo history
+   */
+  clear() {
+    this.undoStack = [];
+    this.redoStack = [];
+    
+    if (DEBUG.UNDO_REDO) {
+      console.log('🗑️ Undo/redo history cleared');
+    }
+  }
+  
+  /**
+   * Get current stack sizes
+   * @returns {object} Stack statistics
+   */
+  getStats() {
+    return {
+      undoCount: this.undoStack.length,
+      redoCount: this.redoStack.length,
+      canUndo: this.undoStack.length > 0,
+      canRedo: this.redoStack.length > 0,
+      isCapturing: this.isCapturing
+    };
+  }
+}
+
+// Global undo manager instance
+let undoManager = null;
+
+
+
+
 // Global preset manager instance
 let presetManager = null;
 
@@ -9610,9 +10208,17 @@ function readFileAsText(file) {
         reader.readAsText(file);
     });
 }
-
 async function createNewComposition() {
     
+    // NEW: Disable undo capturing during reset
+    if (undoManager) {
+      undoManager.isCapturing = false;
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log('🔒 Undo capturing disabled for NEW composition');
+      }
+    }
+
     try {
         if (masterClock && masterClock.isActive()) {
             toggleMasterPlayback();
@@ -9628,6 +10234,10 @@ Any unsaved work will be lost.
 Continue?`);
             
             if (!proceed) {
+                // Re-enable capturing if user cancels
+                if (undoManager) {
+                  undoManager.isCapturing = true;
+                }
                 return;
             }
         }
@@ -9692,6 +10302,21 @@ Continue?`);
             }, 2000);
         }
         
+    // NEW: Re-enable capturing and clear history after NEW composition
+    setTimeout(() => {
+      if (undoManager) {
+        undoManager.isCapturing = true;
+        undoManager.clear();
+        updateUndoRedoButtons(); // NEW: Update button states after clear
+        
+        if (DEBUG.UNDO_REDO) {
+          console.log('🔓 Undo capturing re-enabled after NEW composition');
+          console.log('   History cleared - ready for user actions');
+        }
+      }
+    }, 2500);
+
+        
         return true;
         
     } catch (error) {
@@ -9710,10 +10335,16 @@ Continue?`);
             }, 3000);
         }
         
+        // Re-enable capturing even on error
+        if (undoManager) {
+          undoManager.isCapturing = true;
+        }
+        
         alert('❌ Error creating new composition. Please refresh the page.');
         return false;
     }
 }
+
 
 function resetNewButton() {
     
@@ -9808,11 +10439,24 @@ window.showPerformanceStats = logPerformanceSummary;
 // Initialize systems on page load
 document.addEventListener('DOMContentLoaded', () => {
   audioManager = new AudioManager();
+  
+  // NEW: Initialize undo manager BEFORE voices
+  undoManager = new UndoManager();
+  
+  // NEW: Disable capturing during initialization
+  undoManager.isCapturing = false;
+  
+  if (DEBUG.UNDO_REDO) {
+    console.log('🔒 Undo capturing DISABLED during page load');
+  }
+  
   initializeVoices();
   createVoiceTabs();
   renderParameters();
   
   presetManager = new PresetManager();
+
+
 
   setTimeout(() => {
       const openButton = document.querySelector('#file-controls button:nth-child(2)');
@@ -9857,16 +10501,191 @@ document.addEventListener('DOMContentLoaded', () => {
       tempoDownBtn.onmouseleave = stopTempoScroll;
     }
   }, 200);
+  
+  // NEW: Global keyboard shortcuts for undo/redo
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+Z (or Cmd+Z on Mac) - UNDO
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      
+      if (undoManager && undoManager.undo()) {
+        showUndoRedoFeedback('UNDO');
+      } else {
+        showUndoRedoFeedback('NOTHING TO UNDO', true);
+      }
+    }
+    
+    // Ctrl+Y (or Ctrl+Shift+Z, or Cmd+Shift+Z on Mac) - REDO
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      
+      if (undoManager && undoManager.redo()) {
+        showUndoRedoFeedback('REDO');
+      } else {
+        showUndoRedoFeedback('NOTHING TO REDO', true);
+      }
+    }
+  });
+  
+  if (DEBUG.UNDO_REDO) {
+    console.log('⌨️ Undo/Redo keyboard shortcuts registered');
+    console.log('   Ctrl+Z = Undo');
+    console.log('   Ctrl+Y or Ctrl+Shift+Z = Redo');
+  }
+  
+  // NEW: Re-enable undo capturing AFTER initialization complete
+  setTimeout(() => {
+    if (undoManager) {
+      undoManager.isCapturing = true;
+      undoManager.clear(); // Clear any states captured during init
+      
+      if (DEBUG.UNDO_REDO) {
+        console.log('🔓 Undo capturing ENABLED');
+        console.log('   Initialization states cleared');
+        console.log('   Ready for user actions');
+      }
+    }
+  }, 1000); // Wait 1 second after page load
 });
+
+
+// ===== UNDO/REDO VISUAL FEEDBACK =====
+
+// ===== UNDO/REDO BUTTON FUNCTIONS =====
+
+/**
+ * Perform undo operation (called by UI button)
+ */
+function performUndo() {
+  if (!undoManager) {
+    console.error('❌ UndoManager not initialized');
+    return;
+  }
+  
+  if (undoManager.undo()) {
+    showUndoRedoFeedback('UNDO');
+    updateUndoRedoButtons();
+  } else {
+    showUndoRedoFeedback('NOTHING TO UNDO', true);
+  }
+}
+
+/**
+ * Perform redo operation (called by UI button)
+ */
+function performRedo() {
+  if (!undoManager) {
+    console.error('❌ UndoManager not initialized');
+    return;
+  }
+  
+  if (undoManager.redo()) {
+    showUndoRedoFeedback('REDO');
+    updateUndoRedoButtons();
+  } else {
+    showUndoRedoFeedback('NOTHING TO REDO', true);
+  }
+}
+
+/**
+ * Update undo/redo button states (enabled/disabled)
+ */
+function updateUndoRedoButtons() {
+  if (!undoManager) return;
+  
+  const stats = undoManager.getStats();
+  
+  const undoBtn = document.getElementById('undo-btn');
+  const redoBtn = document.getElementById('redo-btn');
+  
+  if (undoBtn) {
+    undoBtn.disabled = !stats.canUndo;
+    undoBtn.style.opacity = stats.canUndo ? '1.0' : '0.5';
+    undoBtn.style.cursor = stats.canUndo ? 'pointer' : 'not-allowed';
+    
+    // Update tooltip with action count
+    if (stats.undoCount > 0) {
+      const lastAction = undoManager.undoStack[undoManager.undoStack.length - 1];
+      undoBtn.title = `Undo: ${lastAction.action} (Ctrl+Z)\n${stats.undoCount} actions available`;
+    } else {
+      undoBtn.title = 'Nothing to undo (Ctrl+Z)';
+    }
+  }
+  
+  if (redoBtn) {
+    redoBtn.disabled = !stats.canRedo;
+    redoBtn.style.opacity = stats.canRedo ? '1.0' : '0.5';
+    redoBtn.style.cursor = stats.canRedo ? 'pointer' : 'not-allowed';
+    
+    // Update tooltip with action count
+    if (stats.redoCount > 0) {
+      const nextAction = undoManager.redoStack[undoManager.redoStack.length - 1];
+      redoBtn.title = `Redo: ${nextAction.action} (Ctrl+Y)\n${stats.redoCount} actions available`;
+    } else {
+      redoBtn.title = 'Nothing to redo (Ctrl+Y)';
+    }
+  }
+  
+  if (DEBUG.UNDO_REDO) {
+    console.log(`🔘 Button states updated: Undo=${stats.canUndo}, Redo=${stats.canRedo}`);
+  }
+}
+
+
+
+/**
+ * Show temporary visual feedback for undo/redo operations
+ * @param {string} message - Message to display
+ * @param {boolean} isWarning - Show as warning (nothing to undo/redo)
+ */
+function showUndoRedoFeedback(message, isWarning = false) {
+  // Remove any existing feedback
+  const existingFeedback = document.querySelector('.undo-redo-feedback');
+  if (existingFeedback) {
+    existingFeedback.remove();
+  }
+  
+  const feedback = document.createElement('div');
+  feedback.className = 'undo-redo-feedback';
+  feedback.textContent = message;
+  feedback.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${isWarning ? '#fff3cd' : '#28a745'};
+    color: ${isWarning ? '#856404' : 'white'};
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  document.body.appendChild(feedback);
+  
+  // Auto-remove after 2 seconds
+  setTimeout(() => {
+    feedback.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      feedback.remove();
+    }, 300);
+  }, 2000);
+  
+  if (DEBUG.UNDO_REDO) {
+    console.log(`💬 Feedback shown: "${message}"`);
+  }
+}
+
+
+
+
 
 // FORCE CONNECT PLAY BUTTON
 setTimeout(() => {
-
-  
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
 
-
-  
   if (playButton) {
     playButton.onclick = null;
     playButton.onclick = toggleMasterPlayback;
