@@ -2082,4 +2082,319 @@ FOOTER
   pointer-events: none;
 }
 
+/* ===== VISUAL TIMELINE COMPONENT (Phase 1) ===== */
+
+.visual-timeline-container {
+  width: 100%;
+  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.visual-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.timeline-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-info {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.visual-timeline-track {
+  position: relative;
+  height: 60px;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.timeline-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    #e9ecef 0px,
+    #e9ecef 1px,
+    transparent 1px,
+    transparent 40px
+  );
+}
+
+.timeline-regions {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.timeline-region {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+}
+
+.timeline-region.playing {
+  background: linear-gradient(45deg, #28a745, #34ce57);
+  color: white;
+  border: 2px solid #1e7e34;
+}
+
+.timeline-region.muted {
+  background: repeating-linear-gradient(
+    45deg,
+    #6c757d,
+    #6c757d 8px,
+    #495057 8px,
+    #495057 16px
+  );
+  color: white;
+  border: 2px solid #343a40;
+}
+
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #dc3545;
+  z-index: 100;
+  transition: left 0.05s linear;
+  pointer-events: none;
+}
+
+.timeline-playhead::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -6px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 10px solid #dc3545;
+}
+
+.timeline-time-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #666;
+  font-family: 'Courier New', monospace;
+}
+
+.timeline-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.timeline-control-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.timeline-control-btn:hover {
+  background: #5a6268;
+}
+
+.timeline-control-btn.active {
+  background: #4a90e2;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .visual-timeline-container {
+    padding: 10px;
+  }
+  
+  .visual-timeline-track {
+    height: 50px;
+  }
+  
+  .timeline-info {
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-end;
+  }
+}
+
+
+/* ===== DUAL-MODE LIFE SPAN INPUT ===== */
+
+.dual-mode-container {
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.mode-toggle-buttons {
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.mode-btn {
+  transition: all 0.2s ease;
+}
+
+.mode-btn:hover {
+  transform: translateY(-1px);
+}
+
+.mode-btn.active {
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.beat-input-group,
+.time-input-group {
+  min-height: 34px;
+}
+
+.beat-count-input {
+  font-family: 'Courier New', monospace;
+}
+
+.time-input {
+  font-family: 'Courier New', monospace;
+}
+
+.beat-unit-label,
+.time-format-hint,
+.equals-time,
+.equals-beats {
+  font-style: italic;
+}
+
+/* Quick preset buttons */
+.quick-presets {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.preset-btn {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: #e9ecef;
+  border-color: #4a90e2;
+}
+
+/* ===== TIME INPUT WITH ARROWS ===== */
+
+.time-input-with-arrows {
+  position: relative;
+}
+
+.time-input-with-arrows .time-input {
+  padding-right: 24px !important; /* Make room for arrows */
+}
+
+.time-arrows {
+  pointer-events: auto;
+}
+
+.time-arrow {
+  user-select: none;
+  outline: none;
+}
+
+.time-arrow:hover {
+  background: #e9ecef !important;
+  color: #212529 !important;
+}
+
+.time-arrow:active {
+  background: #dee2e6 !important;
+  transform: scale(0.9);
+}
+
+.time-arrow:focus {
+  outline: 1px solid #4a90e2;
+  outline-offset: -1px;
+}
+
+/* Prevent text selection on arrows */
+.time-arrow::selection {
+  background: none;
+}
+
+/* ===== BEAT INPUT WITH ARROWS ===== */
+
+.beat-input-with-arrows {
+  position: relative;
+}
+
+.beat-input-with-arrows .beat-count-input {
+  padding-right: 24px !important; /* Make room for arrows */
+}
+
+.beat-arrows {
+  pointer-events: auto;
+}
+
+.beat-arrow {
+  user-select: none;
+  outline: none;
+}
+
+.beat-arrow:hover {
+  background: #e9ecef !important;
+  color: #212529 !important;
+}
+
+.beat-arrow:active {
+  background: #dee2e6 !important;
+  transform: scale(0.9);
+}
 

@@ -792,34 +792,163 @@ function createLifeSpanControl(param, voiceIndex) {
   
   console.log(`🎵 Voice ${voiceIndex + 1} Life Span: ${maxBeats} beats = ${maxTimeFormatted} @ ${tempo} BPM`);
   
-  // Max Time and Beat Unit Controls
-  const settingsRow = document.createElement('div');
-  settingsRow.className = 'life-span-settings';
-  settingsRow.style.cssText = `
-    display: flex;
-    gap: 15px;
-    margin-bottom: 15px;
-    width: 100%;
-  `;
-  settingsRow.innerHTML = `
-    <div class="max-time-container" style="flex: 1;">
-      <label>Total Time Length:</label>
-      <input type="text" class="max-time-input" value="${maxTimeFormatted}" placeholder="0:05" maxlength="5" 
-             title="Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)"
-             style="width: 100%; padding: 4px; margin-left: 5px;" />
+  // NEW: Enhanced settings row with dual-mode input
+const settingsRow = document.createElement('div');
+settingsRow.className = 'life-span-settings';
+settingsRow.style.cssText = `
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+  width: 100%;
+`;
+
+settingsRow.innerHTML = `
+  <div class="dual-mode-container" style="flex: 2; display: flex; flex-direction: column; gap: 8px;">
+    <label style="font-weight: bold; color: #333;">Total Voice Length:</label>
+    
+    <!-- Mode Toggle Buttons -->
+    <div class="mode-toggle-buttons" style="display: flex; gap: 4px; margin-bottom: 8px;">
+      <button class="mode-btn beats-mode active" data-mode="beats" style="
+        flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 600;
+        background: #4a90e2; color: white; border: none; border-radius: 4px 0 0 4px;
+        cursor: pointer; transition: all 0.2s ease;
+      ">🎵 BEATS</button>
+      <button class="mode-btn time-mode" data-mode="time" style="
+        flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 600;
+        background: #e9ecef; color: #495057; border: none; border-radius: 0 4px 4px 0;
+        cursor: pointer; transition: all 0.2s ease;
+      ">⏰ TIME</button>
     </div>
-    <div class="beat-unit-container" style="flex: 1;">
-      <label>Beat Unit:</label>
-      <select class="beat-unit-select" style="width: 100%; padding: 4px; margin-left: 5px;">
-        ${rhythmOptions.map((option, index) => 
-          `<option value="${index}" ${index === beatUnit ? 'selected' : ''}>${option}</option>`
-        ).join('')}
-      </select>
+    
+    <!-- Input Container (switches between beat/time input) -->
+    <div class="input-container" style="position: relative;">
+      
+   <!-- Beat Input -->
+    <div class="beat-input-group" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <div class="beat-input-with-arrows" style="display: flex; align-items: center; position: relative;">
+        <input type="number" class="beat-count-input" value="${maxBeats}" 
+              min="2" max="9999" step="1" placeholder="32"
+              style="width: 80px; padding: 6px 24px 6px 8px; border: 2px solid #4a90e2; border-radius: 4px; 
+                      font-size: 14px; font-weight: 600; text-align: center; background: #f8f9fa; box-sizing: border-box;" />
+        
+        <!-- Beat Up/Down Arrow Container -->
+        <div class="beat-arrows" style="
+          position: absolute; right: 2px; top: 2px; bottom: 2px; width: 20px;
+          display: flex; flex-direction: column; background: white; border-radius: 0 2px 2px 0;
+        ">
+          <button class="beat-arrow beat-up" style="
+            flex: 1; border: none; background: #f8f9fa; cursor: pointer; 
+            font-size: 10px; line-height: 1; color: #495057; border-radius: 0 2px 0 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.1s ease; border-bottom: 1px solid #dee2e6;
+          " title="Increase by 1 beat">▲</button>
+          
+          <button class="beat-arrow beat-down" style="
+            flex: 1; border: none; background: #f8f9fa; cursor: pointer;
+            font-size: 10px; line-height: 1; color: #495057; border-radius: 0 0 2px 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.1s ease;
+          " title="Decrease by 1 beat">▼</button>
+        </div>
+      </div>
+      
+      <span class="beat-unit-label" style="font-size: 12px; color: #666; min-width: 100px;">
+        ${rhythmOptions[beatUnit]}
+      </span>
+      <span class="tempo-display" style="font-size: 11px; color: #666; font-weight: 600; margin-left: 8px;">
+        @ ${tempo} BPM
+      </span>
+      <span class="equals-time" style="font-size: 12px; color: #666; margin-left: 10px;">
+        = ${maxTimeFormatted}
+      </span>
+      
+      <!-- MOVED: Inline preset buttons after the time display -->
+      <div class="inline-presets" style="display: flex; gap: 3px; margin-left: 15px;">
+        <button class="preset-btn" data-beats="4" style="
+          background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 2px 6px;
+          font-size: 10px; cursor: pointer; transition: all 0.2s ease; font-weight: 600;
+          min-width: 24px; color: #495057;
+        ">4</button>
+        <button class="preset-btn" data-beats="8" style="
+          background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 2px 6px;
+          font-size: 10px; cursor: pointer; transition: all 0.2s ease; font-weight: 600;
+          min-width: 24px; color: #495057;
+        ">8</button>
+        <button class="preset-btn" data-beats="16" style="
+          background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 2px 6px;
+          font-size: 10px; cursor: pointer; transition: all 0.2s ease; font-weight: 600;
+          min-width: 24px; color: #495057;
+        ">16</button>
+        <button class="preset-btn" data-beats="32" style="
+          background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 2px 6px;
+          font-size: 10px; cursor: pointer; transition: all 0.2s ease; font-weight: 600;
+          min-width: 24px; color: #495057;
+        ">32</button>
+        <button class="preset-btn" data-beats="64" style="
+          background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 3px; padding: 2px 6px;
+          font-size: 10px; cursor: pointer; transition: all 0.2s ease; font-weight: 600;
+          min-width: 24px; color: #495057;
+        ">64</button>
+      </div>
     </div>
-  `;
+
+      
+      <!-- Time Input -->
+      <div class="time-input-group" style="display: none; align-items: center; gap: 8px;">
+        <div class="time-input-with-arrows" style="display: flex; align-items: center; position: relative;">
+          <input type="text" class="time-input" value="${maxTimeFormatted}" 
+                 placeholder="1:04" maxlength="5"
+                 style="width: 80px; padding: 6px 24px 6px 8px; border: 2px solid #6c757d; border-radius: 4px; 
+                        font-size: 14px; font-weight: 600; text-align: center; box-sizing: border-box;" />
+          
+          <!-- Time Up/Down Arrow Container -->
+          <div class="time-arrows" style="
+            position: absolute; right: 2px; top: 2px; bottom: 2px; width: 20px;
+            display: flex; flex-direction: column; background: white; border-radius: 0 2px 2px 0;
+          ">
+            <button class="time-arrow time-up" style="
+              flex: 1; border: none; background: #f8f9fa; cursor: pointer; 
+              font-size: 10px; line-height: 1; color: #495057; border-radius: 0 2px 0 0;
+              display: flex; align-items: center; justify-content: center;
+              transition: all 0.1s ease; border-bottom: 1px solid #dee2e6;
+            " title="Increase by 1 second">▲</button>
+            
+            <button class="time-arrow time-down" style="
+              flex: 1; border: none; background: #f8f9fa; cursor: pointer;
+              font-size: 10px; line-height: 1; color: #495057; border-radius: 0 0 2px 0;
+              display: flex; align-items: center; justify-content: center;
+              transition: all 0.1s ease;
+            " title="Decrease by 1 second">▼</button>
+          </div>
+        </div>
+        
+        <span class="time-format-hint" style="font-size: 12px; color: #666; min-width: 100px;">
+          MM:SS format
+        </span>
+        <span class="tempo-display-time" style="font-size: 11px; color: #666; font-weight: 600; margin-left: 8px;">
+          @ ${tempo} BPM
+        </span>
+        <span class="equals-beats" style="font-size: 12px; color: #666; margin-left: 10px;">
+          = ${maxBeats} beats
+        </span>
+      </div>
+    </div>
+      
+  <div class="beat-unit-container" style="flex: 1;">
+    <label>Beat Unit:</label>
+    <select class="beat-unit-select" style="width: 100%; padding: 4px; margin-left: 5px;">
+      ${rhythmOptions.map((option, index) => 
+        `<option value="${index}" ${index === beatUnit ? 'selected' : ''}>${option}</option>`
+      ).join('')}
+    </select>
+  </div>
+`;
+
+
+  
   wrapper.appendChild(settingsRow);
   
-  // Create 3 Life Span sliders
+  // Create 3 Life Span sliders (unchanged)
   for (let i = 1; i <= 3; i++) {
     const spanContainer = document.createElement('div');
     spanContainer.className = 'slider-wrapper';
@@ -835,45 +964,38 @@ function createLifeSpanControl(param, voiceIndex) {
     sliderWrapper.dataset.spanNumber = i;
     sliderWrapper.style.cssText = 'width: 100%; height: 40px; margin-top: 8px;';
     
-    // CREATE THE SLIDER
     const sliderDiv = document.createElement('div');
     sliderWrapper.appendChild(sliderDiv);
     
-
-
-   // Get Life Span data for this span (BEAT-BASED)
-let lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
-
-// SAFEGUARD: Create if missing
-if (!lifeSpanData) {
-  console.warn(`⚠️ Creating missing lifeSpan${i} for Voice ${voiceIndex + 1}`);
-  lifeSpanParam[`lifeSpan${i}`] = {
-    enterBeats: 0,
-    exitBeats: i === 1 ? 999999 : 0 // First entrance defaults to infinity
-  };
-  lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
-}
-
-// SAFEGUARD: Ensure beat properties exist
-if (typeof lifeSpanData.enterBeats === 'undefined') {
-  console.warn(`⚠️ enterBeats missing for lifeSpan${i}, initializing to 0`);
-  lifeSpanData.enterBeats = 0;
-}
-
-if (typeof lifeSpanData.exitBeats === 'undefined') {
-  console.warn(`⚠️ exitBeats missing for lifeSpan${i}, initializing...`);
-  lifeSpanData.exitBeats = i === 1 ? 999999 : 0;
-}
-
-const enterBeats = lifeSpanData.enterBeats;
-const exitBeats = lifeSpanData.exitBeats;
-
-console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beats`);
-
-
-
-
-
+    // Get Life Span data for this span (BEAT-BASED)
+    let lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
+    
+    // SAFEGUARD: Create if missing
+    if (!lifeSpanData) {
+      console.warn(`⚠️ Creating missing lifeSpan${i} for Voice ${voiceIndex + 1}`);
+      lifeSpanParam[`lifeSpan${i}`] = {
+        enterBeats: 0,
+        exitBeats: i === 1 ? 999999 : 0
+      };
+      lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
+    }
+    
+    // SAFEGUARD: Ensure beat properties exist
+    if (typeof lifeSpanData.enterBeats === 'undefined') {
+      console.warn(`⚠️ enterBeats missing for lifeSpan${i}, initializing to 0`);
+      lifeSpanData.enterBeats = 0;
+    }
+    
+    if (typeof lifeSpanData.exitBeats === 'undefined') {
+      console.warn(`⚠️ exitBeats missing for lifeSpan${i}, initializing...`);
+      lifeSpanData.exitBeats = i === 1 ? 999999 : 0;
+    }
+    
+    const enterBeats = lifeSpanData.enterBeats;
+    const exitBeats = lifeSpanData.exitBeats;
+    
+    console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beats`);
+    
     // Check if exit is infinity
     const isInfinity = (exitBeats >= 999999);
     
@@ -885,7 +1007,7 @@ console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beat
         start: [enterBeats, isInfinity ? maxBeats : Math.min(exitBeats, maxBeats)],
         connect: true,
         range: { min: 0, max: maxBeats },
-        step: 1, // 1 BEAT increments (no rounding needed!)
+        step: 1,
         tooltips: [true, true],
         format: formatter
       });
@@ -902,6 +1024,7 @@ console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beat
   
   return wrapper;
 }
+
 
 
 function createLifeSpanBehaviorContainer(param, voiceIndex) {
@@ -2459,9 +2582,7 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
 }
 
 
-
 function updateLifeSpanSlidersForTempoChange(voiceIndex) {
-  
   // Find the Life Span parameter container for this voice
   if (voiceIndex !== currentVoice) {
     return;
@@ -2482,7 +2603,59 @@ function updateLifeSpanSlidersForTempoChange(voiceIndex) {
   if (lifeSpanContainer) {
     rebuildLifeSpanSliders(lifeSpanContainer, voiceIndex);
   }
+  
+  // NEW: Also update the dual-mode displays
+  updateLifeSpanDisplaysForTempoChange(voiceIndex);
 }
+
+
+function updateLifeSpanDisplaysForTempoChange(voiceIndex) {
+  if (voiceIndex !== currentVoice) return;
+  
+  // Find Life Span containers
+  const parameterSection = document.getElementById('parameter-section');
+  const lifeSpanContainers = parameterSection.querySelectorAll('.dual-mode-container');
+  
+  lifeSpanContainers.forEach(container => {
+    const beatCountInput = container.querySelector('.beat-count-input');
+    const timeInput = container.querySelector('.time-input');
+    const equalsTime = container.querySelector('.equals-time');
+    const equalsBeats = container.querySelector('.equals-beats');
+    const tempoDisplays = container.querySelectorAll('.tempo-display, .tempo-display-time');
+    
+    if (!beatCountInput) return;
+    
+    // Get updated tempo
+    const newTempo = getCurrentTempoForVoice(voiceIndex);
+    const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+    const beatUnit = lifeSpan.beatUnit || 7;
+    
+    // Update tempo displays
+    tempoDisplays.forEach(display => {
+      display.textContent = `@ ${newTempo} BPM`;
+    });
+    
+    // Recalculate time from current beat count
+    const currentBeats = parseInt(beatCountInput.value) || 600;
+    const newTimeMs = beatsToMs(currentBeats, beatUnit, newTempo);
+    const newTimeFormatted = formatMsToMMSS(newTimeMs);
+    
+    // Update displays
+    if (equalsTime) equalsTime.textContent = `= ${newTimeFormatted}`;
+    if (timeInput) timeInput.value = newTimeFormatted;
+    
+    // If currently in time mode, also update the beats display
+    const currentTimeValue = timeInput ? timeInput.value : newTimeFormatted;
+    const parsedMs = parseMMSSToMs(currentTimeValue);
+    if (parsedMs && equalsBeats) {
+      const recalcBeats = msToBeats(parsedMs, beatUnit, newTempo);
+      equalsBeats.textContent = `= ${recalcBeats} beats`;
+    }
+    
+    console.log(`🔄 Updated Life Span displays for tempo change: ${newTempo} BPM`);
+  });
+}
+
 
 function createVoiceTabs() {
   const voiceTabs = document.getElementById('voice-tabs');
@@ -4927,7 +5100,7 @@ function selectBaseNote(voiceIndex, minNote, maxNote) {
     };
 }
 
-// Master Chord Compendium
+// MASTER CHORD COMPENDIUM
 const chordQualities = {
     major: [0, 4, 7],
     minor: [0, 3, 7],
@@ -8770,27 +8943,440 @@ actualContainers.forEach((container) => {
     maxTimeInput.title = "Enter time in MM:SS format (minimum: 0:05, maximum: 60:00)";
   }
 
-  // Connect Beat Unit dropdown
-  const beatUnitSelect = container.querySelector('.beat-unit-select');
-  if (beatUnitSelect) {
-    beatUnitSelect.onchange = function(e) {
-      const oldBeatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
-      const newBeatUnit = parseInt(e.target.value);
+// Connect time increment/decrement arrows (UPDATED FOR 1-SECOND INCREMENTS)
+const timeUpArrow = container.querySelector('.time-up');
+const timeDownArrow = container.querySelector('.time-down');
+
+if (timeUpArrow && timeDownArrow) {
+  // Up arrow - increase by 1 second
+  timeUpArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (lifeSpanTimeInput) {
+      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
+      const newTimeMs = Math.min(3600000, currentTime + 1000); // +1 second, max 60 minutes
+      const newTimeFormatted = formatMsToMMSS(newTimeMs);
       
-      console.log(`🎵 Changing beat unit: ${rhythmOptions[oldBeatUnit]} → ${rhythmOptions[newBeatUnit]}`);
+      lifeSpanTimeInput.value = newTimeFormatted;
       
-      // Update beat unit
-      voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = newBeatUnit;
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanTimeInput.dispatchEvent(inputEvent);
       
-      // Beat counts stay the same! Only the display changes.
-      // Example: 80 quarter notes = 80 eighth notes (but different durations)
-      
-      // Rebuild sliders to update tooltips with new time calculations
-      rebuildLifeSpanSliders(container, currentVoice);
-    };
-  }
+      console.log(`⬆️ Time increased: +1s → ${newTimeFormatted}`);
+    }
+  };
   
-  // Connect Repeat checkbox
+  // Down arrow - decrease by 1 second  
+  timeDownArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (lifeSpanTimeInput) {
+      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
+      const newTimeMs = Math.max(5000, currentTime - 1000); // -1 second, min 5 seconds
+      const newTimeFormatted = formatMsToMMSS(newTimeMs);
+      
+      lifeSpanTimeInput.value = newTimeFormatted;
+      
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanTimeInput.dispatchEvent(inputEvent);
+      
+      console.log(`⬇️ Time decreased: -1s → ${newTimeFormatted}`);
+    }
+  };
+  
+  // Hold-to-repeat with faster repeat rate for 1-second increments
+  let arrowInterval = null;
+  
+  const startRepeating = (direction) => {
+    if (arrowInterval) clearInterval(arrowInterval);
+    arrowInterval = setInterval(() => {
+      if (direction === 'up') {
+        timeUpArrow.click();
+      } else {
+        timeDownArrow.click();
+      }
+    }, 100); // Faster repeat: every 100ms
+  };
+  
+  const stopRepeating = () => {
+    if (arrowInterval) {
+      clearInterval(arrowInterval);
+      arrowInterval = null;
+    }
+  };
+  
+  // Hold-to-repeat events
+  timeUpArrow.onmousedown = () => startRepeating('up');
+  timeDownArrow.onmousedown = () => startRepeating('down');
+  
+  timeUpArrow.onmouseup = stopRepeating;
+  timeDownArrow.onmouseup = stopRepeating;
+  timeUpArrow.onmouseleave = stopRepeating;
+  timeDownArrow.onmouseleave = stopRepeating;
+  
+  // Update tooltips
+  timeUpArrow.title = "Increase by 1 second";
+  timeDownArrow.title = "Decrease by 1 second";
+  
+  console.log(`✅ Connected time arrows (1-second increments)`);
+}
+
+// Connect beat increment/decrement arrows
+const beatUpArrow = container.querySelector('.beat-up');
+const beatDownArrow = container.querySelector('.beat-down');
+
+if (beatUpArrow && beatDownArrow) {
+  // Up arrow - increase by 1 beat
+  beatUpArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (lifeSpanBeatCountInput) {
+      const currentBeats = parseInt(lifeSpanBeatCountInput.value) || 0;
+      const newBeats = Math.min(9999, currentBeats + 1);
+      
+      lifeSpanBeatCountInput.value = newBeats;
+      
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanBeatCountInput.dispatchEvent(inputEvent);
+      
+      console.log(`⬆️ Beats increased: +1 → ${newBeats}`);
+    }
+  };
+  
+  // Down arrow - decrease by 1 beat
+  beatDownArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (lifeSpanBeatCountInput) {
+      const currentBeats = parseInt(lifeSpanBeatCountInput.value) || 0;
+      const newBeats = Math.max(2, currentBeats - 1);
+      
+      lifeSpanBeatCountInput.value = newBeats;
+      
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanBeatCountInput.dispatchEvent(inputEvent);
+      
+      console.log(`⬇️ Beats decreased: -1 → ${newBeats}`);
+    }
+  };
+  
+  console.log(`✅ Connected beat increment/decrement arrows`);
+}
+
+ 
+  //Connect dual-mode toggle buttons 
+const modeButtons = container.querySelectorAll('.mode-btn');
+const beatInputGroup = container.querySelector('.beat-input-group');
+const timeInputGroup = container.querySelector('.time-input-group');
+const beatCountInput = container.querySelector('.beat-count-input');
+const timeInput = container.querySelector('.time-input');
+const equalsTime = container.querySelector('.equals-time');
+const equalsBeats = container.querySelector('.equals-beats');
+
+// Connect Beat Unit dropdown
+const beatUnitSelect = container.querySelector('.beat-unit-select');
+if (beatUnitSelect) {
+  beatUnitSelect.onchange = function(e) {
+    const oldBeatUnit = voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit;
+    const newBeatUnit = parseInt(e.target.value);
+    
+    console.log(`🎵 Changing beat unit: ${rhythmOptions[oldBeatUnit]} → ${rhythmOptions[newBeatUnit]}`);
+    
+    // Update beat unit
+    voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = newBeatUnit;
+    
+    // Rebuild sliders to update tooltips with new time calculations
+    rebuildLifeSpanSliders(container, currentVoice);
+  };
+}
+
+// NEW: Connect dual-mode toggle buttons (using unique variable names)
+const lifeSpanModeButtons = container.querySelectorAll('.mode-btn');
+const lifeSpanBeatInputGroup = container.querySelector('.beat-input-group');
+const lifeSpanTimeInputGroup = container.querySelector('.time-input-group');
+const lifeSpanBeatCountInput = container.querySelector('.beat-count-input');
+const lifeSpanTimeInput = container.querySelector('.time-input');
+const lifeSpanEqualsTime = container.querySelector('.equals-time');
+const lifeSpanEqualsBeats = container.querySelector('.equals-beats');
+
+console.log(`🔗 Found ${lifeSpanModeButtons.length} mode buttons for Voice ${currentVoice + 1}`);
+
+lifeSpanModeButtons.forEach((button, index) => {
+  console.log(`   Button ${index + 1}: ${button.dataset.mode} (active: ${button.classList.contains('active')})`);
+  
+  button.onclick = function(e) {
+    console.log(`🖱️ Mode button clicked: ${this.dataset.mode}`);
+    
+    const mode = this.dataset.mode;
+    
+    // Update button states
+    lifeSpanModeButtons.forEach(btn => {
+      if (btn.dataset.mode === mode) {
+        btn.classList.add('active');
+        btn.style.background = '#4a90e2';
+        btn.style.color = 'white';
+        console.log(`   ✅ Activated ${mode} mode`);
+      } else {
+        btn.classList.remove('active');
+        btn.style.background = '#e9ecef';
+        btn.style.color = '#495057';
+      }
+    });
+    
+    // Show/hide appropriate input
+    if (mode === 'beats') {
+      if (lifeSpanBeatInputGroup) lifeSpanBeatInputGroup.style.display = 'flex';
+      if (lifeSpanTimeInputGroup) lifeSpanTimeInputGroup.style.display = 'none';
+      console.log(`🎵 Voice ${currentVoice + 1}: Switched to BEAT mode`);
+    } else if (mode === 'time') {
+      if (lifeSpanBeatInputGroup) lifeSpanBeatInputGroup.style.display = 'none';
+      if (lifeSpanTimeInputGroup) lifeSpanTimeInputGroup.style.display = 'flex';
+      console.log(`⏰ Voice ${currentVoice + 1}: Switched to TIME mode`);
+    }
+  };
+});
+
+// Connect Beat Count Input
+if (lifeSpanBeatCountInput) {
+  lifeSpanBeatCountInput.oninput = function(e) {
+    const newBeats = parseInt(e.target.value);
+    
+    // Calculate minimum beats based on 5-second minimum
+    const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+    const beatUnit = lifeSpan.beatUnit;
+    const tempo = getCurrentTempoForVoice(currentVoice);
+    const minimumBeats = Math.max(2, msToBeats(5000, beatUnit, tempo)); // 5 seconds minimum
+    
+    // Remove any existing error message
+    const existingError = container.querySelector('.beat-error-message');
+    if (existingError) {
+      existingError.remove();
+    }
+    
+    if (isNaN(newBeats) || newBeats < minimumBeats || newBeats > 9999) {
+      e.target.style.borderColor = '#dc3545';
+      e.target.style.backgroundColor = '#fff8f8';
+      
+      // NEW: Show user-friendly error message
+      let errorMessage = '';
+      if (newBeats < minimumBeats) {
+        const actualSeconds = beatsToMs(newBeats, beatUnit, tempo) / 1000;
+        errorMessage = `⚠️ Too short: ${newBeats} beats = ${actualSeconds.toFixed(1)}s (minimum: 5 seconds = ${minimumBeats} beats)`;
+      } else if (newBeats > 9999) {
+        errorMessage = `⚠️ Too long: Maximum is 9999 beats`;
+      } else {
+        errorMessage = `⚠️ Invalid number`;
+      }
+      
+      // Create and show error message
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'beat-error-message';
+      errorDiv.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-size: 11px;
+        color: #721c24;
+        z-index: 1000;
+        margin-top: 4px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      `;
+      errorDiv.textContent = errorMessage;
+      
+      // Insert after the input container
+      const inputContainer = container.querySelector('.input-container');
+      if (inputContainer) {
+        inputContainer.style.position = 'relative';
+        inputContainer.appendChild(errorDiv);
+      }
+      
+      console.warn(`❌ ${errorMessage}`);
+      return;
+    }
+    
+    // Valid input - proceed with update
+    voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeBeats = newBeats;
+    
+    const equivalentMs = beatsToMs(newBeats, beatUnit, tempo);
+    voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = equivalentMs;
+    
+    // Update displays
+    const timeFormatted = formatMsToMMSS(equivalentMs);
+    if (lifeSpanEqualsTime) lifeSpanEqualsTime.textContent = `= ${timeFormatted}`;
+    if (lifeSpanTimeInput) lifeSpanTimeInput.value = timeFormatted;
+    
+    // Visual feedback - valid input
+    e.target.style.borderColor = '#28a745';
+    e.target.style.backgroundColor = '#f8fff8';
+    
+    console.log(`🎵 Beat mode: ${newBeats} beats = ${timeFormatted} @ ${tempo} BPM`);
+    
+    rebuildLifeSpanSliders(container, currentVoice);
+    
+    // Clear visual feedback
+    setTimeout(() => {
+      e.target.style.borderColor = '#4a90e2';
+      e.target.style.backgroundColor = '#f8f9fa';
+    }, 2000);
+  };
+  
+  lifeSpanBeatCountInput.onkeypress = function(e) {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  };
+}
+
+
+
+// Connect Time Input  
+if (lifeSpanTimeInput) {
+  lifeSpanTimeInput.oninput = function(e) {
+    const value = e.target.value; // This is "0:05"
+    const parsedMs = parseMMSSToMs(value); // This is 5000ms
+    
+    if (parsedMs !== null && parsedMs >= 5000 && parsedMs <= 3600000) {
+      const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+      const beatUnit = lifeSpan.beatUnit;
+      const tempo = getCurrentTempoForVoice(currentVoice);
+      
+      const equivalentBeats = msToBeats(parsedMs, beatUnit, tempo); // This is 12 beats
+      
+      // Update storage
+      voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeBeats = equivalentBeats;
+      voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = parsedMs;
+      
+      // FIXED: Show the original time value, not a recalculated one
+      if (lifeSpanEqualsTime) lifeSpanEqualsTime.textContent = `= ${value}`; // Shows "= 0:05"
+      
+      // Update beat input
+      if (lifeSpanBeatCountInput) lifeSpanBeatCountInput.value = equivalentBeats;
+      
+      // Update "= beats" display for when user switches back to beat mode
+      if (lifeSpanEqualsBeats) lifeSpanEqualsBeats.textContent = `= ${equivalentBeats} beats`;
+      
+      console.log(`⏰ Time mode: ${value} = ${equivalentBeats} beats @ ${tempo} BPM`);
+      
+      rebuildLifeSpanSliders(container, currentVoice);
+      
+      // Visual feedback
+      e.target.style.borderColor = '#28a745';
+      e.target.style.backgroundColor = '#f8fff8';
+      setTimeout(() => {
+        e.target.style.borderColor = '#6c757d';
+        e.target.style.backgroundColor = '';
+      }, 2000);
+      
+    } else {
+      // Invalid input feedback
+      e.target.style.borderColor = '#dc3545';
+      e.target.style.backgroundColor = '#fff8f8';
+      setTimeout(() => {
+        e.target.style.borderColor = '#6c757d';
+        e.target.style.backgroundColor = '';
+      }, 3000);
+    }
+  };
+
+
+  
+  lifeSpanTimeInput.onkeypress = function(e) {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  };
+}
+
+// Connect quick preset buttons
+const lifeSpanPresetButtons = container.querySelectorAll('.preset-btn');
+lifeSpanPresetButtons.forEach(button => {
+  button.onclick = function() {
+    const presetBeats = parseInt(this.dataset.beats);
+    
+    // Check if preset is valid before applying
+    const lifeSpan = voiceData[currentVoice].parameters['LIFE SPAN'];
+    const beatUnit = lifeSpan.beatUnit;
+    const tempo = getCurrentTempoForVoice(currentVoice);
+    const minimumBeats = Math.max(2, msToBeats(5000, beatUnit, tempo));
+    
+    if (presetBeats < minimumBeats) {
+      // Visual feedback for invalid preset
+      this.style.background = '#dc3545';
+      this.style.color = 'white';
+      this.style.borderColor = '#dc3545';
+      
+      // Show tooltip-style error
+      const errorTooltip = document.createElement('div');
+      errorTooltip.style.cssText = `
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #dc3545;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        white-space: nowrap;
+        z-index: 1000;
+        margin-bottom: 4px;
+      `;
+      errorTooltip.textContent = `Too short! Min: ${minimumBeats} beats`;
+      
+      this.style.position = 'relative';
+      this.appendChild(errorTooltip);
+      
+      // Remove error feedback after 3 seconds
+      setTimeout(() => {
+        this.style.background = '';
+        this.style.color = '';
+        this.style.borderColor = '';
+        if (errorTooltip.parentNode) {
+          errorTooltip.remove();
+        }
+      }, 3000);
+      
+      const actualSeconds = beatsToMs(presetBeats, beatUnit, tempo) / 1000;
+      console.warn(`❌ Preset ${presetBeats} beats too short: ${actualSeconds.toFixed(1)}s (minimum: 5s = ${minimumBeats} beats)`);
+      return;
+    }
+    
+    // Valid preset - apply it
+    if (lifeSpanBeatCountInput) {
+      lifeSpanBeatCountInput.value = presetBeats;
+      
+      // Trigger the input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanBeatCountInput.dispatchEvent(inputEvent);
+    }
+    
+    // Visual feedback - success
+    this.style.background = '#28a745';
+    this.style.color = 'white';
+    setTimeout(() => {
+      this.style.background = '';
+      this.style.color = '';
+    }, 500);
+    
+    console.log(`🎯 Quick preset: ${presetBeats} beats`);
+  };
+});
+
+
+// Connect Repeat checkbox
   const repeatCheckbox = behaviorContainer ? behaviorContainer.querySelector('.repeat-checkbox') : null;
   if (repeatCheckbox) {
     repeatCheckbox.onchange = function(e) {
@@ -10087,6 +10673,393 @@ class UndoManager {
 // Global undo manager instance
 let undoManager = null;
 
+// ===== VISUAL TIMELINE CLASS (Phase 1) =====
+class VisualTimeline {
+  constructor(voiceIndex) {
+    this.voiceIndex = voiceIndex;
+    this.container = null;
+    this.playhead = null;
+    this.isVisible = false;
+    this.updateInterval = null;
+    
+    this.maxBeats = 700; // Default
+    this.beatUnit = 7;   // Quarter notes
+    this.tempo = 120;    // Default tempo
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`🎬 VisualTimeline created for Voice ${voiceIndex + 1}`);
+    }
+  }
+  
+  render(container) {
+    if (!container) {
+      console.error('❌ VisualTimeline: No container provided');
+      return;
+    }
+    
+    this.container = container;
+    this.updateVoiceData();
+    
+    container.innerHTML = '';
+    container.className = 'visual-timeline-container';
+    
+    // Header
+    const header = this.createHeader();
+    container.appendChild(header);
+    
+    // Timeline track
+    const track = this.createTrack();
+    container.appendChild(track);
+    
+    // Time labels
+    const labels = this.createTimeLabels();
+    container.appendChild(labels);
+    
+    // Controls
+    const controls = this.createControls();
+    container.appendChild(controls);
+    
+    this.isVisible = true;
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`✅ VisualTimeline rendered for Voice ${this.voiceIndex + 1}`);
+      console.log(`   Max: ${this.maxBeats} beats @ ${this.tempo} BPM`);
+    }
+  }
+  
+  createHeader() {
+    const header = document.createElement('div');
+    header.className = 'visual-timeline-header';
+    
+    const title = document.createElement('div');
+    title.className = 'timeline-title';
+    title.innerHTML = `
+      <span>🎵</span>
+      <span>Visual Timeline - Voice ${this.voiceIndex + 1}</span>
+    `;
+    
+    const info = document.createElement('div');
+    info.className = 'timeline-info';
+    
+    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+    const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
+    
+    info.innerHTML = `
+      <span>Length: ${maxTimeFormatted}</span>
+      <span>Tempo: ${this.tempo} BPM</span>
+      <span>Beat: ${rhythmOptions[this.beatUnit]}</span>
+    `;
+    
+    header.appendChild(title);
+    header.appendChild(info);
+    
+    return header;
+  }
+  
+  createTrack() {
+    const track = document.createElement('div');
+    track.className = 'visual-timeline-track';
+    
+    // Grid background
+    const grid = document.createElement('div');
+    grid.className = 'timeline-grid';
+    track.appendChild(grid);
+    
+    // Regions container
+    const regionsContainer = document.createElement('div');
+    regionsContainer.className = 'timeline-regions';
+    
+    // Render life span regions
+    this.renderLifeSpanRegions(regionsContainer);
+    
+    track.appendChild(regionsContainer);
+    
+    // Playhead
+    const playhead = document.createElement('div');
+    playhead.className = 'timeline-playhead';
+    playhead.style.left = '0%';
+    track.appendChild(playhead);
+    
+    this.playhead = playhead;
+    
+    return track;
+  }
+  
+  renderLifeSpanRegions(container) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) return;
+    
+    // Process each life span
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpan[`lifeSpan${i}`];
+      if (!span || span.exitBeats <= 0) continue;
+      
+      const enterBeats = span.enterBeats || 0;
+      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : span.exitBeats;
+      
+      if (enterBeats >= exitBeats) continue;
+      
+      // Calculate percentages
+      const leftPercent = (enterBeats / this.maxBeats) * 100;
+      const widthPercent = ((exitBeats - enterBeats) / this.maxBeats) * 100;
+      
+      // Create region element
+      const region = document.createElement('div');
+      region.className = 'timeline-region playing';
+      region.style.left = `${leftPercent}%`;
+      region.style.width = `${widthPercent}%`;
+      region.textContent = `Entrance ${i}`;
+      region.title = `Entrance ${i}: Beat ${enterBeats} - ${exitBeats >= 999999 ? '∞' : exitBeats}`;
+      
+      container.appendChild(region);
+      
+      if (DEBUG.TIMELINE) {
+        console.log(`   Region ${i}: ${leftPercent.toFixed(1)}% - ${(leftPercent + widthPercent).toFixed(1)}%`);
+      }
+    }
+    
+    // Add muted regions (gaps between playing regions)
+    this.renderMutedRegions(container);
+  }
+  
+  renderMutedRegions(container) {
+    // Simple implementation: everything not covered by playing regions is muted
+    const playingRegions = Array.from(container.querySelectorAll('.timeline-region.playing'));
+    
+    if (playingRegions.length === 0) {
+      // Entire timeline is muted
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted';
+      mutedRegion.style.left = '0%';
+      mutedRegion.style.width = '100%';
+      mutedRegion.textContent = 'MUTED';
+      container.appendChild(mutedRegion);
+      return;
+    }
+    
+    // Sort playing regions by position
+    const sortedRegions = playingRegions.map(region => ({
+      left: parseFloat(region.style.left),
+      right: parseFloat(region.style.left) + parseFloat(region.style.width)
+    })).sort((a, b) => a.left - b.left);
+    
+    // Add muted region at start if needed
+    if (sortedRegions[0].left > 0) {
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted';
+      mutedRegion.style.left = '0%';
+      mutedRegion.style.width = `${sortedRegions[0].left}%`;
+      mutedRegion.textContent = 'MUTED';
+      container.appendChild(mutedRegion);
+    }
+    
+    // Add muted regions between playing regions
+    for (let i = 0; i < sortedRegions.length - 1; i++) {
+      const currentEnd = sortedRegions[i].right;
+      const nextStart = sortedRegions[i + 1].left;
+      
+      if (nextStart > currentEnd) {
+        const mutedRegion = document.createElement('div');
+        mutedRegion.className = 'timeline-region muted';
+        mutedRegion.style.left = `${currentEnd}%`;
+        mutedRegion.style.width = `${nextStart - currentEnd}%`;
+        mutedRegion.textContent = 'MUTED';
+        container.appendChild(mutedRegion);
+      }
+    }
+    
+    // Add muted region at end if needed
+    const lastRegion = sortedRegions[sortedRegions.length - 1];
+    if (lastRegion.right < 100) {
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted';
+      mutedRegion.style.left = `${lastRegion.right}%`;
+      mutedRegion.style.width = `${100 - lastRegion.right}%`;
+      mutedRegion.textContent = 'MUTED';
+      container.appendChild(mutedRegion);
+    }
+  }
+  
+  createTimeLabels() {
+    const labels = document.createElement('div');
+    labels.className = 'timeline-time-labels';
+    
+    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+    const intervals = 5; // Show 6 time labels (0%, 20%, 40%, 60%, 80%, 100%)
+    
+    for (let i = 0; i <= intervals; i++) {
+      const percent = (i / intervals) * 100;
+      const timeMs = (percent / 100) * maxTimeMs;
+      const timeFormatted = formatMsToMMSS(timeMs);
+      const beats = Math.round((percent / 100) * this.maxBeats);
+      
+      const label = document.createElement('span');
+      label.textContent = `${timeFormatted} (${beats})`;
+      label.title = `${timeFormatted} - Beat ${beats}`;
+      labels.appendChild(label);
+    }
+    
+    return labels;
+  }
+  
+  createControls() {
+    const controls = document.createElement('div');
+    controls.className = 'timeline-controls';
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'timeline-control-btn';
+    refreshBtn.textContent = '🔄 Refresh';
+    refreshBtn.title = 'Refresh timeline with current Life Span settings';
+    refreshBtn.onclick = () => this.refresh();
+    
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'timeline-control-btn';
+    settingsBtn.textContent = '⚙️ Settings';
+    settingsBtn.title = 'Open Life Span settings';
+    settingsBtn.onclick = () => this.openLifeSpanSettings();
+    
+    controls.appendChild(refreshBtn);
+    controls.appendChild(settingsBtn);
+    
+    return controls;
+  }
+  
+  updateVoiceData() {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) {
+      console.warn(`Voice ${this.voiceIndex + 1}: No LIFE SPAN parameter`);
+      return;
+    }
+    
+    this.maxBeats = lifeSpan.maxTimeBeats || 700;
+    this.beatUnit = lifeSpan.beatUnit || 7;
+    this.tempo = getCurrentTempoForVoice(this.voiceIndex);
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`📊 Updated timeline data: ${this.maxBeats} beats @ ${this.tempo} BPM`);
+    }
+  }
+  
+  updatePlayhead() {
+    if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
+      return;
+    }
+    
+    const elapsedMs = masterClock.getElapsedTime();
+    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+    
+    let percentage = (elapsedMs / maxTimeMs) * 100;
+    
+    // Handle repeat cycling
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (lifeSpan && lifeSpan.repeat && percentage > 100) {
+      percentage = percentage % 100;
+    }
+    
+    this.playhead.style.left = `${Math.min(percentage, 100)}%`;
+    
+    // Update playhead tooltip with current time
+    const currentTimeFormatted = formatMsToMMSS(elapsedMs);
+    const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
+    this.playhead.title = `${currentTimeFormatted} (Beat ${currentBeat})`;
+  }
+  
+  refresh() {
+    if (!this.container) return;
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`🔄 Refreshing Visual Timeline for Voice ${this.voiceIndex + 1}`);
+    }
+    
+    this.render(this.container);
+  }
+  
+  openLifeSpanSettings() {
+    // Scroll to Life Span parameter and expand it
+    const parameterSection = document.getElementById('parameter-section');
+    const lifeSpanRollup = Array.from(parameterSection.querySelectorAll('.parameter-rollup'))
+      .find(rollup => {
+        const title = rollup.querySelector('.parameter-rollup-title');
+        return title && title.textContent.trim() === 'LIFE SPAN';
+      });
+    
+    if (lifeSpanRollup) {
+      // Expand if collapsed
+      if (lifeSpanRollup.classList.contains('collapsed')) {
+        toggleParameterRollup('LIFE SPAN');
+      }
+      
+      // Scroll into view
+      lifeSpanRollup.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      
+      // Brief highlight effect
+      lifeSpanRollup.style.boxShadow = '0 0 15px rgba(74, 144, 226, 0.5)';
+      setTimeout(() => {
+        lifeSpanRollup.style.boxShadow = '';
+      }, 2000);
+      
+    } else {
+      console.warn('⚠️ Life Span parameter rollup not found');
+    }
+  }
+  
+  startUpdating() {
+    if (this.updateInterval) return;
+    
+    this.updateInterval = setInterval(() => {
+      this.updatePlayhead();
+    }, 50); // 20 FPS
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`▶️ Started timeline updates for Voice ${this.voiceIndex + 1}`);
+    }
+  }
+  
+  stopUpdating() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`⏹️ Stopped timeline updates for Voice ${this.voiceIndex + 1}`);
+    }
+  }
+  
+  destroy() {
+    this.stopUpdating();
+    
+    if (this.container) {
+      this.container.innerHTML = '';
+      this.container = null;
+    }
+    
+    this.playhead = null;
+    this.isVisible = false;
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`🗑️ VisualTimeline destroyed for Voice ${this.voiceIndex + 1}`);
+    }
+  }
+  
+  updateForVoice(newVoiceIndex) {
+    this.voiceIndex = newVoiceIndex;
+    
+    if (this.isVisible && this.container) {
+      this.refresh();
+    }
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`🔄 VisualTimeline updated for Voice ${newVoiceIndex + 1}`);
+    }
+  }
+}
+
+// Global visual timeline instance
+let visualTimeline = null;
 
 
 
