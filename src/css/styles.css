@@ -2085,13 +2085,15 @@ FOOTER
 /* ===== VISUAL TIMELINE COMPONENT (Phase 1) ===== */
 
 .visual-timeline-container {
-  width: 100%;
-  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  margin-bottom: 8px;
   border: 1px solid #dee2e6;
   border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: visible !important; /* CHANGED: Allow overflow for floating elements */
+  position: relative !important;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .visual-timeline-header {
@@ -2123,12 +2125,15 @@ FOOTER
 .visual-timeline-track {
   position: relative;
   height: 60px;
+  margin: 30px 0 15px 15px; /* FIXED: No right margin */
   background: #fff;
-  border: 1px solid #ced4da;
   border-radius: 4px;
-  margin-bottom: 10px;
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  overflow: visible !important;
+  position: relative !important;
 }
+
 
 .timeline-grid {
   position: absolute;
@@ -2155,8 +2160,8 @@ FOOTER
 
 .timeline-region {
   position: absolute;
-  top: 5px;
-  bottom: 5px;
+  top:15px;
+  bottom: 15px;
   border-radius: 3px;
   display: flex;
   align-items: center;
@@ -2170,7 +2175,11 @@ FOOTER
 .timeline-region.playing {
   background: linear-gradient(45deg, #28a745, #34ce57);
   color: white;
-  border: 2px solid #1e7e34;
+  border: none !important;
+  border-radius: 6px !important; /* Ensure rounded corners */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; /* Slightly stronger shadow */
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .timeline-region.muted {
@@ -2187,42 +2196,36 @@ FOOTER
 
 .timeline-playhead {
   position: absolute;
-  top: 0;
+  top: -15px; /* EXTENDED FURTHER UP to ensure caret space */
   bottom: 0;
   width: 3px;
   background: #dc3545;
   z-index: 100;
   transition: left 0.05s linear;
   pointer-events: none;
-}
-
-.timeline-playhead::before {
-  content: '';
-  position: absolute;
-  top: -8px;
-  left: -6px;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 10px solid #dc3545;
+  height: auto; /* Let it calculate its own height */
 }
 
 .timeline-time-labels {
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
+  padding: 0 0 0 15px; /* FIXED: No right padding */
+  margin-bottom: 8px;
   font-size: 11px;
   color: #666;
   font-family: 'Courier New', monospace;
 }
 
+
+
 .timeline-controls {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-top: 10px;
+  padding: 0 0 15px 15px; /* FIXED: No right padding */
 }
+
+
 
 .timeline-control-btn {
   background: #6c757d;
@@ -2259,6 +2262,7 @@ FOOTER
     align-items: flex-end;
   }
 }
+
 
 
 /* ===== DUAL-MODE LIFE SPAN INPUT ===== */
@@ -2397,4 +2401,163 @@ FOOTER
   background: #dee2e6 !important;
   transform: scale(0.9);
 }
+
+/* ===== VISUAL TIMELINE (STYLED LIKE PARAMETER ROLLUPS) ===== */
+
+.visual-timeline-container {
+  margin-bottom: 8px;
+  margin-right: 15px; /* ADD: Right margin like parameter rollups */
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+
+.visual-timeline-header {
+  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  padding: 12px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.timeline-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-info {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+/* Timeline track - NO BORDERS, uses padding like parameter content */
+.visual-timeline-track {
+  position: relative;
+  height: 60px;
+  margin: 15px 15px 15px 15px; /* Consistent margin on all sides */
+  background: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+
+
+.timeline-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    #e9ecef 0px,
+    #e9ecef 1px,
+    transparent 1px,
+    transparent 40px
+  );
+}
+
+.timeline-regions {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Regions - NO BORDERS, use background only */
+.timeline-region {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 6px; /* More rounded for better look */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  /* Add subtle margin on all sides */
+  margin: 0 1% 0 0; /* 1% right margin */
+}
+
+.timeline-region.playing {
+  background: linear-gradient(45deg, #28a745, #34ce57);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow instead of border */
+}
+
+.timeline-region.muted {
+  background: repeating-linear-gradient(
+    45deg,
+    #6c757d,
+    #6c757d 6px,
+    #495057 6px,
+    #495057 12px
+  );
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow instead of border */
+}
+
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #dc3545;
+  z-index: 100;
+  transition: left 0.05s linear;
+  pointer-events: none;
+}
+
+.timeline-playhead::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #dc3545;
+}
+
+.timeline-time-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 15px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #666;
+  font-family: 'Courier New', monospace;
+}
+
+.timeline-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 15px 15px 15px;
+}
+
+.timeline-control-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
 

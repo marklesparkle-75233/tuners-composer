@@ -417,6 +417,11 @@ class MasterClock {
       updateTimelinePlayhead();
     }
 
+        // NEW: Update visual timeline playhead if visible
+    if (visualTimeline && visualTimeline.isVisible) {
+      visualTimeline.updatePlayhead();
+    }
+
     this.lastUpdateTime = now;
   }
   
@@ -1026,7 +1031,6 @@ settingsRow.innerHTML = `
 }
 
 
-
 function createLifeSpanBehaviorContainer(param, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'behavior-container life-span-behavior';
@@ -1063,15 +1067,15 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   controlsWrapper.appendChild(repeatContainer);
   wrapper.appendChild(controlsWrapper);
   
-  // NEW: Add Timeline View button
+  // NEW: Add Visual Timeline button
   const timelineButton = document.createElement('button');
-  timelineButton.className = 'timeline-view-button';
-  timelineButton.textContent = 'TIMELINE VIEW';
+  timelineButton.className = 'visual-timeline-button';
+  timelineButton.textContent = '🎬 VISUAL TIMELINE';
   timelineButton.style.cssText = `
-    width: 50%;
+    width: 80%;
     margin-top: 15px;
     padding: 10px 20px;
-    background: linear-gradient(to bottom, #4a90e2, #357abd);
+    background: linear-gradient(to bottom, #28a745, #1e7e34);
     color: white;
     border: none;
     border-radius: 6px;
@@ -1082,34 +1086,32 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   `;
   
   timelineButton.onmouseover = function() {
-    this.style.background = 'linear-gradient(to bottom, #357abd, #2868a8)';
+    this.style.background = 'linear-gradient(to bottom, #218838, #1c7430)';
     this.style.transform = 'translateY(-1px)';
     this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
   };
   
   timelineButton.onmouseout = function() {
-    this.style.background = 'linear-gradient(to bottom, #4a90e2, #357abd)';
+    this.style.background = 'linear-gradient(to bottom, #28a745, #1e7e34)';
     this.style.transform = 'translateY(0)';
     this.style.boxShadow = 'none';
   };
   
-timelineButton.onclick = function() {
-  console.log('🔘 Timeline View button clicked');
-  console.log('   Function exists:', typeof showTimelineView);
-  
-  try {
-    showTimelineView();
-  } catch (error) {
-    console.error('❌ Error in button onclick handler:', error);
-    alert(`Error: ${error.message}\n\nCheck console for details.`);
-  }
-};
-
+  timelineButton.onclick = function() {
+    console.log('🎬 Visual Timeline button clicked');
+    try {
+      showVisualTimeline();
+    } catch (error) {
+      console.error('❌ Error in visual timeline button:', error);
+      alert(`Error: ${error.message}\n\nCheck console for details.`);
+    }
+  };
   
   wrapper.appendChild(timelineButton);
   
   return wrapper;
 }
+
 
 // ===== TIMELINE VIEW HELPER FUNCTIONS =====
 
@@ -2679,6 +2681,9 @@ function selectVoice(voiceIndex) {
     currentVoice = voiceIndex;
     updateVoiceTabs();
     renderParameters();
+    
+    // NEW: Update visual timeline for new voice
+    updateVisualTimelineForVoiceChange(voiceIndex);
     
     setTimeout(() => {
       connectAllSliders();
@@ -8944,79 +8949,98 @@ actualContainers.forEach((container) => {
   }
 
 // Connect time increment/decrement arrows (UPDATED FOR 1-SECOND INCREMENTS)
+// Connect time increment/decrement arrows (FIXED HOLD-TO-REPEAT)
 const timeUpArrow = container.querySelector('.time-up');
 const timeDownArrow = container.querySelector('.time-down');
 
 if (timeUpArrow && timeDownArrow) {
-  // Up arrow - increase by 1 second
+  // Define the increment/decrement functions
+  const incrementTime = () => {
+    if (lifeSpanTimeInput) {
+      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
+      const newTimeMs = Math.min(3600000, currentTime + 1000); // +1 second
+      const newTimeFormatted = formatMsToMMSS(newTimeMs);
+      
+      lifeSpanTimeInput.value = newTimeFormatted;
+      
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanTimeInput.dispatchEvent(inputEvent);
+    }
+  };
+  
+  const decrementTime = () => {
+    if (lifeSpanTimeInput) {
+      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
+      const newTimeMs = Math.max(5000, currentTime - 1000); // -1 second
+      const newTimeFormatted = formatMsToMMSS(newTimeMs);
+      
+      lifeSpanTimeInput.value = newTimeFormatted;
+      
+      // Trigger input event to update everything
+      const inputEvent = new Event('input', { bubbles: true });
+      lifeSpanTimeInput.dispatchEvent(inputEvent);
+    }
+  };
+  
+  // Single click handlers
   timeUpArrow.onclick = function(e) {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (lifeSpanTimeInput) {
-      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
-      const newTimeMs = Math.min(3600000, currentTime + 1000); // +1 second, max 60 minutes
-      const newTimeFormatted = formatMsToMMSS(newTimeMs);
-      
-      lifeSpanTimeInput.value = newTimeFormatted;
-      
-      // Trigger input event to update everything
-      const inputEvent = new Event('input', { bubbles: true });
-      lifeSpanTimeInput.dispatchEvent(inputEvent);
-      
-      console.log(`⬆️ Time increased: +1s → ${newTimeFormatted}`);
-    }
+    incrementTime();
+    console.log(`⬆️ Time increased by 1 second`);
   };
   
-  // Down arrow - decrease by 1 second  
   timeDownArrow.onclick = function(e) {
     e.preventDefault();
     e.stopPropagation();
+    decrementTime();
+    console.log(`⬇️ Time decreased by 1 second`);
+  };
+  
+  // Hold-to-repeat functionality
+  let timeArrowInterval = null;
+  
+  const startTimeRepeating = (direction) => {
+    if (timeArrowInterval) clearInterval(timeArrowInterval);
     
-    if (lifeSpanTimeInput) {
-      const currentTime = parseMMSSToMs(lifeSpanTimeInput.value) || 0;
-      const newTimeMs = Math.max(5000, currentTime - 1000); // -1 second, min 5 seconds
-      const newTimeFormatted = formatMsToMMSS(newTimeMs);
-      
-      lifeSpanTimeInput.value = newTimeFormatted;
-      
-      // Trigger input event to update everything
-      const inputEvent = new Event('input', { bubbles: true });
-      lifeSpanTimeInput.dispatchEvent(inputEvent);
-      
-      console.log(`⬇️ Time decreased: -1s → ${newTimeFormatted}`);
-    }
+    // Initial delay, then repeat faster
+    setTimeout(() => {
+      timeArrowInterval = setInterval(() => {
+        if (direction === 'up') {
+          incrementTime();
+        } else {
+          decrementTime();
+        }
+      }, 100); // Fast repeat every 100ms
+    }, 300); // Initial 300ms delay before repeating starts
   };
   
-  // Hold-to-repeat with faster repeat rate for 1-second increments
-  let arrowInterval = null;
-  
-  const startRepeating = (direction) => {
-    if (arrowInterval) clearInterval(arrowInterval);
-    arrowInterval = setInterval(() => {
-      if (direction === 'up') {
-        timeUpArrow.click();
-      } else {
-        timeDownArrow.click();
-      }
-    }, 100); // Faster repeat: every 100ms
-  };
-  
-  const stopRepeating = () => {
-    if (arrowInterval) {
-      clearInterval(arrowInterval);
-      arrowInterval = null;
+  const stopTimeRepeating = () => {
+    if (timeArrowInterval) {
+      clearInterval(timeArrowInterval);
+      timeArrowInterval = null;
     }
   };
   
   // Hold-to-repeat events
-  timeUpArrow.onmousedown = () => startRepeating('up');
-  timeDownArrow.onmousedown = () => startRepeating('down');
+  timeUpArrow.onmousedown = (e) => {
+    e.preventDefault();
+    startTimeRepeating('up');
+  };
+  timeDownArrow.onmousedown = (e) => {
+    e.preventDefault();
+    startTimeRepeating('down');
+  };
   
-  timeUpArrow.onmouseup = stopRepeating;
-  timeDownArrow.onmouseup = stopRepeating;
-  timeUpArrow.onmouseleave = stopRepeating;
-  timeDownArrow.onmouseleave = stopRepeating;
+  timeUpArrow.onmouseup = stopTimeRepeating;
+  timeDownArrow.onmouseup = stopTimeRepeating;
+  timeUpArrow.onmouseleave = stopTimeRepeating;
+  timeDownArrow.onmouseleave = stopTimeRepeating;
+  
+  console.log(`✅ Connected time arrows with hold-to-repeat`);
+
+
   
   // Update tooltips
   timeUpArrow.title = "Increase by 1 second";
@@ -9025,16 +9049,13 @@ if (timeUpArrow && timeDownArrow) {
   console.log(`✅ Connected time arrows (1-second increments)`);
 }
 
-// Connect beat increment/decrement arrows
+// Connect beat increment/decrement arrows (FIXED HOLD-TO-REPEAT)
 const beatUpArrow = container.querySelector('.beat-up');
 const beatDownArrow = container.querySelector('.beat-down');
 
 if (beatUpArrow && beatDownArrow) {
-  // Up arrow - increase by 1 beat
-  beatUpArrow.onclick = function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
+  // Define the increment/decrement functions
+  const incrementBeat = () => {
     if (lifeSpanBeatCountInput) {
       const currentBeats = parseInt(lifeSpanBeatCountInput.value) || 0;
       const newBeats = Math.min(9999, currentBeats + 1);
@@ -9044,16 +9065,10 @@ if (beatUpArrow && beatDownArrow) {
       // Trigger input event to update everything
       const inputEvent = new Event('input', { bubbles: true });
       lifeSpanBeatCountInput.dispatchEvent(inputEvent);
-      
-      console.log(`⬆️ Beats increased: +1 → ${newBeats}`);
     }
   };
   
-  // Down arrow - decrease by 1 beat
-  beatDownArrow.onclick = function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
+  const decrementBeat = () => {
     if (lifeSpanBeatCountInput) {
       const currentBeats = parseInt(lifeSpanBeatCountInput.value) || 0;
       const newBeats = Math.max(2, currentBeats - 1);
@@ -9063,13 +9078,67 @@ if (beatUpArrow && beatDownArrow) {
       // Trigger input event to update everything
       const inputEvent = new Event('input', { bubbles: true });
       lifeSpanBeatCountInput.dispatchEvent(inputEvent);
-      
-      console.log(`⬇️ Beats decreased: -1 → ${newBeats}`);
     }
   };
   
-  console.log(`✅ Connected beat increment/decrement arrows`);
+  // Single click handlers
+  beatUpArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    incrementBeat();
+    console.log(`⬆️ Beat increased by 1`);
+  };
+  
+  beatDownArrow.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    decrementBeat();
+    console.log(`⬇️ Beat decreased by 1`);
+  };
+  
+  // Hold-to-repeat functionality
+  let beatArrowInterval = null;
+  
+  const startBeatRepeating = (direction) => {
+    if (beatArrowInterval) clearInterval(beatArrowInterval);
+    
+    // Initial delay, then repeat faster
+    setTimeout(() => {
+      beatArrowInterval = setInterval(() => {
+        if (direction === 'up') {
+          incrementBeat();
+        } else {
+          decrementBeat();
+        }
+      }, 100); // Fast repeat every 100ms
+    }, 300); // Initial 300ms delay before repeating starts
+  };
+  
+  const stopBeatRepeating = () => {
+    if (beatArrowInterval) {
+      clearInterval(beatArrowInterval);
+      beatArrowInterval = null;
+    }
+  };
+  
+  // Hold-to-repeat events
+  beatUpArrow.onmousedown = (e) => {
+    e.preventDefault();
+    startBeatRepeating('up');
+  };
+  beatDownArrow.onmousedown = (e) => {
+    e.preventDefault();
+    startBeatRepeating('down');
+  };
+  
+  beatUpArrow.onmouseup = stopBeatRepeating;
+  beatDownArrow.onmouseup = stopBeatRepeating;
+  beatUpArrow.onmouseleave = stopBeatRepeating;
+  beatDownArrow.onmouseleave = stopBeatRepeating;
+  
+  console.log(`✅ Connected beat arrows with hold-to-repeat`);
 }
+
 
  
   //Connect dual-mode toggle buttons 
@@ -10672,6 +10741,7 @@ class UndoManager {
 
 // Global undo manager instance
 let undoManager = null;
+// ===== END UNDO/REDO MANAGER CLASS =====
 
 // ===== VISUAL TIMELINE CLASS (Phase 1) =====
 class VisualTimeline {
@@ -10756,173 +10826,273 @@ class VisualTimeline {
     return header;
   }
   
-  createTrack() {
-    const track = document.createElement('div');
-    track.className = 'visual-timeline-track';
-    
-    // Grid background
-    const grid = document.createElement('div');
-    grid.className = 'timeline-grid';
-    track.appendChild(grid);
-    
-    // Regions container
-    const regionsContainer = document.createElement('div');
-    regionsContainer.className = 'timeline-regions';
-    
-    // Render life span regions
-    this.renderLifeSpanRegions(regionsContainer);
-    
-    track.appendChild(regionsContainer);
-    
-    // Playhead
-    const playhead = document.createElement('div');
-    playhead.className = 'timeline-playhead';
-    playhead.style.left = '0%';
-    track.appendChild(playhead);
-    
-    this.playhead = playhead;
-    
-    return track;
-  }
+createTrack() {
+  const track = document.createElement('div');
+  track.className = 'visual-timeline-track';
   
-  renderLifeSpanRegions(container) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan) return;
-    
-    // Process each life span
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpan[`lifeSpan${i}`];
-      if (!span || span.exitBeats <= 0) continue;
-      
-      const enterBeats = span.enterBeats || 0;
-      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : span.exitBeats;
-      
-      if (enterBeats >= exitBeats) continue;
-      
-      // Calculate percentages
-      const leftPercent = (enterBeats / this.maxBeats) * 100;
-      const widthPercent = ((exitBeats - enterBeats) / this.maxBeats) * 100;
-      
-      // Create region element
-      const region = document.createElement('div');
-      region.className = 'timeline-region playing';
-      region.style.left = `${leftPercent}%`;
-      region.style.width = `${widthPercent}%`;
-      region.textContent = `Entrance ${i}`;
-      region.title = `Entrance ${i}: Beat ${enterBeats} - ${exitBeats >= 999999 ? '∞' : exitBeats}`;
-      
-      container.appendChild(region);
-      
-      if (DEBUG.TIMELINE) {
-        console.log(`   Region ${i}: ${leftPercent.toFixed(1)}% - ${(leftPercent + widthPercent).toFixed(1)}%`);
-      }
-    }
-    
-    // Add muted regions (gaps between playing regions)
-    this.renderMutedRegions(container);
-  }
+  // Grid background
+  const grid = document.createElement('div');
+  grid.className = 'timeline-grid';
+  track.appendChild(grid);
   
-  renderMutedRegions(container) {
-    // Simple implementation: everything not covered by playing regions is muted
-    const playingRegions = Array.from(container.querySelectorAll('.timeline-region.playing'));
+  // Regions container
+  const regionsContainer = document.createElement('div');
+  regionsContainer.className = 'timeline-regions';
+  
+  // Render life span regions
+  this.renderLifeSpanRegions(regionsContainer);
+  
+  track.appendChild(regionsContainer);
+  
+  // FIXED: Declare playhead BEFORE using it
+  const playhead = document.createElement('div');
+  playhead.className = 'timeline-playhead-container';
+  playhead.style.cssText = `
+    position: absolute;
+    top: 15px;
+    left: 0%;
+    width: 3px;
+    height: calc(100% - 15px);
+    background: #dc3545;
+    transition: left 0.05s linear;
+    pointer-events: none;
+    z-index: 100;
+  `;
+
+  // NOW we can reference playhead since it's declared above
+  const playheadArrow = document.createElement('div');
+  playheadArrow.style.cssText = `
+    position: absolute;
+    top: -15px;
+    left: -7px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid #dc3545;
+    z-index: 9999;
+  `;
+
+  console.log('🔺 Creating proper CSS triangle caret');
+  playhead.appendChild(playheadArrow);
+
+  const playheadTooltip = document.createElement('div');
+  playheadTooltip.textContent = '0:00';
+  playheadTooltip.style.cssText = `
+    position: absolute;
+    top: 10px;
+    left: 8px;
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  `;
+  playhead.appendChild(playheadTooltip);
+
+  track.appendChild(playhead);
+
+  // Store references
+  this.playhead = playhead;
+  this.playheadTooltip = playheadTooltip;
+  
+  return track;
+}
+
+
+
+  
+renderLifeSpanRegions(container) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan) return;
+  
+  console.log(`🔍 CONSERVATIVE: Rendering regions for Voice ${this.voiceIndex + 1}`);
+  console.log(`   Timeline maxBeats: ${this.maxBeats}`);
+  
+  // Collect all valid spans first
+  const validSpans = [];
+  
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpan[`lifeSpan${i}`];
+    if (!span || span.exitBeats <= 0) continue;
     
-    if (playingRegions.length === 0) {
-      // Entire timeline is muted
-      const mutedRegion = document.createElement('div');
-      mutedRegion.className = 'timeline-region muted';
-      mutedRegion.style.left = '0%';
-      mutedRegion.style.width = '100%';
-      mutedRegion.textContent = 'MUTED';
-      container.appendChild(mutedRegion);
-      return;
-    }
+    const enterBeats = Math.max(0, span.enterBeats || 0);
+    const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : Math.min(span.exitBeats, this.maxBeats);
     
-    // Sort playing regions by position
-    const sortedRegions = playingRegions.map(region => ({
-      left: parseFloat(region.style.left),
-      right: parseFloat(region.style.left) + parseFloat(region.style.width)
-    })).sort((a, b) => a.left - b.left);
-    
-    // Add muted region at start if needed
-    if (sortedRegions[0].left > 0) {
-      const mutedRegion = document.createElement('div');
-      mutedRegion.className = 'timeline-region muted';
-      mutedRegion.style.left = '0%';
-      mutedRegion.style.width = `${sortedRegions[0].left}%`;
-      mutedRegion.textContent = 'MUTED';
-      container.appendChild(mutedRegion);
-    }
-    
-    // Add muted regions between playing regions
-    for (let i = 0; i < sortedRegions.length - 1; i++) {
-      const currentEnd = sortedRegions[i].right;
-      const nextStart = sortedRegions[i + 1].left;
-      
-      if (nextStart > currentEnd) {
-        const mutedRegion = document.createElement('div');
-        mutedRegion.className = 'timeline-region muted';
-        mutedRegion.style.left = `${currentEnd}%`;
-        mutedRegion.style.width = `${nextStart - currentEnd}%`;
-        mutedRegion.textContent = 'MUTED';
-        container.appendChild(mutedRegion);
-      }
-    }
-    
-    // Add muted region at end if needed
-    const lastRegion = sortedRegions[sortedRegions.length - 1];
-    if (lastRegion.right < 100) {
-      const mutedRegion = document.createElement('div');
-      mutedRegion.className = 'timeline-region muted';
-      mutedRegion.style.left = `${lastRegion.right}%`;
-      mutedRegion.style.width = `${100 - lastRegion.right}%`;
-      mutedRegion.textContent = 'MUTED';
-      container.appendChild(mutedRegion);
+    if (enterBeats < exitBeats) {
+      validSpans.push({
+        number: i,
+        enterBeats: enterBeats,
+        exitBeats: exitBeats,
+        isInfinity: span.exitBeats >= 999999
+      });
     }
   }
   
-  createTimeLabels() {
-    const labels = document.createElement('div');
-    labels.className = 'timeline-time-labels';
+  console.log(`   Found ${validSpans.length} valid spans:`, validSpans);
+  
+  // Render each valid span
+  validSpans.forEach(span => {
+    const leftPercent = (span.enterBeats / this.maxBeats) * 100;
+    const rightPercent = (span.exitBeats / this.maxBeats) * 100;
+    let widthPercent = rightPercent - leftPercent;
     
-    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-    const intervals = 5; // Show 6 time labels (0%, 20%, 40%, 60%, 80%, 100%)
+    // FIXED: Declare region variable properly
+    const region = document.createElement('div');
+    region.className = 'timeline-region playing';
     
-    for (let i = 0; i <= intervals; i++) {
-      const percent = (i / intervals) * 100;
-      const timeMs = (percent / 100) * maxTimeMs;
-      const timeFormatted = formatMsToMMSS(timeMs);
-      const beats = Math.round((percent / 100) * this.maxBeats);
-      
-      const label = document.createElement('span');
-      label.textContent = `${timeFormatted} (${beats})`;
-      label.title = `${timeFormatted} - Beat ${beats}`;
-      labels.appendChild(label);
+    // Handle full-width vs partial-width regions
+    if (leftPercent === 0 && rightPercent >= 99.5) {
+      // Full-width region - extend to exactly match time labels
+      region.style.cssText = `
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 15px;
+        bottom: 5px;
+        border-radius: 6px;
+      `;
+      console.log(`   Span ${span.number}: Using left:0, right:0 (full width)`);
+    } else {
+      // Partial regions use percentage with margin
+      const finalWidth = Math.max(1, widthPercent - 3);
+      region.style.cssText = `
+        position: absolute;
+        left: ${leftPercent.toFixed(1)}%;
+        width: ${finalWidth.toFixed(1)}%;
+        top: 15px;
+        bottom: 15px;
+        border-radius: 6px;
+      `;
+      console.log(`   Span ${span.number}: ${leftPercent.toFixed(1)}% + ${finalWidth.toFixed(1)}%`);
     }
     
-    return labels;
+    region.textContent = `Entrance ${span.number}`;
+    region.title = `Entrance ${span.number}: Beat ${span.enterBeats} - ${span.isInfinity ? '∞' : span.exitBeats}`;
+    
+    container.appendChild(region);
+  });
+  
+  // Add muted regions if needed
+  if (validSpans.length > 0) {
+    this.renderMutedRegionsWithMargin(container, validSpans);
+  } else {
+    // No playing regions - entire timeline is muted
+    const mutedRegion = document.createElement('div');
+    mutedRegion.className = 'timeline-region muted';
+    mutedRegion.style.cssText = `
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 3px;
+      bottom: 3px;
+      border-radius: 6px;
+    `;
+    mutedRegion.textContent = 'MUTED';
+    container.appendChild(mutedRegion);
   }
+}
+
+
+  renderMutedRegionsWithMargin(container, playingSpans) {
+  // Sort playing spans by position
+  const sortedSpans = playingSpans.sort((a, b) => a.enterBeats - b.enterBeats);
+  
+  const marginPercent = 2; // Same 2% margin for muted regions
+  
+  // Add muted region at start if needed
+  if (sortedSpans[0].enterBeats > 0) {
+    const mutedWidth = (sortedSpans[0].enterBeats / this.maxBeats) * 100;
+    const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+    
+    const mutedRegion = document.createElement('div');
+    mutedRegion.className = 'timeline-region muted';
+    mutedRegion.style.left = '0%';
+    mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
+    mutedRegion.textContent = 'MUTED';
+    container.appendChild(mutedRegion);
+  }
+  
+  // Add muted regions between playing spans
+  for (let i = 0; i < sortedSpans.length - 1; i++) {
+    const currentEnd = sortedSpans[i].exitBeats;
+    const nextStart = sortedSpans[i + 1].enterBeats;
+    
+    if (nextStart > currentEnd) {
+      const leftPercent = (currentEnd / this.maxBeats) * 100;
+      const mutedWidth = ((nextStart - currentEnd) / this.maxBeats) * 100;
+      const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+      
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted';
+      mutedRegion.style.left = `${leftPercent.toFixed(1)}%`;
+      mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
+      mutedRegion.textContent = 'MUTED';
+      container.appendChild(mutedRegion);
+    }
+  }
+  
+  // Add muted region at end if needed
+  const lastSpan = sortedSpans[sortedSpans.length - 1];
+  if (lastSpan.exitBeats < this.maxBeats) {
+    const leftPercent = (lastSpan.exitBeats / this.maxBeats) * 100;
+    const mutedWidth = ((this.maxBeats - lastSpan.exitBeats) / this.maxBeats) * 100;
+    const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+    
+    const mutedRegion = document.createElement('div');
+    mutedRegion.className = 'timeline-region muted';
+    mutedRegion.style.left = `${leftPercent.toFixed(1)}%`;
+    mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
+    mutedRegion.textContent = 'MUTED';
+    container.appendChild(mutedRegion);
+  }
+}
+
+
+createTimeLabels() {
+  const labels = document.createElement('div');
+  labels.className = 'timeline-time-labels';
+  
+  const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+  const intervals = 5; // Show 6 time labels (0%, 20%, 40%, 60%, 80%, 100%)
+  
+  for (let i = 0; i <= intervals; i++) {
+    const percent = (i / intervals) * 100;
+    const timeMs = (percent / 100) * maxTimeMs;
+    const timeFormatted = formatMsToMMSS(timeMs);
+    const beats = Math.round((percent / 100) * this.maxBeats);
+    
+    const label = document.createElement('span');
+    label.textContent = `${timeFormatted}`;
+    label.title = `Beat ${beats} - ${timeFormatted}`;
+    
+    labels.appendChild(label);
+  }
+  
+  return labels;
+}
+
   
   createControls() {
-    const controls = document.createElement('div');
-    controls.className = 'timeline-controls';
-    
-    const refreshBtn = document.createElement('button');
-    refreshBtn.className = 'timeline-control-btn';
-    refreshBtn.textContent = '🔄 Refresh';
-    refreshBtn.title = 'Refresh timeline with current Life Span settings';
-    refreshBtn.onclick = () => this.refresh();
-    
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'timeline-control-btn';
-    settingsBtn.textContent = '⚙️ Settings';
-    settingsBtn.title = 'Open Life Span settings';
-    settingsBtn.onclick = () => this.openLifeSpanSettings();
-    
-    controls.appendChild(refreshBtn);
-    controls.appendChild(settingsBtn);
-    
-    return controls;
-  }
+  const controls = document.createElement('div');
+  controls.className = 'timeline-controls';
+  
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'timeline-control-btn';
+  refreshBtn.textContent = '🔄 Refresh';
+  refreshBtn.title = 'Refresh timeline with current Life Span settings';
+  refreshBtn.onclick = () => this.refresh();
+  
+  controls.appendChild(refreshBtn);
+  
+  return controls;
+}
+
   
   updateVoiceData() {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
@@ -10941,29 +11111,39 @@ class VisualTimeline {
   }
   
   updatePlayhead() {
-    if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
-      return;
-    }
-    
-    const elapsedMs = masterClock.getElapsedTime();
-    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-    
-    let percentage = (elapsedMs / maxTimeMs) * 100;
-    
-    // Handle repeat cycling
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (lifeSpan && lifeSpan.repeat && percentage > 100) {
-      percentage = percentage % 100;
-    }
-    
-    this.playhead.style.left = `${Math.min(percentage, 100)}%`;
-    
-    // Update playhead tooltip with current time
-    const currentTimeFormatted = formatMsToMMSS(elapsedMs);
-    const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
-    this.playhead.title = `${currentTimeFormatted} (Beat ${currentBeat})`;
+  if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
+    return;
   }
   
+  const elapsedMs = masterClock.getElapsedTime();
+  const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+  
+  let percentage = (elapsedMs / maxTimeMs) * 100;
+  
+  // Handle repeat cycling
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (lifeSpan && lifeSpan.repeat && percentage > 100) {
+    percentage = percentage % 100;
+  }
+  
+  // Update playhead position
+  this.playhead.style.left = `${Math.min(percentage, 100)}%`;
+  
+  // Update tooltip text
+  const currentTimeFormatted = formatMsToMMSS(elapsedMs);
+  const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
+  
+  if (this.playheadTooltip) {
+    this.playheadTooltip.textContent = currentTimeFormatted;
+    this.playheadTooltip.title = `Beat ${currentBeat}`;
+  }
+  
+  if (DEBUG.TIMELINE && Math.random() < 0.05) {
+    console.log(`⏱️ Playhead: ${percentage.toFixed(1)}% (${currentTimeFormatted}, Beat ${currentBeat})`);
+  }
+}
+
+
   refresh() {
     if (!this.container) return;
     
@@ -10974,37 +11154,7 @@ class VisualTimeline {
     this.render(this.container);
   }
   
-  openLifeSpanSettings() {
-    // Scroll to Life Span parameter and expand it
-    const parameterSection = document.getElementById('parameter-section');
-    const lifeSpanRollup = Array.from(parameterSection.querySelectorAll('.parameter-rollup'))
-      .find(rollup => {
-        const title = rollup.querySelector('.parameter-rollup-title');
-        return title && title.textContent.trim() === 'LIFE SPAN';
-      });
-    
-    if (lifeSpanRollup) {
-      // Expand if collapsed
-      if (lifeSpanRollup.classList.contains('collapsed')) {
-        toggleParameterRollup('LIFE SPAN');
-      }
-      
-      // Scroll into view
-      lifeSpanRollup.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
-      });
-      
-      // Brief highlight effect
-      lifeSpanRollup.style.boxShadow = '0 0 15px rgba(74, 144, 226, 0.5)';
-      setTimeout(() => {
-        lifeSpanRollup.style.boxShadow = '';
-      }, 2000);
-      
-    } else {
-      console.warn('⚠️ Life Span parameter rollup not found');
-    }
-  }
+  
   
   startUpdating() {
     if (this.updateInterval) return;
@@ -11061,6 +11211,70 @@ class VisualTimeline {
 // Global visual timeline instance
 let visualTimeline = null;
 
+// ===== GLOBAL VISUAL TIMELINE FUNCTIONS =====
+
+function showVisualTimeline() {
+  console.log('🎬 Showing Visual Timeline for Voice', currentVoice + 1);
+  
+  // Find or create timeline container
+  let timelineContainer = document.getElementById('visual-timeline-container');
+  
+  if (!timelineContainer) {
+    // Create new container above parameter section
+    timelineContainer = document.createElement('div');
+    timelineContainer.id = 'visual-timeline-container';
+    
+    const parameterSection = document.getElementById('parameter-section');
+    const mainContent = document.getElementById('main-content');
+    
+    if (parameterSection && mainContent) {
+      // FIXED: Insert INSIDE parameter section, not above it
+      parameterSection.insertBefore(timelineContainer, parameterSection.firstChild);
+      console.log('✅ Created timeline container INSIDE parameter section');
+    } else {
+      console.error('❌ Could not find parameter section or main content');
+      return;
+    }
+  }
+  
+  // Create or update timeline instance
+  if (!visualTimeline) {
+    visualTimeline = new VisualTimeline(currentVoice);
+  } else {
+    visualTimeline.updateForVoice(currentVoice);
+  }
+  
+  // Render timeline
+  visualTimeline.render(timelineContainer);
+  
+  // Start updates if master clock is running
+  if (masterClock && masterClock.isActive()) {
+    visualTimeline.startUpdating();
+  }
+  
+  console.log('✅ Visual Timeline displayed');
+}
+
+
+function hideVisualTimeline() {
+  const timelineContainer = document.getElementById('visual-timeline-container');
+  
+  if (timelineContainer) {
+    timelineContainer.style.display = 'none';
+  }
+  
+  if (visualTimeline) {
+    visualTimeline.stopUpdating();
+  }
+  
+  console.log('🙈 Visual Timeline hidden');
+}
+
+function updateVisualTimelineForVoiceChange(newVoiceIndex) {
+  if (visualTimeline && visualTimeline.isVisible) {
+    visualTimeline.updateForVoice(newVoiceIndex);
+  }
+}
 
 
 // Global preset manager instance
