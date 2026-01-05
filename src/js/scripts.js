@@ -2351,8 +2351,6 @@ function connectTimelineSliders() {
   console.log(`✅ Connected ${timelineSliders.length} timeline sliders`);
 }
 
-// ===== END TIMELINE VIEW FUNCTIONS =====
-
 function updateTimelinePlayhead() {
   // Check 1: Is timeline active?
   if (!timelineViewActive) {
@@ -2411,8 +2409,8 @@ function updateTimelinePlayhead() {
     console.warn('⚠️ Tooltip element not found');
   }
 }
-
 // ===== END TIMELINE VIEW FUNCTIONS =====
+
 
 function rebuildLifeSpanSliders(container, voiceIndex) {
   console.log(`🔄 Rebuilding Life Span sliders for Voice ${voiceIndex + 1}`);
@@ -2432,15 +2430,6 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
   
   console.log(`📏 Max: ${maxBeats} beats, Unit: ${rhythmOptions[beatUnit]}`);
   
-  // DEBUG: Log current stored values
-  console.log('📊 Current stored beat values:');
-  for (let i = 1; i <= 3; i++) {
-    const span = lifeSpanParam[`lifeSpan${i}`];
-    if (span) {
-      console.log(`   Entrance ${i}: enterBeats=${span.enterBeats}, exitBeats=${span.exitBeats}`);
-    }
-  }
-  
   // Find all Life Span sliders
   const spanSliders = container.querySelectorAll('.life-span-dual-slider');
   
@@ -2449,7 +2438,7 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
     
     console.log(`🔄 Rebuilding slider ${spanNumber}...`);
     
-    // Get current BEAT values from PRIMARY storage
+    // Get current BEAT values from PRIMARY storage (DON'T read from sliders)
     const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
     
     if (!spanData) {
@@ -2457,50 +2446,23 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
       return;
     }
     
+    // ALWAYS use stored data, never read from old sliders
     let currentEnterBeats = spanData.enterBeats || 0;
     let currentExitBeats = spanData.exitBeats || 0;
     
-    console.log(`   📖 Reading from storage: ${currentEnterBeats}-${currentExitBeats} beats`);
+    console.log(`   📖 Using stored data: ${currentEnterBeats}-${currentExitBeats} beats`);
     
-    // Find ALL existing slider instances
+    // Find ALL existing slider instances and destroy them
     const existingSliders = sliderContainer.querySelectorAll('.noUi-target');
     
     if (existingSliders.length > 0) {
       console.log(`   🗑️ Found ${existingSliders.length} existing sliders, destroying...`);
       
-      // Try to read current values from first slider BEFORE destroying
-      const firstSlider = existingSliders[0];
-      
-      if (firstSlider.noUiSlider) {
-        try {
-          const values = firstSlider.noUiSlider.get();
-          const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
-          
-          const sliderEnterBeats = Math.round(formatter.from(values[0]));
-          const sliderExitBeats = Math.round(formatter.from(values[1]));
-          
-          console.log(`   📊 Slider currently shows: ${sliderEnterBeats}-${sliderExitBeats} beats`);
-          
-          // Use slider values if they're different (user just edited)
-          if (sliderEnterBeats !== currentEnterBeats || sliderExitBeats !== currentExitBeats) {
-            console.log(`   🔀 Using slider values (user edited)`);
-            currentEnterBeats = sliderEnterBeats;
-            currentExitBeats = sliderExitBeats;
-            
-            // UPDATE storage with slider values
-            spanData.enterBeats = currentEnterBeats;
-            spanData.exitBeats = currentExitBeats;
-          }
-          
-        } catch (e) {
-          console.warn(`   ⚠️ Could not read slider values:`, e);
-        }
-      }
-      
-      // Destroy ALL existing sliders
+      // Destroy ALL existing sliders WITHOUT reading their values (timeline operations)
       existingSliders.forEach((slider) => {
         try {
           if (slider.noUiSlider) {
+            // DON'T read values - use stored data only
             slider.noUiSlider.destroy();
           }
           slider.remove();
@@ -2508,7 +2470,7 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
           console.warn(`   ⚠️ Error destroying slider:`, e);
         }
       });
-      
+
       console.log(`   ✅ Destroyed ${existingSliders.length} sliders`);
     }
     
@@ -2519,19 +2481,7 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
       currentExitBeats = Math.min(currentExitBeats, maxBeats);
     }
     
-    // Update storage with clamped values
-    spanData.enterBeats = currentEnterBeats;
-    spanData.exitBeats = currentExitBeats;
-    
-    console.log(`   💾 Storing: ${currentEnterBeats}-${currentExitBeats} beats`);
-    
-    // Update legacy milliseconds
-    const tempo = getCurrentTempoForVoice(voiceIndex);
-    if (!lifeSpanParam[`lifeSpan${spanNumber}Legacy`]) {
-      lifeSpanParam[`lifeSpan${spanNumber}Legacy`] = {};
-    }
-    lifeSpanParam[`lifeSpan${spanNumber}Legacy`].enter = beatsToMs(currentEnterBeats, beatUnit, tempo);
-    lifeSpanParam[`lifeSpan${spanNumber}Legacy`].exit = beatsToMs(currentExitBeats, beatUnit, tempo);
+    console.log(`   💾 Final values: ${currentEnterBeats}-${currentExitBeats} beats`);
     
     // Create NEW slider
     const newSliderDiv = document.createElement('div');
@@ -2580,8 +2530,9 @@ function rebuildLifeSpanSliders(container, voiceIndex) {
     }
   });
   
-  console.log(`✅ Rebuilt all sliders for Voice ${voiceIndex + 1}`);
+  console.log(`✅ Rebuilt all sliders for Voice ${voiceIndex + 1} - PRESERVED timeline changes`);
 }
+
 
 
 function updateLifeSpanSlidersForTempoChange(voiceIndex) {
@@ -4551,14 +4502,62 @@ class InteractivePiano {
     this.selectRange(this.dragStartNote, currentNote, this.dragMode === 'select');
   }
   
-  handleMouseUp = () => {
-    this.isDragging = false;
-    this.dragStartNote = null;
-    this.dragMode = null;
-    
-    document.removeEventListener('mousemove', this.handleMouseMove);
-    document.removeEventListener('mouseup', this.handleMouseUp);
+  handleMouseUp(e) {
+  const endBeat = this.screenXToBeat(e.clientX);
+  const snappedEndBeat = this.snapToBeat ? this.snapBeatToGrid(endBeat) : endBeat;
+  
+  console.log(`🖱️ MOUSE UP at beat ${snappedEndBeat.toFixed(0)}`);
+  console.log(`   isDragging: ${this.isDragging}`);
+  console.log(`   dragStartBeat: ${this.dragStartBeat}`);
+  
+  if (!this.isDragging || this.dragStartBeat === null) {
+    console.log(`   → Not a drag operation, skipping`);
+    return;
   }
+  
+  // Calculate drag distance
+  const dragDistance = Math.abs(snappedEndBeat - this.dragStartBeat);
+  
+  console.log(`   Drag distance: ${dragDistance.toFixed(1)} beats`);
+  
+      if (dragDistance < 0.5) {
+      // Very small drag or click - treat as click-release for Phase 3
+      console.log(`💎 CLICK-RELEASE (small drag) at beat ${snappedEndBeat.toFixed(0)} - Phase 3 event placeholder`);
+      console.log(`   🛑 EARLY RETURN - Should NOT execute drag operation`);
+      
+      this.showEventDiamond(snappedEndBeat);
+      
+      // IMPORTANT: Clean up drag state and return early
+      this.isDragging = false;
+      this.dragStartBeat = null;
+      this.currentMode = null;
+      this.clearDragPreview();
+      
+      console.log(`   🛑 Drag state cleaned, returning early`);
+      return;
+    }
+    
+    // This should NOT run for single clicks
+    console.log(`🖱️ DRAG COMPLETE - Range: ${this.dragStartBeat.toFixed(0)} → ${snappedEndBeat.toFixed(0)}`);
+    console.log(`   Mode: ${this.currentMode}`);
+    
+    // Execute the drag operation
+    this.executeDragOperation(this.dragStartBeat, snappedEndBeat, this.currentMode);
+
+  
+  // Clean up drag state
+  this.isDragging = false;
+  this.dragStartBeat = null;
+  this.currentMode = null;
+  this.clearDragPreview();
+  
+  // Refresh timeline
+  setTimeout(() => {
+    this.refresh();
+  }, 100);
+}
+ 
+
   
   toggleNote(midiNote) {
     // NEW: Capture state before piano keyboard change
@@ -5317,15 +5316,40 @@ if (this.lookaheadScheduler) {
     this.lastTempoUpdate = this.masterClock.getMasterTime();
   }
   
-  shouldPlayNote() {
+    shouldPlayNote() {
     if (!this.isActive) return false;
     
     // Get elapsed time since master clock started
     const elapsedMs = this.masterClock.getElapsedTime();
     
     // Check Life Span timing
-    return this.isInLifeSpan(elapsedMs);
+    const shouldPlay = this.isInLifeSpan(elapsedMs);
+    
+    // Enhanced debugging for mute testing
+    if (DEBUG.VOICE_CLOCK || Math.random() < 0.02) { // 2% of calls for debugging
+      const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+      const beatUnit = lifeSpanParam ? lifeSpanParam.beatUnit || 7 : 7;
+      const tempo = this.currentTempo || 120;
+      const currentBeat = msToBeats(elapsedMs, beatUnit, tempo);
+      
+      console.log(`🎵 Voice ${this.voiceIndex + 1} shouldPlay check:`);
+      console.log(`   Elapsed: ${formatMsToMMSS(elapsedMs)} (Beat ${currentBeat.toFixed(1)})`);
+      console.log(`   Result: ${shouldPlay ? 'PLAY' : 'MUTED'}`);
+      
+      if (lifeSpanParam) {
+        for (let i = 1; i <= 3; i++) {
+          const span = lifeSpanParam[`lifeSpan${i}`];
+          if (span && span.exitBeats > 0) {
+            const inThisSpan = currentBeat >= span.enterBeats && currentBeat < span.exitBeats;
+            console.log(`     Entrance ${i}: ${span.enterBeats}-${span.exitBeats} beats (${inThisSpan ? 'IN' : 'out'})`);
+          }
+        }
+      }
+    }
+    
+    return shouldPlay;
   }
+
 
   isInLifeSpan(elapsedMs) {
   const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
@@ -10743,7 +10767,9 @@ class UndoManager {
 let undoManager = null;
 // ===== END UNDO/REDO MANAGER CLASS =====
 
-// ===== VISUAL TIMELINE CLASS (Phase 1) =====
+// ===== VISUAL TIMELINE CLASS (Phase 1 + 2) =====
+
+
 class VisualTimeline {
   constructor(voiceIndex) {
     this.voiceIndex = voiceIndex;
@@ -10756,12 +10782,23 @@ class VisualTimeline {
     this.beatUnit = 7;   // Quarter notes
     this.tempo = 120;    // Default tempo
     
+    // NEW: Interactive capabilities (Phase 2) - MOUSE-DRIVEN DESIGN
+    this.isInteractive = true;
+    this.snapToBeat = true;
+    
+    // Mouse interaction state
+    this.isDragging = false;
+    this.dragStartBeat = null;
+    this.currentMode = null; // 'mute' or 'unmute'
+    this.hoverBeat = null;
+
+    
     if (DEBUG.TIMELINE) {
       console.log(`🎬 VisualTimeline created for Voice ${voiceIndex + 1}`);
     }
   }
-  
-  render(container) {
+
+    render(container) {
     if (!container) {
       console.error('❌ VisualTimeline: No container provided');
       return;
@@ -10785,9 +10822,16 @@ class VisualTimeline {
     const labels = this.createTimeLabels();
     container.appendChild(labels);
     
+    // Beat labels (NEW)
+    const beatLabels = this.createBeatLabels();
+    container.appendChild(beatLabels);
+    
     // Controls
     const controls = this.createControls();
     container.appendChild(controls);
+    
+    // NEW: Make interactive after rendering
+    this.makeTrackInteractive();
     
     this.isVisible = true;
     
@@ -10795,6 +10839,185 @@ class VisualTimeline {
       console.log(`✅ VisualTimeline rendered for Voice ${this.voiceIndex + 1}`);
       console.log(`   Max: ${this.maxBeats} beats @ ${this.tempo} BPM`);
     }
+  }
+  
+makeTrackInteractive() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) {
+    console.error('❌ Timeline track not found for interaction');
+    return;
+  }
+  
+  // Add simple click-only styling
+  track.style.cursor = 'pointer';
+  track.style.userSelect = 'none';
+  
+  // Single click handler only - no drag, no double-click
+  track.addEventListener('click', (e) => this.handleSimpleClick(e));
+  
+  // Prevent context menu and selection
+  track.addEventListener('contextmenu', (e) => e.preventDefault());
+  track.addEventListener('selectstart', (e) => e.preventDefault());
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🖱️ Track set to simple click-to-toggle mode`);
+  }
+}
+
+makeTrackInteractive() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  // Basic styling only - no interaction yet
+  track.style.cursor = 'default';
+  track.style.userSelect = 'none';
+  
+  console.log(`🎬 Timeline track rendered (interaction coming in events system)`);
+}
+
+
+  // NEW: Check if beat is in a playing region
+  checkIfBeatIsInPlayingRegion(beat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) return false;
+    
+    // Check all 3 Life Span entrances
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpan[`lifeSpan${i}`];
+      if (!span || span.exitBeats <= 0) continue;
+      
+      const enterBeats = span.enterBeats || 0;
+      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : span.exitBeats;
+      
+      if (beat >= enterBeats && beat < exitBeats) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+   // NEW: Show warning when no entrances available
+  showNoAvailableEntranceWarning() {
+    const warning = document.createElement('div');
+    warning.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      max-width: 400px;
+      text-align: center;
+    `;
+    
+    warning.innerHTML = `
+      <div style="font-size: 18px; font-weight: bold; color: #856404; margin-bottom: 10px;">
+        ⚠️ No Available Entrances
+      </div>
+      <div style="color: #856404; margin-bottom: 15px;">
+        All 3 entrance windows are in use. Clear an existing entrance first.
+      </div>
+      <button onclick="this.parentElement.remove()" style="
+        background: #ffc107; color: #856404; border: none; padding: 8px 16px;
+        border-radius: 4px; font-weight: bold; cursor: pointer;
+      ">OK</button>
+    `;
+    
+    document.body.appendChild(warning);
+    
+    setTimeout(() => {
+      if (warning.parentElement) {
+        warning.remove();
+      }
+    }, 5000);
+  }
+
+    // NEW: Update legacy millisecond storage
+  updateLegacyStorage() {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const tempo = getCurrentTempoForVoice(this.voiceIndex);
+    const beatUnit = lifeSpan.beatUnit || 7;
+    
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpan[`lifeSpan${i}`];
+      if (span) {
+        if (!lifeSpan[`lifeSpan${i}Legacy`]) {
+          lifeSpan[`lifeSpan${i}Legacy`] = {};
+        }
+        
+        lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
+        lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
+      }
+    }
+    
+    console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
+  }
+  
+  // NEW: Handle track leave
+  handleTrackLeave(e) {
+    const track = this.container.querySelector('.visual-timeline-track');
+    track.style.cursor = 'pointer';
+    track.title = '';
+  }
+  
+  // NEW: Convert screen X coordinate to beat position
+  screenXToBeat(screenX) {
+    const track = this.container.querySelector('.visual-timeline-track');
+    if (!track) return 0;
+    
+    const rect = track.getBoundingClientRect();
+    const relativeX = screenX - rect.left;
+    const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+    
+    const beat = percentage * this.maxBeats;
+    
+    if (DEBUG.TIMELINE && Math.random() < 0.1) {
+      console.log(`📐 Screen ${screenX} → Beat ${beat.toFixed(2)} (${(percentage * 100).toFixed(1)}%)`);
+    }
+    
+    return beat;
+  }
+  
+  // NEW: Snap beat to grid
+  snapBeatToGrid(beat) {
+    return Math.round(beat);
+  }
+  
+  // NEW: Show visual feedback for clicks
+  showClickFeedback(beat) {
+    const track = this.container.querySelector('.visual-timeline-track');
+    if (!track) return;
+    
+    // Create temporary click indicator
+    const indicator = document.createElement('div');
+    indicator.style.cssText = `
+      position: absolute;
+      left: ${(beat / this.maxBeats) * 100}%;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #ffc107;
+      transform: translateX(-50%);
+      z-index: 200;
+      pointer-events: none;
+      animation: pulse 0.5s ease;
+    `;
+    
+    track.appendChild(indicator);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (indicator.parentElement) {
+        indicator.remove();
+      }
+    }, 500);
+    
+    console.log(`💫 Click feedback shown at beat ${beat.toFixed(0)}`);
   }
   
   createHeader() {
@@ -10805,7 +11028,8 @@ class VisualTimeline {
     title.className = 'timeline-title';
     title.innerHTML = `
       <span>🎵</span>
-      <span>Visual Timeline - Voice ${this.voiceIndex + 1}</span>
+      <span>Interactive Timeline - Voice ${this.voiceIndex + 1}</span>
+      <span style="font-size: 12px; color: #28a745; margin-left: 8px;">● CLICK TO EDIT</span>
     `;
     
     const info = document.createElement('div');
@@ -10826,273 +11050,366 @@ class VisualTimeline {
     return header;
   }
   
-createTrack() {
-  const track = document.createElement('div');
-  track.className = 'visual-timeline-track';
-  
-  // Grid background
-  const grid = document.createElement('div');
-  grid.className = 'timeline-grid';
-  track.appendChild(grid);
-  
-  // Regions container
-  const regionsContainer = document.createElement('div');
-  regionsContainer.className = 'timeline-regions';
-  
-  // Render life span regions
-  this.renderLifeSpanRegions(regionsContainer);
-  
-  track.appendChild(regionsContainer);
-  
-  // FIXED: Declare playhead BEFORE using it
-  const playhead = document.createElement('div');
-  playhead.className = 'timeline-playhead-container';
-  playhead.style.cssText = `
-    position: absolute;
-    top: 15px;
-    left: 0%;
-    width: 3px;
-    height: calc(100% - 15px);
-    background: #dc3545;
-    transition: left 0.05s linear;
-    pointer-events: none;
-    z-index: 100;
-  `;
-
-  // NOW we can reference playhead since it's declared above
-  const playheadArrow = document.createElement('div');
-  playheadArrow.style.cssText = `
-    position: absolute;
-    top: -15px;
-    left: -7px;
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 12px solid #dc3545;
-    z-index: 9999;
-  `;
-
-  console.log('🔺 Creating proper CSS triangle caret');
-  playhead.appendChild(playheadArrow);
-
-  const playheadTooltip = document.createElement('div');
-  playheadTooltip.textContent = '0:00';
-  playheadTooltip.style.cssText = `
-    position: absolute;
-    top: 10px;
-    left: 8px;
-    background: #333;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
-    white-space: nowrap;
-    pointer-events: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  `;
-  playhead.appendChild(playheadTooltip);
-
-  track.appendChild(playhead);
-
-  // Store references
-  this.playhead = playhead;
-  this.playheadTooltip = playheadTooltip;
-  
-  return track;
-}
-
-
-
-  
-renderLifeSpanRegions(container) {
-  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-  if (!lifeSpan) return;
-  
-  console.log(`🔍 CONSERVATIVE: Rendering regions for Voice ${this.voiceIndex + 1}`);
-  console.log(`   Timeline maxBeats: ${this.maxBeats}`);
-  
-  // Collect all valid spans first
-  const validSpans = [];
-  
-  for (let i = 1; i <= 3; i++) {
-    const span = lifeSpan[`lifeSpan${i}`];
-    if (!span || span.exitBeats <= 0) continue;
+  createTrack() {
+    const track = document.createElement('div');
+    track.className = 'visual-timeline-track';
     
-    const enterBeats = Math.max(0, span.enterBeats || 0);
-    const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : Math.min(span.exitBeats, this.maxBeats);
+    // Grid background
+    const grid = document.createElement('div');
+    grid.className = 'timeline-grid';
+    track.appendChild(grid);
     
-    if (enterBeats < exitBeats) {
-      validSpans.push({
-        number: i,
-        enterBeats: enterBeats,
-        exitBeats: exitBeats,
-        isInfinity: span.exitBeats >= 999999
-      });
-    }
+    // Regions container
+    const regionsContainer = document.createElement('div');
+    regionsContainer.className = 'timeline-regions';
+    
+    // Render life span regions
+    this.renderLifeSpanRegions(regionsContainer);
+    
+    track.appendChild(regionsContainer);
+    
+    // Playhead
+    const playhead = document.createElement('div');
+    playhead.className = 'timeline-playhead-container';
+    playhead.style.cssText = `
+      position: absolute;
+      top: 15px;
+      left: 0%;
+      width: 3px;
+      height: calc(100% - 15px);
+      background: #dc3545;
+      transition: left 0.05s linear;
+      pointer-events: none;
+      z-index: 100;
+    `;
+
+    const playheadArrow = document.createElement('div');
+    playheadArrow.style.cssText = `
+      position: absolute;
+      top: -15px;
+      left: -7px;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 12px solid #dc3545;
+      z-index: 9999;
+    `;
+
+    playhead.appendChild(playheadArrow);
+
+    const playheadTooltip = document.createElement('div');
+    playheadTooltip.textContent = '0:00';
+    playheadTooltip.style.cssText = `
+      position: absolute;
+      top: 10px;
+      left: 8px;
+      background: #333;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    `;
+    playhead.appendChild(playheadTooltip);
+
+    track.appendChild(playhead);
+
+    // Store references
+    this.playhead = playhead;
+    this.playheadTooltip = playheadTooltip;
+    
+    return track;
   }
   
-  console.log(`   Found ${validSpans.length} valid spans:`, validSpans);
-  
-  // Render each valid span
-  validSpans.forEach(span => {
-    const leftPercent = (span.enterBeats / this.maxBeats) * 100;
-    const rightPercent = (span.exitBeats / this.maxBeats) * 100;
-    let widthPercent = rightPercent - leftPercent;
+  renderLifeSpanRegions(container) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) return;
     
-    // FIXED: Declare region variable properly
-    const region = document.createElement('div');
-    region.className = 'timeline-region playing';
+    console.log(`🔍 Rendering regions for Voice ${this.voiceIndex + 1}`);
+    console.log(`   Timeline maxBeats: ${this.maxBeats}`);
     
-    // Handle full-width vs partial-width regions
-    if (leftPercent === 0 && rightPercent >= 99.5) {
-      // Full-width region - extend to exactly match time labels
-      region.style.cssText = `
+    // Collect all valid spans first
+    const validSpans = [];
+    
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpan[`lifeSpan${i}`];
+      if (!span || span.exitBeats <= 0) continue;
+      
+      const enterBeats = Math.max(0, span.enterBeats || 0);
+      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : Math.min(span.exitBeats, this.maxBeats);
+      
+      if (enterBeats < exitBeats) {
+        validSpans.push({
+          number: i,
+          enterBeats: enterBeats,
+          exitBeats: exitBeats,
+          isInfinity: span.exitBeats >= 999999
+        });
+      }
+    }
+    
+    console.log(`   Found ${validSpans.length} valid spans:`, validSpans);
+    
+    // Render each valid span with interactive styling
+    validSpans.forEach(span => {
+      const leftPercent = (span.enterBeats / this.maxBeats) * 100;
+      const rightPercent = (span.exitBeats / this.maxBeats) * 100;
+      console.log(`🔍 Region ${span.number} positioning:`); // ← Fixed: span.number instead of i
+      console.log(`   Enter: ${span.enterBeats} beats = ${leftPercent.toFixed(2)}%`);
+      console.log(`   Exit: ${span.exitBeats} beats = ${rightPercent.toFixed(2)}%`);
+      console.log(`   Width: ${(rightPercent - leftPercent).toFixed(2)}%`);
+      
+      const region = document.createElement('div');
+      region.className = 'timeline-region playing interactive';
+      region.dataset.entrance = span.number;
+      
+      // Handle full-width vs partial-width regions
+      if (leftPercent === 0 && rightPercent >= 99.5) {
+        region.style.cssText = `
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 15px;
+          bottom: 15px;
+          border-radius: 6px;
+          cursor: inherit;
+          transition: all 0.2s ease;
+          user-select: none;
+        `;
+      } else {
+        const finalWidth = Math.max(1, rightPercent - leftPercent);
+        region.style.cssText = `
+          position: absolute;
+          left: ${leftPercent.toFixed(1)}%;
+          width: ${finalWidth.toFixed(1)}%;
+          top: 15px;
+          bottom: 15px;
+          border-radius: 6px;
+          cursor: inherit;
+          transition: all 0.2s ease;
+          user-select: none;
+        `;
+      }
+      
+      region.textContent = `Entrance ${span.number}`;
+      region.title = `Entrance ${span.number}: Beat ${span.enterBeats} - ${span.isInfinity ? '∞' : span.exitBeats}`;
+
+      
+      container.appendChild(region);
+    });
+    
+    // Add muted regions if needed
+    if (validSpans.length > 0) {
+      this.renderMutedRegions(container, validSpans);
+    } else {
+      // No playing regions - entire timeline is muted
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted interactive';
+      mutedRegion.style.cssText = `
         position: absolute;
         left: 0;
         right: 0;
         top: 15px;
-        bottom: 5px;
-        border-radius: 6px;
-      `;
-      console.log(`   Span ${span.number}: Using left:0, right:0 (full width)`);
-    } else {
-      // Partial regions use percentage with margin
-      const finalWidth = Math.max(1, widthPercent - 3);
-      region.style.cssText = `
-        position: absolute;
-        left: ${leftPercent.toFixed(1)}%;
-        width: ${finalWidth.toFixed(1)}%;
-        top: 15px;
         bottom: 15px;
         border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
       `;
-      console.log(`   Span ${span.number}: ${leftPercent.toFixed(1)}% + ${finalWidth.toFixed(1)}%`);
-    }
-    
-    region.textContent = `Entrance ${span.number}`;
-    region.title = `Entrance ${span.number}: Beat ${span.enterBeats} - ${span.isInfinity ? '∞' : span.exitBeats}`;
-    
-    container.appendChild(region);
-  });
-  
-  // Add muted regions if needed
-  if (validSpans.length > 0) {
-    this.renderMutedRegionsWithMargin(container, validSpans);
-  } else {
-    // No playing regions - entire timeline is muted
-    const mutedRegion = document.createElement('div');
-    mutedRegion.className = 'timeline-region muted';
-    mutedRegion.style.cssText = `
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: 3px;
-      bottom: 3px;
-      border-radius: 6px;
-    `;
-    mutedRegion.textContent = 'MUTED';
-    container.appendChild(mutedRegion);
-  }
-}
-
-
-  renderMutedRegionsWithMargin(container, playingSpans) {
-  // Sort playing spans by position
-  const sortedSpans = playingSpans.sort((a, b) => a.enterBeats - b.enterBeats);
-  
-  const marginPercent = 2; // Same 2% margin for muted regions
-  
-  // Add muted region at start if needed
-  if (sortedSpans[0].enterBeats > 0) {
-    const mutedWidth = (sortedSpans[0].enterBeats / this.maxBeats) * 100;
-    const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
-    
-    const mutedRegion = document.createElement('div');
-    mutedRegion.className = 'timeline-region muted';
-    mutedRegion.style.left = '0%';
-    mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
-    mutedRegion.textContent = 'MUTED';
-    container.appendChild(mutedRegion);
-  }
-  
-  // Add muted regions between playing spans
-  for (let i = 0; i < sortedSpans.length - 1; i++) {
-    const currentEnd = sortedSpans[i].exitBeats;
-    const nextStart = sortedSpans[i + 1].enterBeats;
-    
-    if (nextStart > currentEnd) {
-      const leftPercent = (currentEnd / this.maxBeats) * 100;
-      const mutedWidth = ((nextStart - currentEnd) / this.maxBeats) * 100;
-      const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+      mutedRegion.textContent = 'MUTED - Click to unmute';
+      mutedRegion.title = 'Timeline is muted - Click to create unmuted region';
       
-      const mutedRegion = document.createElement('div');
-      mutedRegion.className = 'timeline-region muted';
-      mutedRegion.style.left = `${leftPercent.toFixed(1)}%`;
-      mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
-      mutedRegion.textContent = 'MUTED';
       container.appendChild(mutedRegion);
     }
   }
   
-  // Add muted region at end if needed
-  const lastSpan = sortedSpans[sortedSpans.length - 1];
-  if (lastSpan.exitBeats < this.maxBeats) {
-    const leftPercent = (lastSpan.exitBeats / this.maxBeats) * 100;
-    const mutedWidth = ((this.maxBeats - lastSpan.exitBeats) / this.maxBeats) * 100;
-    const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+  renderMutedRegions(container, playingSpans) {
+    const sortedSpans = playingSpans.sort((a, b) => a.enterBeats - b.enterBeats);
+    const marginPercent = 0; // No gaps - snug regions
     
-    const mutedRegion = document.createElement('div');
-    mutedRegion.className = 'timeline-region muted';
-    mutedRegion.style.left = `${leftPercent.toFixed(1)}%`;
-    mutedRegion.style.width = `${finalMutedWidth.toFixed(1)}%`;
-    mutedRegion.textContent = 'MUTED';
-    container.appendChild(mutedRegion);
+    // Add muted region at start if needed
+    if (sortedSpans[0].enterBeats > 0) {
+      const mutedWidth = (sortedSpans[0].enterBeats / this.maxBeats) * 100;
+      const finalMutedWidth = Math.max(0.1, mutedWidth);
+
+      
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted interactive';
+      mutedRegion.style.cssText = `
+        position: absolute;
+        left: 0%;
+        width: ${finalMutedWidth.toFixed(1)}%;
+        top: 15px;
+        bottom: 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+      `;
+      mutedRegion.textContent = 'MUTED';
+      mutedRegion.title = 'Muted region';
+      
+      container.appendChild(mutedRegion);
+    }
+    
+    // Add muted regions between playing spans
+    for (let i = 0; i < sortedSpans.length - 1; i++) {
+      const currentEnd = sortedSpans[i].exitBeats;
+      const nextStart = sortedSpans[i + 1].enterBeats;
+      
+      if (nextStart > currentEnd) {
+        const leftPercent = (currentEnd / this.maxBeats) * 100;
+        const mutedWidth = ((nextStart - currentEnd) / this.maxBeats) * 100;
+        const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+        
+        const mutedRegion = document.createElement('div');
+        mutedRegion.className = 'timeline-region muted interactive';
+        mutedRegion.style.cssText = `
+          position: absolute;
+          left: ${leftPercent.toFixed(1)}%;
+          width: ${finalMutedWidth.toFixed(1)}%;
+          top: 15px;
+          bottom: 15px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          user-select: none;
+        `;
+        mutedRegion.textContent = 'MUTED';
+        mutedRegion.title = 'Click to unmute this section';
+        
+        container.appendChild(mutedRegion);
+      }
+    }
+    
+    // Add muted region at end if needed
+    const lastSpan = sortedSpans[sortedSpans.length - 1];
+    if (lastSpan.exitBeats < this.maxBeats) {
+      const leftPercent = (lastSpan.exitBeats / this.maxBeats) * 100;
+      const mutedWidth = ((this.maxBeats - lastSpan.exitBeats) / this.maxBeats) * 100;
+      const finalMutedWidth = Math.max(1, mutedWidth - marginPercent);
+      
+      const mutedRegion = document.createElement('div');
+      mutedRegion.className = 'timeline-region muted interactive';
+      mutedRegion.style.cssText = `
+        position: absolute;
+        left: ${leftPercent.toFixed(1)}%;
+        width: ${finalMutedWidth.toFixed(1)}%;
+        top: 15px;
+        bottom: 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+      `;
+      mutedRegion.textContent = 'MUTED';
+      mutedRegion.title = 'Click to unmute this section';
+      
+      container.appendChild(mutedRegion);
+    }
   }
-}
-
-
-createTimeLabels() {
-  const labels = document.createElement('div');
-  labels.className = 'timeline-time-labels';
   
-  const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-  const intervals = 5; // Show 6 time labels (0%, 20%, 40%, 60%, 80%, 100%)
-  
-  for (let i = 0; i <= intervals; i++) {
-    const percent = (i / intervals) * 100;
-    const timeMs = (percent / 100) * maxTimeMs;
-    const timeFormatted = formatMsToMMSS(timeMs);
-    const beats = Math.round((percent / 100) * this.maxBeats);
+  // NEW: Create beat labels display (Feature #5)
+  createBeatLabels() {
+    const labels = document.createElement('div');
+    labels.className = 'timeline-beat-labels';
+    labels.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      padding: 0 15px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      color: #999;
+      font-family: 'Courier New', monospace;
+      border-top: 1px solid #eee;
+      padding-top: 4px;
+    `;
     
-    const label = document.createElement('span');
-    label.textContent = `${timeFormatted}`;
-    label.title = `Beat ${beats} - ${timeFormatted}`;
+    const intervals = 5; // Show 6 beat labels
     
-    labels.appendChild(label);
+    for (let i = 0; i <= intervals; i++) {
+      const percent = (i / intervals) * 100;
+      const beats = Math.round((percent / 100) * this.maxBeats);
+      
+      const label = document.createElement('span');
+      label.textContent = `Beat ${beats}`;
+      label.title = `Beat ${beats}`;
+      
+      labels.appendChild(label);
+    }
+    
+    return labels;
   }
   
-  return labels;
-}
-
+  createTimeLabels() {
+    const labels = document.createElement('div');
+    labels.className = 'timeline-time-labels';
+    
+    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+    const intervals = 5; // Show 6 time labels (0%, 20%, 40%, 60%, 80%, 100%)
+    
+    for (let i = 0; i <= intervals; i++) {
+      const percent = (i / intervals) * 100;
+      const timeMs = (percent / 100) * maxTimeMs;
+      const timeFormatted = formatMsToMMSS(timeMs);
+      const beats = Math.round((percent / 100) * this.maxBeats);
+      
+      const label = document.createElement('span');
+      label.textContent = `${timeFormatted}`;
+      label.title = `Beat ${beats} - ${timeFormatted}`;
+      
+      labels.appendChild(label);
+    }
+    
+    return labels;
+  }
   
   createControls() {
-  const controls = document.createElement('div');
-  controls.className = 'timeline-controls';
-  
-  const refreshBtn = document.createElement('button');
-  refreshBtn.className = 'timeline-control-btn';
-  refreshBtn.textContent = '🔄 Refresh';
-  refreshBtn.title = 'Refresh timeline with current Life Span settings';
-  refreshBtn.onclick = () => this.refresh();
-  
-  controls.appendChild(refreshBtn);
-  
-  return controls;
-}
-
+    const controls = document.createElement('div');
+    controls.className = 'timeline-controls';
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'timeline-control-btn';
+    refreshBtn.textContent = '🔄 Refresh';
+    refreshBtn.title = 'Refresh timeline with current Life Span settings';
+    refreshBtn.onclick = () => this.refresh();
+    
+    // NEW: Add snap to beat toggle
+    const snapToggle = document.createElement('label');
+    snapToggle.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #666;
+      cursor: pointer;
+    `;
+    
+    const snapCheckbox = document.createElement('input');
+    snapCheckbox.type = 'checkbox';
+    snapCheckbox.checked = this.snapToBeat;
+    snapCheckbox.style.cssText = 'width: 16px; height: 16px;';
+    snapCheckbox.onchange = (e) => {
+      this.snapToBeat = e.target.checked;
+      console.log(`📐 Snap to beat: ${this.snapToBeat ? 'ON' : 'OFF'}`);
+    };
+    
+    const snapLabel = document.createElement('span');
+    snapLabel.textContent = '📐 Snap to Beat';
+    
+    snapToggle.appendChild(snapCheckbox);
+    snapToggle.appendChild(snapLabel);
+    
+    controls.appendChild(refreshBtn);
+    controls.appendChild(snapToggle);
+    
+    return controls;
+  }
   
   updateVoiceData() {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
@@ -11111,39 +11428,38 @@ createTimeLabels() {
   }
   
   updatePlayhead() {
-  if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
-    return;
+    if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
+      return;
+    }
+    
+    const elapsedMs = masterClock.getElapsedTime();
+    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+    
+    let percentage = (elapsedMs / maxTimeMs) * 100;
+    
+    // Handle repeat cycling
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (lifeSpan && lifeSpan.repeat && percentage > 100) {
+      percentage = percentage % 100;
+    }
+    
+    // Update playhead position
+    this.playhead.style.left = `${Math.min(percentage, 100)}%`;
+    
+    // Update tooltip text
+    const currentTimeFormatted = formatMsToMMSS(elapsedMs);
+    const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
+    
+    if (this.playheadTooltip) {
+      this.playheadTooltip.textContent = currentTimeFormatted;
+      this.playheadTooltip.title = `Beat ${currentBeat}`;
+    }
+    
+    if (DEBUG.TIMELINE && Math.random() < 0.05) {
+      console.log(`⏱️ Playhead: ${percentage.toFixed(1)}% (${currentTimeFormatted}, Beat ${currentBeat})`);
+    }
   }
   
-  const elapsedMs = masterClock.getElapsedTime();
-  const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-  
-  let percentage = (elapsedMs / maxTimeMs) * 100;
-  
-  // Handle repeat cycling
-  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-  if (lifeSpan && lifeSpan.repeat && percentage > 100) {
-    percentage = percentage % 100;
-  }
-  
-  // Update playhead position
-  this.playhead.style.left = `${Math.min(percentage, 100)}%`;
-  
-  // Update tooltip text
-  const currentTimeFormatted = formatMsToMMSS(elapsedMs);
-  const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
-  
-  if (this.playheadTooltip) {
-    this.playheadTooltip.textContent = currentTimeFormatted;
-    this.playheadTooltip.title = `Beat ${currentBeat}`;
-  }
-  
-  if (DEBUG.TIMELINE && Math.random() < 0.05) {
-    console.log(`⏱️ Playhead: ${percentage.toFixed(1)}% (${currentTimeFormatted}, Beat ${currentBeat})`);
-  }
-}
-
-
   refresh() {
     if (!this.container) return;
     
@@ -11153,8 +11469,6 @@ createTimeLabels() {
     
     this.render(this.container);
   }
-  
-  
   
   startUpdating() {
     if (this.updateInterval) return;
@@ -11206,38 +11520,133 @@ createTimeLabels() {
       console.log(`🔄 VisualTimeline updated for Voice ${newVoiceIndex + 1}`);
     }
   }
+
+  
+    // NEW: Update cursor based on position - CORRECTED TOOLTIPS
+  updateCursorForPosition(beat) {
+    const track = this.container.querySelector('.visual-timeline-track');
+    const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
+    
+    if (isInPlayingRegion) {
+      // Over green region - show gray vertical bar cursor (will mute)
+      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
+      track.title = `Beat ${beat.toFixed(0)} - Drag to mute | Click for event`;
+    } else {
+      // Over gray region - show green vertical bar cursor (will unmute)
+      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
+      track.title = `Beat ${beat.toFixed(0)} - Drag to unmute | Click for event`;
+    }
+  }
+  
+  
+  // NEW: Update legacy millisecond storage
+  updateLegacyStorage() {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const tempo = getCurrentTempoForVoice(this.voiceIndex);
+    const beatUnit = lifeSpan.beatUnit || 7;
+    
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpan[`lifeSpan${i}`];
+      if (span) {
+        if (!lifeSpan[`lifeSpan${i}Legacy`]) {
+          lifeSpan[`lifeSpan${i}Legacy`] = {};
+        }
+        
+        lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
+        lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
+      }
+    }
+    
+    console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
+  }
+
+
+  // NEW: Show drag preview overlay
+  showDragPreview(startBeat, endBeat) {
+    // Clear existing preview
+    this.clearDragPreview();
+    
+    const track = this.container.querySelector('.visual-timeline-track');
+    if (!track) return;
+    
+    const minBeat = Math.min(startBeat, endBeat);
+    const maxBeat = Math.max(startBeat, endBeat);
+    
+    const leftPercent = (minBeat / this.maxBeats) * 100;
+    const widthPercent = ((maxBeat - minBeat) / this.maxBeats) * 100;
+    
+    const preview = document.createElement('div');
+    preview.className = 'timeline-drag-preview';
+    preview.style.cssText = `
+      position: absolute;
+      left: ${leftPercent.toFixed(2)}%;
+      width: ${widthPercent.toFixed(2)}%;
+      top: 5px;
+      bottom: 5px;
+      background: ${this.currentMode === 'mute' ? 'rgba(108,117,125,0.5)' : 'rgba(40,167,69,0.5)'};
+      border: 2px dashed ${this.currentMode === 'mute' ? '#6c757d' : '#28a745'};
+      border-radius: 4px;
+      z-index: 150;
+      pointer-events: none;
+    `;
+    
+    track.appendChild(preview);
+  }
+  
+  // NEW: Clear drag preview
+  clearDragPreview() {
+    const preview = this.container.querySelector('.timeline-drag-preview');
+    if (preview) {
+      preview.remove();
+    }
+  }
+  
+
+  // NEW: Update cursor based on position  
+  updateCursorForPosition(beat) {
+    const track = this.container.querySelector('.visual-timeline-track');
+    const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
+    
+    if (isInPlayingRegion) {
+      // Over green region - show gray vertical bar cursor (will mute)
+      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
+      track.title = `Beat ${beat.toFixed(0)} - Drag to MUTE this area`;
+    } else {
+      // Over gray region - show green vertical bar cursor (will unmute)
+      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
+      track.title = `Beat ${beat.toFixed(0)} - Drag to UNMUTE this area`;
+    }
+  }
+
 }
 
 // Global visual timeline instance
 let visualTimeline = null;
 
 // ===== GLOBAL VISUAL TIMELINE FUNCTIONS =====
-
+// Updated showVisualTimeline function - FIXED to use VisualTimeline
 function showVisualTimeline() {
-  console.log('🎬 Showing Visual Timeline for Voice', currentVoice + 1);
+  console.log('🎬 Showing Interactive Timeline for Voice', currentVoice + 1);
   
   // Find or create timeline container
   let timelineContainer = document.getElementById('visual-timeline-container');
   
   if (!timelineContainer) {
-    // Create new container above parameter section
     timelineContainer = document.createElement('div');
     timelineContainer.id = 'visual-timeline-container';
     
     const parameterSection = document.getElementById('parameter-section');
-    const mainContent = document.getElementById('main-content');
     
-    if (parameterSection && mainContent) {
-      // FIXED: Insert INSIDE parameter section, not above it
+    if (parameterSection) {
       parameterSection.insertBefore(timelineContainer, parameterSection.firstChild);
-      console.log('✅ Created timeline container INSIDE parameter section');
+      console.log('✅ Created interactive timeline container');
     } else {
-      console.error('❌ Could not find parameter section or main content');
+      console.error('❌ Could not find parameter section');
       return;
     }
   }
   
-  // Create or update timeline instance
+  // Create or update timeline instance using VisualTimeline
   if (!visualTimeline) {
     visualTimeline = new VisualTimeline(currentVoice);
   } else {
@@ -11252,9 +11661,8 @@ function showVisualTimeline() {
     visualTimeline.startUpdating();
   }
   
-  console.log('✅ Visual Timeline displayed');
+  console.log('✅ Interactive Timeline displayed with click-to-mute functionality');
 }
-
 
 function hideVisualTimeline() {
   const timelineContainer = document.getElementById('visual-timeline-container');
@@ -11269,13 +11677,12 @@ function hideVisualTimeline() {
   
   console.log('🙈 Visual Timeline hidden');
 }
-
+// Update visual timeline for voice changes - FIXED
 function updateVisualTimelineForVoiceChange(newVoiceIndex) {
   if (visualTimeline && visualTimeline.isVisible) {
     visualTimeline.updateForVoice(newVoiceIndex);
   }
 }
-
 
 // Global preset manager instance
 let presetManager = null;
@@ -11818,8 +12225,6 @@ function updateUndoRedoButtons() {
   }
 }
 
-
-
 /**
  * Show temporary visual feedback for undo/redo operations
  * @param {string} message - Message to display
@@ -11865,10 +12270,6 @@ function showUndoRedoFeedback(message, isWarning = false) {
   }
 }
 
-
-
-
-
 // FORCE CONNECT PLAY BUTTON
 setTimeout(() => {
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
@@ -11882,8 +12283,6 @@ setTimeout(() => {
     console.log('❌ PLAY button not found in DOM');
   }
 }, 2000);
-
-
 
 /**
  * Load legacy file format and convert to beat-based storage
@@ -11944,8 +12343,6 @@ function migrateLegacyLifeSpanData() {
   }
 }
 
-
-
 // Add anywhere in scripts.js (around line ~5500)
 function debugLifeSpanData(voiceIndex, context) {
   console.log(`\n🔍 LIFE SPAN DEBUG [${context}] - Voice ${voiceIndex + 1}:`);
@@ -11983,3 +12380,191 @@ function debugLifeSpanData(voiceIndex, context) {
   
   console.log('================================\n');
 }
+
+// ===== UPDATE GLOBAL VISUAL TIMELINE FUNCTIONS =====
+
+// Updated showVisualTimeline function - FIXED
+function showVisualTimeline() {
+  console.log('🎬 Showing Interactive Timeline for Voice', currentVoice + 1);
+  
+  // Find or create timeline container
+  let timelineContainer = document.getElementById('visual-timeline-container');
+  
+  if (!timelineContainer) {
+    timelineContainer = document.createElement('div');
+    timelineContainer.id = 'visual-timeline-container';
+    
+    const parameterSection = document.getElementById('parameter-section');
+    
+    if (parameterSection) {
+      parameterSection.insertBefore(timelineContainer, parameterSection.firstChild);
+      console.log('✅ Created interactive timeline container');
+    } else {
+      console.error('❌ Could not find parameter section');
+      return;
+    }
+  }
+  
+  // Create or update timeline instance using VisualTimeline only
+  if (!visualTimeline) {
+    visualTimeline = new VisualTimeline(currentVoice);
+  } else {
+    visualTimeline.updateForVoice(currentVoice);
+  }
+  
+  // Render timeline
+  visualTimeline.render(timelineContainer);
+  
+  // Start updates if master clock is running
+  if (masterClock && masterClock.isActive()) {
+    visualTimeline.startUpdating();
+  }
+  
+  console.log('✅ Interactive Timeline displayed with click-to-mute functionality');
+}
+
+
+// Update visual timeline for voice changes
+function updateVisualTimelineForVoiceChange(newVoiceIndex) {
+  if (visualTimeline && visualTimeline.isVisible) {
+    if (visualTimeline instanceof InteractiveTimeline) {
+      visualTimeline.updateForVoice(newVoiceIndex);
+    } else {
+      // Upgrade to interactive timeline
+      const container = document.getElementById('visual-timeline-container');
+      if (container) {
+        visualTimeline.destroy();
+        visualTimeline = new InteractiveTimeline(newVoiceIndex);
+        visualTimeline.render(container);
+      }
+    }
+  }
+}
+
+// ===== REGION ALGORITHM HELPER FUNCTIONS =====
+
+/**
+ * Detect all mute regions based on gaps between playing regions
+ * @param {Array} playingRegions - Array of {start, end} playing regions
+ * @param {number} maxBeats - Total timeline length
+ * @returns {Array} Array of {start, end} muted regions
+ */
+function detectMuteRegions(playingRegions, maxBeats) {
+  const mutedRegions = [];
+  
+  if (playingRegions.length === 0) {
+    return [{ start: 0, end: maxBeats }];
+  }
+  
+  const sorted = [...playingRegions].sort((a, b) => a.start - b.start);
+  
+  // Muted region at start
+  if (sorted[0].start > 0) {
+    mutedRegions.push({
+      start: 0,
+      end: sorted[0].start
+    });
+  }
+  
+  // Muted regions between playing regions
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const currentEnd = sorted[i].end;
+    const nextStart = sorted[i + 1].start;
+    
+    if (nextStart > currentEnd) {
+      mutedRegions.push({
+        start: currentEnd,
+        end: nextStart
+      });
+    }
+  }
+  
+  // Muted region at end
+  const lastRegion = sorted[sorted.length - 1];
+  if (lastRegion.end < maxBeats) {
+    mutedRegions.push({
+      start: lastRegion.end,
+      end: maxBeats
+    });
+  }
+  
+  return mutedRegions;
+}
+
+/**
+ * Convert mute regions back to playing regions (inverse operation)
+ * @param {Array} mutedRegions - Array of {start, end} muted regions
+ * @param {number} maxBeats - Total timeline length
+ * @returns {Array} Array of {start, end} playing regions
+ */
+function invertMuteRegions(mutedRegions, maxBeats) {
+  if (mutedRegions.length === 0) {
+    return [{ start: 0, end: maxBeats }];
+  }
+  
+  const playingRegions = [];
+  const sorted = [...mutedRegions].sort((a, b) => a.start - b.start);
+  
+  // Playing region before first mute
+  if (sorted[0].start > 0) {
+    playingRegions.push({
+      start: 0,
+      end: sorted[0].start
+    });
+  }
+  
+  // Playing regions between muted regions
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const currentEnd = sorted[i].end;
+    const nextStart = sorted[i + 1].start;
+    
+    if (nextStart > currentEnd) {
+      playingRegions.push({
+        start: currentEnd,
+        end: nextStart
+      });
+    }
+  }
+  
+  // Playing region after last mute
+  const lastMuted = sorted[sorted.length - 1];
+  if (lastMuted.end < maxBeats) {
+    playingRegions.push({
+      start: lastMuted.end,
+      end: maxBeats
+    });
+  }
+  
+  return playingRegions;
+}
+
+/**
+ * Optimize regions to fit 3-entrance limit
+ * Prioritizes longest regions and merges adjacent ones
+ * @param {Array} regions - Array of regions to optimize
+ * @returns {Array} Optimized array with maximum 3 regions
+ */
+function optimizeRegionsForThreeLimit(regions) {
+  if (regions.length <= 3) return regions;
+  
+  // Sort by duration (longest first)
+  const sorted = [...regions].sort((a, b) => (b.end - b.start) - (a.end - a.start));
+  
+  // Keep top 3 longest regions
+  let optimized = sorted.slice(0, 3);
+  
+  // Sort back by start time
+  optimized.sort((a, b) => a.start - b.start);
+  
+  // Assign entrance numbers
+  optimized.forEach((region, index) => {
+    region.entrance = index + 1;
+  });
+  
+  console.log(`✂️ Optimized ${regions.length} regions to 3:`, optimized);
+  
+  return optimized;
+}
+
+
+

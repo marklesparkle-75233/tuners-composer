@@ -2096,6 +2096,26 @@ FOOTER
   box-sizing: border-box;
 }
 
+/* Force default cursor throughout timeline */
+.visual-timeline-container,
+.visual-timeline-container *,
+.visual-timeline-track,
+.visual-timeline-track *,
+.timeline-region,
+.timeline-region.playing,
+.timeline-region.muted {
+  cursor: default !important;
+}
+
+/* Override any pointer cursors */
+.timeline-region.playing:hover,
+.timeline-region.muted:hover {
+  cursor: default !important;
+}
+
+
+
+
 .visual-timeline-header {
   display: flex;
   justify-content: space-between;
@@ -2170,7 +2190,10 @@ FOOTER
   font-weight: 600;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
   transition: all 0.2s ease;
+  cursor: inherit !important;
+  margin: 0; /* ← Fixed */
 }
+
 
 .timeline-region.playing {
   background: linear-gradient(45deg, #28a745, #34ce57);
@@ -2180,7 +2203,24 @@ FOOTER
   box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; /* Slightly stronger shadow */
   margin: 0 !important;
   padding: 0 !important;
+  cursor: inherit !important;
 }
+
+.timeline-region.muted {
+  cursor: inherit !important;
+  margin-left: 0 !important; /* ← Force no left margin */
+}
+
+.visual-timeline-track * {
+  cursor: inherit !important;
+}
+
+.timeline-region.playing:hover {
+  background: linear-gradient(45deg, #34ce57, #28a745) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+}
+
 
 .timeline-region.muted {
   background: repeating-linear-gradient(
@@ -2192,7 +2232,21 @@ FOOTER
   );
   color: white;
   border: 2px solid #343a40;
+  margin: 0; /* ← Fixed */
 }
+
+.timeline-region.muted:hover {
+  background: repeating-linear-gradient(
+    45deg,
+    #5a6268,
+    #5a6268 8px,
+    #6c757d 8px,
+    #6c757d 16px
+  ) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+}
+
 
 .timeline-playhead {
   position: absolute;
@@ -2560,4 +2614,98 @@ FOOTER
   transition: background 0.2s ease;
 }
 
+
+/* ===== INTERACTIVE TIMELINE STYLES (Phase 2) ===== */
+
+.timeline-region.interactive {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.timeline-region.interactive:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+  transform: translateY(-1px);
+  z-index: 50;
+}
+
+.timeline-region.playing.interactive:hover {
+  background: linear-gradient(45deg, #34ce57, #28a745) !important;
+}
+
+.timeline-region.muted.interactive:hover {
+  background: repeating-linear-gradient(
+    45deg,
+    #5a6268,
+    #5a6268 8px,
+    #6c757d 8px,
+    #6c757d 16px
+  ) !important;
+}
+
+/* Click feedback animation */
+@keyframes timeline-click-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.timeline-region.click-feedback {
+  animation: timeline-click-pulse 0.3s ease;
+}
+
+/* Region limit warning */
+.timeline-region-warning {
+  font-family: 'Segoe UI', sans-serif;
+  line-height: 1.4;
+}
+
+.timeline-region-warning button:hover {
+  background: #ffcd39 !important;
+  transform: translateY(-1px);
+}
+
+/* Interactive cursor styles */
+.visual-timeline-track.split-cursor {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><text x='12' y='16' text-anchor='middle' font-size='16'>✂</text></svg>") 12 12, pointer !important;
+}
+
+.visual-timeline-track.play-cursor {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><text x='12' y='16' text-anchor='middle' font-size='16'>▶</text></svg>") 12 12, pointer !important;
+}
+
+/* Update timeline controls layout */
+.timeline-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 0 15px 15px 15px;
+  flex-wrap: wrap;
+}
+
+.timeline-controls button {
+  white-space: nowrap;
+}
+
+/* Mobile responsive interactive timeline */
+@media (max-width: 768px) {
+  .timeline-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .timeline-controls label {
+    font-size: 11px;
+  }
+  
+  .visual-timeline-track {
+    height: 50px;
+    margin: 15px 10px;
+  }
+  
+  .timeline-region {
+    top: 10px;
+    bottom: 10px;
+  }
+}
 
