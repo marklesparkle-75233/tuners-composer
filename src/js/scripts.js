@@ -49,9 +49,9 @@ const DEBUG = {
   PERFORMANCE: false,      // CPU, memory, oscillator pool stats
   PHRASE_STYLES: false,    // Phrase pattern generation (uses PHRASE_STYLES_DEBUG)
   UNDO_REDO: true,        // NEW: Undo/redo operations and state capture
+  EVENTS: true,           // NEW: Events system operations and timeline interaction
   ALL: false               // Master override - enables all logging
 };
-
 
 // Master override
 if (DEBUG.ALL) {
@@ -581,25 +581,44 @@ function initializeVoices() {
           behavior: 25
         };
 
-        // Inside initializeVoices() function, update LIFE SPAN parameter:
+// Inside initializeVoices() function, update LIFE SPAN parameter:
 
 } else if (param.name === 'LIFE SPAN') {
   // Initialize Life Span parameter with BEAT-BASED storage
   const defaultTempo = 120;
   const defaultBeatUnit = 7; // Quarter Notes
   const defaultTimeMs = 300000; // 5 minutes
-  
-  // Calculate default in beats
-  // const defaultMaxBeats = msToBeats(defaultTimeMs, defaultBeatUnit, defaultTempo);
   const defaultMaxBeats = 700;
   
   voice.parameters[param.name] = {
     // PRIMARY STORAGE (beats)
-    maxTimeBeats: defaultMaxBeats,     // NEW: Store as beats (600 quarter notes @ 120 BPM)
+    maxTimeBeats: defaultMaxBeats,     
     beatUnit: defaultBeatUnit,         
+    
+    // NEW: Events array system (will replace 3-entrance system)
+    events: [
+      { 
+        type: 'mute', 
+        beatPosition: 0, 
+        action: 'unmute', 
+        id: 'default-start' 
+      },
+      { 
+        type: 'mute', 
+        beatPosition: defaultMaxBeats, 
+        action: 'mute', 
+        id: 'default-end' 
+      }
+      // Two events = voice plays from beat 0 to maxTimeBeats, then stops
+      // This replicates current Voice 1 behavior: finite timeline
+    ],
+    nextEventId: 2, // Updated for 2 default events
+
+    
+    // LEGACY: Keep existing 3-entrance system (for rollback safety)
     lifeSpan1: {
-      enterBeats: 0,                   // NEW: Store entrance as beats
-      exitBeats: 999999                // NEW: Store exit as beats (infinity)
+      enterBeats: 0,                   
+      exitBeats: 999999                // Infinity
     },
     lifeSpan2: {
       enterBeats: 0,
@@ -613,7 +632,7 @@ function initializeVoices() {
     behavior: 0,
     
     // LEGACY STORAGE (milliseconds - for backward compatibility)
-    maxTimeMs: defaultTimeMs,          // Keep for old file loading
+    maxTimeMs: defaultTimeMs,          
     lifeSpan1Legacy: {
       enter: 0,
       exit: 999999999
@@ -627,8 +646,6 @@ function initializeVoices() {
       exit: 0
     }
   };
-
-
       } else if (param.name === 'PHRASE STYLES') {
         // Initialize Phrase Styles parameter with defaults
         voice.parameters[param.name] = {
@@ -949,83 +966,8 @@ settingsRow.innerHTML = `
   </div>
 `;
 
-
-  
   wrapper.appendChild(settingsRow);
   
-  // Create 3 Life Span sliders (unchanged)
-  for (let i = 1; i <= 3; i++) {
-    const spanContainer = document.createElement('div');
-    spanContainer.className = 'slider-wrapper';
-    spanContainer.style.cssText = 'width: 100%; margin-bottom: 15px;';
-    
-    const spanHeader = document.createElement('div');
-    spanHeader.className = 'slider-label';
-    spanHeader.textContent = `Entrance & Exit ${i}`;
-    spanContainer.appendChild(spanHeader);
-    
-    const sliderWrapper = document.createElement('div');
-    sliderWrapper.className = 'life-span-dual-slider';
-    sliderWrapper.dataset.spanNumber = i;
-    sliderWrapper.style.cssText = 'width: 100%; height: 40px; margin-top: 8px;';
-    
-    const sliderDiv = document.createElement('div');
-    sliderWrapper.appendChild(sliderDiv);
-    
-    // Get Life Span data for this span (BEAT-BASED)
-    let lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
-    
-    // SAFEGUARD: Create if missing
-    if (!lifeSpanData) {
-      console.warn(`⚠️ Creating missing lifeSpan${i} for Voice ${voiceIndex + 1}`);
-      lifeSpanParam[`lifeSpan${i}`] = {
-        enterBeats: 0,
-        exitBeats: i === 1 ? 999999 : 0
-      };
-      lifeSpanData = lifeSpanParam[`lifeSpan${i}`];
-    }
-    
-    // SAFEGUARD: Ensure beat properties exist
-    if (typeof lifeSpanData.enterBeats === 'undefined') {
-      console.warn(`⚠️ enterBeats missing for lifeSpan${i}, initializing to 0`);
-      lifeSpanData.enterBeats = 0;
-    }
-    
-    if (typeof lifeSpanData.exitBeats === 'undefined') {
-      console.warn(`⚠️ exitBeats missing for lifeSpan${i}, initializing...`);
-      lifeSpanData.exitBeats = i === 1 ? 999999 : 0;
-    }
-    
-    const enterBeats = lifeSpanData.enterBeats;
-    const exitBeats = lifeSpanData.exitBeats;
-    
-    console.log(`📖 Life Span ${i} initial values: ${enterBeats}-${exitBeats} beats`);
-    
-    // Check if exit is infinity
-    const isInfinity = (exitBeats >= 999999);
-    
-    // Create formatter for beat-based tooltips
-    const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
-    
-    try {
-      noUiSlider.create(sliderDiv, {
-        start: [enterBeats, isInfinity ? maxBeats : Math.min(exitBeats, maxBeats)],
-        connect: true,
-        range: { min: 0, max: maxBeats },
-        step: 1,
-        tooltips: [true, true],
-        format: formatter
-      });
-      
-      console.log(`✅ Created Life Span ${i} slider: ${enterBeats}-${exitBeats} beats (max: ${maxBeats})`);
-      
-    } catch (error) {
-      console.error(`❌ Error creating Life Span ${i} slider:`, error);
-    }
-    
-    spanContainer.appendChild(sliderWrapper);
-    wrapper.appendChild(spanContainer);
-  }
   
   return wrapper;
 }
@@ -1067,49 +1009,7 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   controlsWrapper.appendChild(repeatContainer);
   wrapper.appendChild(controlsWrapper);
   
-  // NEW: Add Visual Timeline button
-  const timelineButton = document.createElement('button');
-  timelineButton.className = 'visual-timeline-button';
-  timelineButton.textContent = '🎬 VISUAL TIMELINE';
-  timelineButton.style.cssText = `
-    width: 80%;
-    margin-top: 15px;
-    padding: 10px 20px;
-    background: linear-gradient(to bottom, #28a745, #1e7e34);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  `;
-  
-  timelineButton.onmouseover = function() {
-    this.style.background = 'linear-gradient(to bottom, #218838, #1c7430)';
-    this.style.transform = 'translateY(-1px)';
-    this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-  };
-  
-  timelineButton.onmouseout = function() {
-    this.style.background = 'linear-gradient(to bottom, #28a745, #1e7e34)';
-    this.style.transform = 'translateY(0)';
-    this.style.boxShadow = 'none';
-  };
-  
-  timelineButton.onclick = function() {
-    console.log('🎬 Visual Timeline button clicked');
-    try {
-      showVisualTimeline();
-    } catch (error) {
-      console.error('❌ Error in visual timeline button:', error);
-      alert(`Error: ${error.message}\n\nCheck console for details.`);
-    }
-  };
-  
-  wrapper.appendChild(timelineButton);
-  
-  return wrapper;
+ return wrapper;
 }
 
 
@@ -2412,204 +2312,6 @@ function updateTimelinePlayhead() {
 // ===== END TIMELINE VIEW FUNCTIONS =====
 
 
-function rebuildLifeSpanSliders(container, voiceIndex) {
-  console.log(`🔄 Rebuilding Life Span sliders for Voice ${voiceIndex + 1}`);
-
-  // DEBUG: Check data at start of rebuild
-  debugLifeSpanData(voiceIndex, 'Start of rebuildLifeSpanSliders');
-  
-  const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
-  
-  if (!lifeSpanParam) {
-    console.error(`❌ No LIFE SPAN parameter for Voice ${voiceIndex + 1}`);
-    return;
-  }
-  
-  const maxBeats = lifeSpanParam.maxTimeBeats || 600;
-  const beatUnit = lifeSpanParam.beatUnit || 7;
-  
-  console.log(`📏 Max: ${maxBeats} beats, Unit: ${rhythmOptions[beatUnit]}`);
-  
-  // Find all Life Span sliders
-  const spanSliders = container.querySelectorAll('.life-span-dual-slider');
-  
-  spanSliders.forEach((sliderContainer) => {
-    const spanNumber = parseInt(sliderContainer.dataset.spanNumber);
-    
-    console.log(`🔄 Rebuilding slider ${spanNumber}...`);
-    
-    // Get current BEAT values from PRIMARY storage (DON'T read from sliders)
-    const spanData = lifeSpanParam[`lifeSpan${spanNumber}`];
-    
-    if (!spanData) {
-      console.error(`   ❌ No data for lifeSpan${spanNumber}`);
-      return;
-    }
-    
-    // ALWAYS use stored data, never read from old sliders
-    let currentEnterBeats = spanData.enterBeats || 0;
-    let currentExitBeats = spanData.exitBeats || 0;
-    
-    console.log(`   📖 Using stored data: ${currentEnterBeats}-${currentExitBeats} beats`);
-    
-    // Find ALL existing slider instances and destroy them
-    const existingSliders = sliderContainer.querySelectorAll('.noUi-target');
-    
-    if (existingSliders.length > 0) {
-      console.log(`   🗑️ Found ${existingSliders.length} existing sliders, destroying...`);
-      
-      // Destroy ALL existing sliders WITHOUT reading their values (timeline operations)
-      existingSliders.forEach((slider) => {
-        try {
-          if (slider.noUiSlider) {
-            // DON'T read values - use stored data only
-            slider.noUiSlider.destroy();
-          }
-          slider.remove();
-        } catch (e) {
-          console.warn(`   ⚠️ Error destroying slider:`, e);
-        }
-      });
-
-      console.log(`   ✅ Destroyed ${existingSliders.length} sliders`);
-    }
-    
-    // Clamp beat values to new range
-    currentEnterBeats = Math.min(currentEnterBeats, maxBeats);
-    
-    if (currentExitBeats < 999999) {
-      currentExitBeats = Math.min(currentExitBeats, maxBeats);
-    }
-    
-    console.log(`   💾 Final values: ${currentEnterBeats}-${currentExitBeats} beats`);
-    
-    // Create NEW slider
-    const newSliderDiv = document.createElement('div');
-    sliderContainer.appendChild(newSliderDiv);
-    
-    // Create formatter
-    const formatter = createLifeSpanBeatFormatter(voiceIndex, beatUnit);
-    
-    // Check infinity
-    const isInfinity = (currentExitBeats >= 999999);
-    
-    try {
-      noUiSlider.create(newSliderDiv, {
-        start: [currentEnterBeats, isInfinity ? maxBeats : currentExitBeats],
-        connect: true,
-        range: { min: 0, max: maxBeats },
-        step: 1,
-        tooltips: [true, true],
-        format: formatter
-      });
-      
-      console.log(`   ✅ Created new slider: ${currentEnterBeats}-${currentExitBeats} beats (max: ${maxBeats})`);
-      
-      // Reconnect update handler
-      newSliderDiv.noUiSlider.on('update', function(values) {
-        const enterBeats = Math.round(formatter.from(values[0]));
-        const exitBeats = Math.round(formatter.from(values[1]));
-        
-        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].enterBeats = enterBeats;
-        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}`].exitBeats = exitBeats;
-        
-        // Update legacy
-        const tempo = getCurrentTempoForVoice(voiceIndex);
-        const beatUnit = voiceData[voiceIndex].parameters['LIFE SPAN'].beatUnit;
-        
-        if (!voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`]) {
-          voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`] = {};
-        }
-        
-        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`].enter = beatsToMs(enterBeats, beatUnit, tempo);
-        voiceData[voiceIndex].parameters['LIFE SPAN'][`lifeSpan${spanNumber}Legacy`].exit = beatsToMs(exitBeats, beatUnit, tempo);
-      });
-      
-    } catch (error) {
-      console.error(`   ❌ Error creating slider ${spanNumber}:`, error);
-    }
-  });
-  
-  console.log(`✅ Rebuilt all sliders for Voice ${voiceIndex + 1} - PRESERVED timeline changes`);
-}
-
-
-
-function updateLifeSpanSlidersForTempoChange(voiceIndex) {
-  // Find the Life Span parameter container for this voice
-  if (voiceIndex !== currentVoice) {
-    return;
-  }
-  
-  const parameterSection = document.getElementById('parameter-section');
-  const lifeSpanRollup = Array.from(parameterSection.querySelectorAll('.parameter-rollup'))
-    .find(rollup => {
-      const title = rollup.querySelector('.parameter-rollup-title');
-      return title && title.textContent.trim() === 'LIFE SPAN';
-    });
-  
-  if (!lifeSpanRollup) {
-    return;
-  }
-  
-  const lifeSpanContainer = lifeSpanRollup.querySelector('.dual-slider');
-  if (lifeSpanContainer) {
-    rebuildLifeSpanSliders(lifeSpanContainer, voiceIndex);
-  }
-  
-  // NEW: Also update the dual-mode displays
-  updateLifeSpanDisplaysForTempoChange(voiceIndex);
-}
-
-
-function updateLifeSpanDisplaysForTempoChange(voiceIndex) {
-  if (voiceIndex !== currentVoice) return;
-  
-  // Find Life Span containers
-  const parameterSection = document.getElementById('parameter-section');
-  const lifeSpanContainers = parameterSection.querySelectorAll('.dual-mode-container');
-  
-  lifeSpanContainers.forEach(container => {
-    const beatCountInput = container.querySelector('.beat-count-input');
-    const timeInput = container.querySelector('.time-input');
-    const equalsTime = container.querySelector('.equals-time');
-    const equalsBeats = container.querySelector('.equals-beats');
-    const tempoDisplays = container.querySelectorAll('.tempo-display, .tempo-display-time');
-    
-    if (!beatCountInput) return;
-    
-    // Get updated tempo
-    const newTempo = getCurrentTempoForVoice(voiceIndex);
-    const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
-    const beatUnit = lifeSpan.beatUnit || 7;
-    
-    // Update tempo displays
-    tempoDisplays.forEach(display => {
-      display.textContent = `@ ${newTempo} BPM`;
-    });
-    
-    // Recalculate time from current beat count
-    const currentBeats = parseInt(beatCountInput.value) || 600;
-    const newTimeMs = beatsToMs(currentBeats, beatUnit, newTempo);
-    const newTimeFormatted = formatMsToMMSS(newTimeMs);
-    
-    // Update displays
-    if (equalsTime) equalsTime.textContent = `= ${newTimeFormatted}`;
-    if (timeInput) timeInput.value = newTimeFormatted;
-    
-    // If currently in time mode, also update the beats display
-    const currentTimeValue = timeInput ? timeInput.value : newTimeFormatted;
-    const parsedMs = parseMMSSToMs(currentTimeValue);
-    if (parsedMs && equalsBeats) {
-      const recalcBeats = msToBeats(parsedMs, beatUnit, newTempo);
-      equalsBeats.textContent = `= ${recalcBeats} beats`;
-    }
-    
-    console.log(`🔄 Updated Life Span displays for tempo change: ${newTempo} BPM`);
-  });
-}
-
-
 function createVoiceTabs() {
   const voiceTabs = document.getElementById('voice-tabs');
   voiceTabs.innerHTML = '';
@@ -2872,7 +2574,6 @@ function updateCheckboxSelection(voiceIndex, paramName, index, isChecked) {
   const selectedNames = param.selectedValues.map(i => optionsList[i]);
   
 }
-
 
 function createDualSlider(param, voiceIndex) {
     const wrapper = document.createElement('div');
@@ -3485,6 +3186,11 @@ function renderParameters() {
     parameterSection.appendChild(parameterRollup);
   });
   
+  // NEW: Auto-show Visual Timeline for current voice
+  setTimeout(() => {
+    showVisualTimeline();
+  }, 50);
+
   setTimeout(() => {
     connectAllSliders();
   }, 100);
@@ -4604,6 +4310,58 @@ class InteractivePiano {
     });
   }
   
+  // NEW: Reset timeline to full-width playing
+  resetToFullPlaying() {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) return;
+    
+    // NEW: Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Reset to full playing`, true);
+    }
+    
+    // Reset events to default (play from 0 to maxBeats)
+    const maxBeats = lifeSpan.maxTimeBeats || 700;
+    
+    lifeSpan.events = [
+      {
+        type: 'mute',
+        beatPosition: 0,
+        action: 'unmute',
+        id: 'default-start'
+      },
+      {
+        type: 'mute',
+        beatPosition: maxBeats,
+        action: 'mute',
+        id: 'default-end'
+      }
+    ];
+    
+    lifeSpan.nextEventId = 1; // Reset event counter
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🔄 Reset Voice ${this.voiceIndex + 1} to full playing (0-${maxBeats} beats)`);
+      console.log(`   Events:`, lifeSpan.events);
+    }
+    
+    // Refresh timeline
+    this.refresh();
+    
+    // Show visual feedback
+    const refreshBtn = this.container.querySelector('.timeline-control-btn');
+    if (refreshBtn) {
+      const originalText = refreshBtn.textContent;
+      refreshBtn.textContent = '✅ Reset';
+      refreshBtn.style.background = '#28a745';
+      
+      setTimeout(() => {
+        refreshBtn.textContent = originalText;
+        refreshBtn.style.background = '';
+      }, 1500);
+    }
+  }
+
   updateVoiceData() {
     const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
     
@@ -5350,85 +5108,118 @@ if (this.lookaheadScheduler) {
     return shouldPlay;
   }
 
-
   isInLifeSpan(elapsedMs) {
-  const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-  
-  if (!lifeSpanParam) {
-    return true; // No Life Span parameter
-  }
-  
-  // Get current tempo and beat unit
-  const tempo = this.currentTempo || getCurrentTempoForVoice(this.voiceIndex);
-  const beatUnit = lifeSpanParam.beatUnit || 7;
-  
-  // Convert elapsed time to beats ONCE
-  const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
-  
-  // Collect all active spans
-  let activeSpans = [];
-  for (let i = 1; i <= 3; i++) {
-    const span = lifeSpanParam[`lifeSpan${i}`];
+    const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
     
-    if (span && typeof span.exitBeats === 'number' && span.exitBeats > 0) {
-      activeSpans.push({
-        enterBeats: span.enterBeats || 0,
-        exitBeats: span.exitBeats >= 999999 ? Infinity : span.exitBeats,
-        number: i
-      });
+    if (!lifeSpanParam) {
+      return true; // No Life Span parameter
     }
-  }
-  
-  if (activeSpans.length === 0) {
-    return false; // No active spans
-  }
-  
-  // Handle REPEAT mode
-  if (lifeSpanParam.repeat) {
-    const maxBeats = lifeSpanParam.maxTimeBeats || 700;
     
-    // Check for infinite spans
-    for (const span of activeSpans) {
-      if (span.exitBeats === Infinity) {
-        return true;
+    // NEW: Use events array instead of 3-entrance system
+    if (lifeSpanParam.events && lifeSpanParam.events.length > 0) {
+      return this.isInLifeSpanEvents(elapsedMs, lifeSpanParam);
+    }
+    
+    // FALLBACK: Use old 3-entrance system (for safety during transition)
+    return this.isInLifeSpanLegacy(elapsedMs, lifeSpanParam);
+  }
+
+  
+  // NEW: Events-based play/mute logic
+  isInLifeSpanEvents(elapsedMs, lifeSpanParam) {
+    const tempo = this.currentTempo || getCurrentTempoForVoice(this.voiceIndex);
+    const beatUnit = lifeSpanParam.beatUnit || 7;
+    const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
+    
+    // Handle repeat mode
+    let currentBeat = elapsedBeats;
+    if (lifeSpanParam.repeat) {
+      const maxBeats = lifeSpanParam.maxTimeBeats || 700;
+      currentBeat = elapsedBeats % maxBeats;
+    }
+    
+    // Process events chronologically to determine current play state
+    const muteEvents = lifeSpanParam.events
+      .filter(event => event.type === 'mute')
+      .sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    let isPlaying = false; // Default to muted
+    
+    muteEvents.forEach(event => {
+      if (currentBeat >= event.beatPosition) {
+        isPlaying = (event.action === 'unmute');
+      }
+    });
+    
+    if (DEBUG.EVENTS && Math.random() < 0.02) { // 2% of calls for debugging
+      console.log(`🎵 Voice ${this.voiceIndex + 1} events check:`);
+      console.log(`   Current beat: ${currentBeat.toFixed(1)} (elapsed: ${elapsedBeats.toFixed(1)})`);
+      console.log(`   Result: ${isPlaying ? 'PLAYING' : 'MUTED'} (from events system)`);
+    }
+    
+    return isPlaying;
+  }
+  
+  // LEGACY: Original 3-entrance system (fallback)
+  isInLifeSpanLegacy(elapsedMs, lifeSpanParam) {
+    // Get current tempo and beat unit
+    const tempo = this.currentTempo || getCurrentTempoForVoice(this.voiceIndex);
+    const beatUnit = lifeSpanParam.beatUnit || 7;
+    
+    // Convert elapsed time to beats ONCE
+    const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
+    
+    // Collect all active spans
+    let activeSpans = [];
+    for (let i = 1; i <= 3; i++) {
+      const span = lifeSpanParam[`lifeSpan${i}`];
+      
+      if (span && typeof span.exitBeats === 'number' && span.exitBeats > 0) {
+        activeSpans.push({
+          enterBeats: span.enterBeats || 0,
+          exitBeats: span.exitBeats >= 999999 ? Infinity : span.exitBeats,
+          number: i
+        });
       }
     }
     
-    // Calculate position within current cycle
-    const cyclePosition = elapsedBeats % maxBeats;
+    if (activeSpans.length === 0) {
+      return false; // No active spans
+    }
     
-    // Check if we're in any active span at this cycle position
-    for (const span of activeSpans) {
-      // FIXED: Use < (not <=) to EXCLUDE the exit beat
-      if (cyclePosition >= span.enterBeats && cyclePosition < span.exitBeats) {
-        if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) { // Log 1% of checks
-          console.log(`✓ Voice ${this.voiceIndex + 1} in span ${span.number}: beat ${cyclePosition.toFixed(1)} (${span.enterBeats}-${span.exitBeats})`);
+    // Handle REPEAT mode
+    if (lifeSpanParam.repeat) {
+      const maxBeats = lifeSpanParam.maxTimeBeats || 700;
+      
+      // Check for infinite spans
+      for (const span of activeSpans) {
+        if (span.exitBeats === Infinity) {
+          return true;
         }
+      }
+      
+      // Calculate position within current cycle
+      const cyclePosition = elapsedBeats % maxBeats;
+      
+      // Check if we're in any active span at this cycle position
+      for (const span of activeSpans) {
+        if (cyclePosition >= span.enterBeats && cyclePosition < span.exitBeats) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    // NON-REPEAT: Check spans once
+    for (const span of activeSpans) {
+      if (elapsedBeats >= span.enterBeats && elapsedBeats < span.exitBeats) {
         return true;
       }
     }
     
     return false;
   }
-  
-  // NON-REPEAT: Check spans once
-  for (const span of activeSpans) {
-    // FIXED: Use < (not <=) to EXCLUDE the exit beat - prevents extra note
-    if (elapsedBeats >= span.enterBeats && elapsedBeats < span.exitBeats) {
-      if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) {
-        console.log(`✓ Voice ${this.voiceIndex + 1} in span ${span.number}: beat ${elapsedBeats.toFixed(1)} (${span.enterBeats}-${span.exitBeats})`);
-      }
-      return true;
-    }
-  }
-  
-  if (DEBUG.VOICE_CLOCK && Math.random() < 0.01) {
-    console.log(`✗ Voice ${this.voiceIndex + 1} outside all spans at beat ${elapsedBeats.toFixed(1)}`);
-  }
-  
-  return false;
-}
-
 
 
    
@@ -8934,7 +8725,15 @@ actualContainers.forEach((container) => {
         console.log(`✅ Max Time updated: ${newMaxBeats} beats = ${quantizedFormatted} @ ${tempo} BPM`);
         
         // IMMEDIATELY rebuild all sliders with new range
-        rebuildLifeSpanSliders(container, currentVoice);
+        // NEW: Update Visual Timeline instead of rebuilding obsolete sliders
+        if (visualTimeline && visualTimeline.isVisible) {
+          visualTimeline.updateVoiceData(); // Update cached data first
+          visualTimeline.refresh();         // Then refresh display
+          
+          if (DEBUG.EVENTS) {
+            console.log(`🔄 Timeline refreshed for parameter change`);
+          }
+        }
         
         // Clear visual feedback
         setTimeout(() => {
@@ -9187,7 +8986,15 @@ if (beatUnitSelect) {
     voiceData[currentVoice].parameters['LIFE SPAN'].beatUnit = newBeatUnit;
     
     // Rebuild sliders to update tooltips with new time calculations
-    rebuildLifeSpanSliders(container, currentVoice);
+    // NEW: Update Visual Timeline instead of rebuilding obsolete sliders
+if (visualTimeline && visualTimeline.isVisible) {
+  visualTimeline.updateVoiceData(); // Update cached data first
+  visualTimeline.refresh();         // Then refresh display
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Timeline refreshed for parameter change`);
+  }
+}
   };
 }
 
@@ -9236,7 +9043,6 @@ lifeSpanModeButtons.forEach((button, index) => {
     }
   };
 });
-
 // Connect Beat Count Input
 if (lifeSpanBeatCountInput) {
   lifeSpanBeatCountInput.oninput = function(e) {
@@ -9258,7 +9064,7 @@ if (lifeSpanBeatCountInput) {
       e.target.style.borderColor = '#dc3545';
       e.target.style.backgroundColor = '#fff8f8';
       
-      // NEW: Show user-friendly error message
+      // Show user-friendly error message
       let errorMessage = '';
       if (newBeats < minimumBeats) {
         const actualSeconds = beatsToMs(newBeats, beatUnit, tempo) / 1000;
@@ -9306,6 +9112,35 @@ if (lifeSpanBeatCountInput) {
     const equivalentMs = beatsToMs(newBeats, beatUnit, tempo);
     voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = equivalentMs;
     
+    // NEW: Update events array when timeline length changes
+    const lifeSpanParam = voiceData[currentVoice].parameters['LIFE SPAN'];
+    if (lifeSpanParam.events && lifeSpanParam.events.length > 0) {
+      // Find and update the default-end event
+      const endEvent = lifeSpanParam.events.find(event => event.id === 'default-end');
+      if (endEvent) {
+        const oldBeat = endEvent.beatPosition;
+        endEvent.beatPosition = newBeats;
+        
+        if (DEBUG.EVENTS) {
+          console.log(`🔄 Updated default-end event: ${oldBeat} → ${newBeats} beats`);
+        }
+      }
+      
+      // If no default-end event exists, create one
+      if (!endEvent) {
+        lifeSpanParam.events.push({
+          type: 'mute',
+          beatPosition: newBeats,
+          action: 'mute',
+          id: 'default-end'
+        });
+        
+        if (DEBUG.EVENTS) {
+          console.log(`➕ Created default-end event at beat ${newBeats}`);
+        }
+      }
+    }
+    
     // Update displays
     const timeFormatted = formatMsToMMSS(equivalentMs);
     if (lifeSpanEqualsTime) lifeSpanEqualsTime.textContent = `= ${timeFormatted}`;
@@ -9317,7 +9152,15 @@ if (lifeSpanBeatCountInput) {
     
     console.log(`🎵 Beat mode: ${newBeats} beats = ${timeFormatted} @ ${tempo} BPM`);
     
-    rebuildLifeSpanSliders(container, currentVoice);
+    // NEW: Update Visual Timeline instead of rebuilding obsolete sliders
+if (visualTimeline && visualTimeline.isVisible) {
+  visualTimeline.updateVoiceData(); // Update cached data first
+  visualTimeline.refresh();         // Then refresh display
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Timeline refreshed for parameter change`);
+  }
+}
     
     // Clear visual feedback
     setTimeout(() => {
@@ -9352,6 +9195,35 @@ if (lifeSpanTimeInput) {
       voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeBeats = equivalentBeats;
       voiceData[currentVoice].parameters['LIFE SPAN'].maxTimeMs = parsedMs;
       
+      // NEW: Update events array when timeline length changes
+      const lifeSpanParam = voiceData[currentVoice].parameters['LIFE SPAN'];
+      if (lifeSpanParam.events && lifeSpanParam.events.length > 0) {
+        // Find and update the default-end event
+        const endEvent = lifeSpanParam.events.find(event => event.id === 'default-end');
+        if (endEvent) {
+          const oldBeat = endEvent.beatPosition;
+          endEvent.beatPosition = equivalentBeats;
+          
+          if (DEBUG.EVENTS) {
+            console.log(`🔄 Updated default-end event: ${oldBeat} → ${equivalentBeats} beats`);
+          }
+        }
+        
+        // If no default-end event exists, create one
+        if (!endEvent) {
+          lifeSpanParam.events.push({
+            type: 'mute',
+            beatPosition: equivalentBeats,
+            action: 'mute',
+            id: 'default-end'
+          });
+          
+          if (DEBUG.EVENTS) {
+            console.log(`➕ Created default-end event at beat ${equivalentBeats}`);
+          }
+        }
+      }
+      
       // FIXED: Show the original time value, not a recalculated one
       if (lifeSpanEqualsTime) lifeSpanEqualsTime.textContent = `= ${value}`; // Shows "= 0:05"
       
@@ -9363,7 +9235,15 @@ if (lifeSpanTimeInput) {
       
       console.log(`⏰ Time mode: ${value} = ${equivalentBeats} beats @ ${tempo} BPM`);
       
-      rebuildLifeSpanSliders(container, currentVoice);
+      // NEW: Update Visual Timeline instead of rebuilding obsolete sliders
+if (visualTimeline && visualTimeline.isVisible) {
+  visualTimeline.updateVoiceData(); // Update cached data first
+  visualTimeline.refresh();         // Then refresh display
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Timeline refreshed for parameter change`);
+  }
+}
       
       // Visual feedback
       e.target.style.borderColor = '#28a745';
@@ -9383,8 +9263,6 @@ if (lifeSpanTimeInput) {
       }, 3000);
     }
   };
-
-
   
   lifeSpanTimeInput.onkeypress = function(e) {
     if (e.key === 'Enter') {
@@ -10791,7 +10669,7 @@ class VisualTimeline {
     this.dragStartBeat = null;
     this.currentMode = null; // 'mute' or 'unmute'
     this.hoverBeat = null;
-
+    this.isHandleDragging = false; // NEW: Track handle drag state
     
     if (DEBUG.TIMELINE) {
       console.log(`🎬 VisualTimeline created for Voice ${voiceIndex + 1}`);
@@ -10840,102 +10718,666 @@ class VisualTimeline {
       console.log(`   Max: ${this.maxBeats} beats @ ${this.tempo} BPM`);
     }
   }
-  
-makeTrackInteractive() {
+
+  makeTrackInteractive() {
   const track = this.container.querySelector('.visual-timeline-track');
-  if (!track) {
-    console.error('❌ Timeline track not found for interaction');
-    return;
-  }
+  if (!track) return;
   
-  // Add simple click-only styling
+  // Enable interaction
   track.style.cursor = 'pointer';
   track.style.userSelect = 'none';
   
-  // Single click handler only - no drag, no double-click
-  track.addEventListener('click', (e) => this.handleSimpleClick(e));
+  // NEW: Enhanced click handler with modifier key support
+  track.addEventListener('click', (e) => {
+    // Check for modifier keys and target type
+    if (e.shiftKey && e.target.classList.contains('timeline-region')) {
+      // Shift+Click region → Quick parameter event
+      console.log(`🖱️ SHIFT+CLICK: Quick parameter event`);
+      this.handleQuickParameterEvent(e);
+      return;
+    }
+    
+    if (e.altKey && e.target.classList.contains('timeline-region')) {
+      // Alt+Click region → Quick delete
+      console.log(`🖱️ ALT+CLICK: Quick delete region`);
+      this.handleQuickRegionDelete(e);
+      return;
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🖱️ Single click: No action (use drag handles or double-click to create)`);
+    }
+  });
+  
+  // NEW: Double-click handler for context menu or region creation
+  track.addEventListener('dblclick', (e) => {
+    if (e.target.classList.contains('timeline-region')) {
+      // Double-click region → Context menu
+      console.log(`🖱️ DOUBLE-CLICK REGION: Show context menu`);
+      this.showRegionContextMenu(e);
+    } else if (!e.target.classList.contains('region-drag-handle')) {
+      // Double-click empty area → Create new region
+      console.log(`🖱️ DOUBLE-CLICK EMPTY: Starting new region creation`);
+      this.startNewRegionCreation(e);
+    }
+  });
   
   // Prevent context menu and selection
   track.addEventListener('contextmenu', (e) => e.preventDefault());
   track.addEventListener('selectstart', (e) => e.preventDefault());
   
-  if (DEBUG.TIMELINE) {
-    console.log(`🖱️ Track set to simple click-to-toggle mode`);
+  if (DEBUG.EVENTS) {
+    console.log(`🖱️ Timeline track interactive with enhanced controls:`);
+    console.log(`   • Drag handles = Resize region edges`);
+    console.log(`   • Click region = Move entire region`);
+    console.log(`   • Double-click empty = Create new region`);
+    console.log(`   • Double-click region = Context menu`);
+    console.log(`   • Shift+Click region = Quick parameter event`);
+    console.log(`   • Alt+Click region = Quick delete`);
   }
 }
 
-makeTrackInteractive() {
-  const track = this.container.querySelector('.visual-timeline-track');
-  if (!track) return;
+
+// NEW: Handle timeline click events (DISABLED - use drag handles instead)
+handleTimelineClick(e) {
+  if (DEBUG.EVENTS) {
+    console.log(`🖱️ Timeline click disabled - use drag handles for region editing`);
+  }
   
-  // Basic styling only - no interaction yet
-  track.style.cursor = 'default';
-  track.style.userSelect = 'none';
+  // All timeline editing now done through:
+  // - Drag handles (resize region edges)
+  // - Click region body (move entire region)
+  // - Reset button (restore full-width playing)
   
-  console.log(`🎬 Timeline track rendered (interaction coming in events system)`);
+  return; // No click-to-mute functionality
 }
 
 
-  // NEW: Check if beat is in a playing region
+// NEW: Convert screen X coordinate to beat position
+screenXToBeat(screenX) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return 0;
+  
+  const rect = track.getBoundingClientRect();
+  const relativeX = screenX - rect.left;
+  const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+  
+  return percentage * this.maxBeats;
+}
+
+// NEW: Snap beat to grid
+snapBeatToGrid(beat) {
+  return Math.round(beat);
+}
+
+  // NEW: Check if beat is in a playing region (using events system)
   checkIfBeatIsInPlayingRegion(beat) {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan) return false;
+    if (!lifeSpan || !lifeSpan.events) return false;
     
-    // Check all 3 Life Span entrances
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpan[`lifeSpan${i}`];
-      if (!span || span.exitBeats <= 0) continue;
-      
-      const enterBeats = span.enterBeats || 0;
-      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : span.exitBeats;
-      
-      if (beat >= enterBeats && beat < exitBeats) {
-        return true;
+    // Process events up to this beat to determine play state
+    const muteEvents = lifeSpan.events
+      .filter(event => event.type === 'mute')
+      .sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    let isPlaying = false;
+    
+    muteEvents.forEach(event => {
+      if (beat >= event.beatPosition) {
+        isPlaying = (event.action === 'unmute');
       }
+    });
+    
+    return isPlaying;
+  }
+
+  // NEW: Insert mute event at beat position
+  insertMuteEvent(beat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Generate unique ID
+    const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
+    lifeSpan.nextEventId++;
+    
+    // Create new mute event
+    const newEvent = {
+      type: 'mute',
+      beatPosition: beat,
+      action: 'mute',
+      id: eventId
+    };
+    
+    // Insert in chronological order
+    const insertIndex = lifeSpan.events.findIndex(event => 
+      event.type === 'mute' && event.beatPosition > beat
+    );
+    
+    if (insertIndex === -1) {
+      lifeSpan.events.push(newEvent);
+    } else {
+      lifeSpan.events.splice(insertIndex, 0, newEvent);
     }
     
-    return false;
+    if (DEBUG.EVENTS) {
+      console.log(`➕ Inserted MUTE event at beat ${beat} (${eventId})`);
+      console.log(`   Updated events:`, lifeSpan.events);
+    }
+  }
+
+  // NEW: Insert unmute event at beat position
+  insertUnmuteEvent(beat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Generate unique ID
+    const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
+    lifeSpan.nextEventId++;
+    
+    // Create new unmute event
+    const newEvent = {
+      type: 'mute',
+      beatPosition: beat,
+      action: 'unmute',
+      id: eventId
+    };
+    
+    // Insert in chronological order
+    const insertIndex = lifeSpan.events.findIndex(event => 
+      event.type === 'mute' && event.beatPosition > beat
+    );
+    
+    if (insertIndex === -1) {
+      lifeSpan.events.push(newEvent);
+    } else {
+      lifeSpan.events.splice(insertIndex, 0, newEvent);
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`➕ Inserted UNMUTE event at beat ${beat} (${eventId})`);
+      console.log(`   Updated events:`, lifeSpan.events);
+    }
+  }
+
+// NEW: Add drag functionality to region handles
+  addHandleDragFunctionality(handle, regionIndex, handleType) {
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartBeat = 0;
+    let originalEvents = null;
+    
+    // Mouse down - start drag
+    handle.onmousedown = (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // Prevent timeline click event
+      
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartBeat = this.screenXToBeat(e.clientX);
+      
+      // Capture state for undo
+      if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+        undoManager.captureState(`Timeline: Drag ${handleType} handle`, true);
+      }
+      
+      // Store original events for validation
+      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+      originalEvents = JSON.parse(JSON.stringify(lifeSpan.events));
+
+      // NEW: Store region's original boundaries before any visual changes
+      const region = handle.closest('.timeline-region');
+      if (region) {
+        const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+        const targetRegion = playingRegions[regionIndex];
+        
+        if (targetRegion) {
+          // Store actual beat boundaries (not CSS percentages)
+          region.dataset.originalStartBeat = targetRegion.start;
+          region.dataset.originalEndBeat = targetRegion.end;
+          
+          if (DEBUG.EVENTS) {
+            console.log(`💾 Stored original boundaries: ${targetRegion.start}-${targetRegion.end} beats`);
+          }
+        }
+      }
+      
+      // Visual feedback - highlight handle during drag
+      handle.style.background = 'rgba(40,167,69,1.0)';
+      handle.style.borderColor = '#1e7e34';
+      handle.style.width = '12px';
+      handle.style.boxShadow = '0 0 8px rgba(40,167,69,0.6)';
+      
+      // Add global mouse move and up listeners
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      if (DEBUG.EVENTS) {
+        console.log(`🖱️ Started dragging ${handleType} handle at beat ${dragStartBeat.toFixed(1)}`);
+      }
+    };
+    
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      
+      const currentBeat = this.screenXToBeat(e.clientX);
+      const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+      
+      // Clamp to timeline bounds
+      const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+      
+      // Update handle position visually (preview)
+      this.updateHandlePosition(handle, handleType, clampedBeat);
+      
+      // NEW: Show real-time beat position and time in tooltip
+      const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
+      const timeFormatted = formatMsToMMSS(timeMs);
+      
+      handle.title = `${handleType === 'left' ? 'Start' : 'End'}: Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
+      
+      // NEW: Optional - show floating tooltip for better visibility
+      this.showDragTooltip(e.clientX, e.clientY, clampedBeat, timeFormatted, handleType);
+    };
+
+    const handleMouseUp = (e) => {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      
+      const finalBeat = this.screenXToBeat(e.clientX);
+      const snappedFinalBeat = this.snapToBeat ? this.snapBeatToGrid(finalBeat) : finalBeat;
+      const clampedFinalBeat = Math.max(0, Math.min(this.maxBeats, snappedFinalBeat));
+      
+      // Apply the drag operation to events array
+      this.applyHandleDrag(regionIndex, handleType, clampedFinalBeat);
+      
+            // Remove global listeners first
+      document.removeEventListener('mousemove', handleWholeRegionMouseMove);
+      document.removeEventListener('mouseup', handleWholeRegionMouseUp);
+
+      
+      // Reset handle visual state
+      handle.style.background = 'rgba(40,167,69,0.7)';
+      handle.style.borderColor = '#fff';
+      handle.style.width = '8px';
+      handle.style.boxShadow = 'none';
+      handle.title = `Drag to adjust ${handleType === 'left' ? 'start' : 'end'} time`;
+      
+            // NEW: Remove floating tooltip
+      const dragTooltip = document.querySelector('.drag-tooltip');
+      if (dragTooltip) {
+        dragTooltip.remove();
+      }
+
+      // Refresh timeline to show final result
+      setTimeout(() => {
+        this.refresh();
+      }, 50);
+      
+      if (DEBUG.EVENTS) {
+        console.log(`✅ Finished dragging ${handleType} handle to beat ${clampedFinalBeat.toFixed(0)}`);
+      }
+    };
   }
   
-   // NEW: Show warning when no entrances available
-  showNoAvailableEntranceWarning() {
-    const warning = document.createElement('div');
-    warning.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #fff3cd;
-      border: 2px solid #ffc107;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
-      max-width: 400px;
-      text-align: center;
-    `;
+    // NEW: Update handle position during drag (visual preview)
+  updateHandlePosition(handle, handleType, beat) {
+    const percentage = (beat / this.maxBeats) * 100;
+    const region = handle.closest('.timeline-region');
+    if (!region) return;
     
-    warning.innerHTML = `
-      <div style="font-size: 18px; font-weight: bold; color: #856404; margin-bottom: 10px;">
-        ⚠️ No Available Entrances
-      </div>
-      <div style="color: #856404; margin-bottom: 15px;">
-        All 3 entrance windows are in use. Clear an existing entrance first.
-      </div>
-      <button onclick="this.parentElement.remove()" style="
-        background: #ffc107; color: #856404; border: none; padding: 8px 16px;
-        border-radius: 4px; font-weight: bold; cursor: pointer;
-      ">OK</button>
-    `;
+    // NEW: Use stored original boundaries instead of CSS calculations
+    const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
+    const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
     
-    document.body.appendChild(warning);
+    const originalLeftPercent = (originalStartBeat / this.maxBeats) * 100;
+    const originalRightPercent = (originalEndBeat / this.maxBeats) * 100;
     
-    setTimeout(() => {
-      if (warning.parentElement) {
-        warning.remove();
+    if (handleType === 'left') {
+      // LEFT HANDLE: Move left edge, keep right edge fixed at original position
+      const fixedRightPercent = originalRightPercent;
+      const newLeftPercent = Math.max(0, Math.min(percentage, fixedRightPercent - 1));
+      const newWidth = fixedRightPercent - newLeftPercent;
+      
+      region.style.left = `${newLeftPercent.toFixed(1)}%`;
+      region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
+      
+      if (DEBUG.EVENTS && Math.random() < 0.1) {
+        console.log(`🖱️ LEFT drag: ${newLeftPercent.toFixed(1)}% → ${fixedRightPercent.toFixed(1)}%`);
       }
-    }, 5000);
+      
+    } else {
+      // RIGHT HANDLE: Keep left edge fixed at original position, move right edge
+      const fixedLeftPercent = originalLeftPercent;
+      const newRightPercent = Math.max(fixedLeftPercent + 1, Math.min(percentage, 100));
+      const newWidth = newRightPercent - fixedLeftPercent;
+      
+      // Keep original left position, just adjust width
+      region.style.left = `${fixedLeftPercent.toFixed(1)}%`;
+      region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
+      
+      if (DEBUG.EVENTS && Math.random() < 0.1) {
+        console.log(`🖱️ RIGHT drag: ${fixedLeftPercent.toFixed(1)}% → ${newRightPercent.toFixed(1)}%`);
+      }
+    }
   }
+
+
+  // NEW: Apply handle drag to events array
+  applyHandleDrag(regionIndex, handleType, newBeat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Get current playing regions
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    
+    if (regionIndex >= playingRegions.length) {
+      console.warn(`Invalid region index ${regionIndex}`);
+      return;
+    }
+    
+    const region = playingRegions[regionIndex];
+    let newStartBeat = region.start;
+    let newEndBeat = region.end;
+    
+    // Update the appropriate boundary
+    if (handleType === 'left') {
+      newStartBeat = Math.max(0, Math.min(newBeat, region.end - 1)); // Can't go past end
+    } else {
+      newEndBeat = Math.max(region.start + 1, Math.min(newBeat, this.maxBeats)); // Can't go before start
+    }
+    
+    // Validate the new region
+    if (newStartBeat >= newEndBeat) {
+      console.warn(`Invalid drag: start ${newStartBeat} >= end ${newEndBeat}`);
+      return;
+    }
+    
+    // Update events array by replacing this region's events
+    this.replaceRegionInEvents(regionIndex, newStartBeat, newEndBeat);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🔄 Updated region ${regionIndex}: ${region.start}-${region.end} → ${newStartBeat}-${newEndBeat}`);
+    }
+  }
+
+    // NEW: Replace a region's events in the events array  
+  replaceRegionInEvents(regionIndex, newStart, newEnd) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Get current playing regions to identify which events to replace
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🔄 DRAG: Replacing region ${regionIndex}: ${targetRegion.start}-${targetRegion.end} → ${newStart}-${newEnd}`);
+      console.log(`   Before:`, lifeSpan.events.map(e => `${e.action}@${e.beatPosition}`));
+    }
+    
+    // STRATEGY: Remove events for this region, then add new events
+    // This prevents duplication and conflicts
+    
+    // Step 1: Remove events that define the target region
+    lifeSpan.events = lifeSpan.events.filter(event => {
+      if (event.type !== 'mute') return true; // Keep non-mute events
+      
+      // Remove the unmute event that starts this region
+      if (event.action === 'unmute' && event.beatPosition === targetRegion.start) {
+        if (DEBUG.EVENTS) {
+          console.log(`   🗑️ Removed start event: unmute@${event.beatPosition}`);
+        }
+        return false;
+      }
+      
+      // Remove the mute event that ends this region  
+      if (event.action === 'mute' && event.beatPosition === targetRegion.end) {
+        if (DEBUG.EVENTS) {
+          console.log(`   🗑️ Removed end event: mute@${event.beatPosition}`);
+        }
+        return false;
+      }
+      
+      return true; // Keep all other events
+    });
+    
+    // Step 2: Add new events for the resized region
+    const newStartEvent = {
+      type: 'mute',
+      beatPosition: newStart,
+      action: 'unmute',
+      id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
+    };
+    
+    const newEndEvent = {
+      type: 'mute', 
+      beatPosition: newEnd,
+      action: 'mute',
+      id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
+    };
+    
+    lifeSpan.events.push(newStartEvent);
+    lifeSpan.events.push(newEndEvent);
+    
+    // Step 3: Sort events chronologically
+    lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`   ✅ Added new events: unmute@${newStart}, mute@${newEnd}`);
+      console.log(`   After:`, lifeSpan.events.map(e => `${e.action}@${e.beatPosition}`));
+      
+      // Verify result
+      const newRegions = this.convertEventsToRegions(lifeSpan.events);
+      console.log(`   Result: ${newRegions.length} regions:`, newRegions.map(r => `${r.start}-${r.end}`));
+    }
+  }
+
+  
+// NEW: Show floating tooltip during drag
+  showDragTooltip(clientX, clientY, beat, timeFormatted, handleType) {
+    // Remove existing drag tooltip
+    const existingTooltip = document.querySelector('.drag-tooltip');
+    if (existingTooltip) {
+      existingTooltip.remove();
+    }
+    
+    // Create new floating tooltip
+    const tooltip = document.createElement('div');
+    tooltip.className = 'drag-tooltip';
+    tooltip.style.cssText = `
+      position: fixed;
+      left: ${clientX + 15}px;
+      top: ${clientY - 30}px;
+      background: #333;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      z-index: 10000;
+      pointer-events: none;
+      white-space: nowrap;
+    `;
+    
+    const handleLabel = handleType === 'left' ? 'Start' : 'End';
+    tooltip.textContent = `${handleLabel}: Beat ${beat.toFixed(0)} (${timeFormatted})`;
+    
+    document.body.appendChild(tooltip);
+  }
+
+  // NEW: Start whole-region drag operation
+  startWholeRegionDrag(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const region = e.target;
+    const regionIndex = parseInt(region.dataset.regionIndex);
+    
+    // Get original region boundaries from events
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    const regionWidth = targetRegion.end - targetRegion.start; // Width in beats
+    const dragStartX = e.clientX;
+    const dragStartBeat = this.screenXToBeat(dragStartX);
+    const clickOffsetBeat = dragStartBeat - targetRegion.start; // Where in region user clicked
+    
+    let isDragging = false;
+    
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Move region ${targetRegion.start}-${targetRegion.end}`, true);
+    }
+    
+        // Visual feedback - highlight entire region during drag
+    region.style.boxShadow = '0 0 12px rgba(40,167,69,0.8)';
+    region.style.transform = 'translateY(-2px)';
+    region.style.cursor = 'grabbing';
+    region.style.opacity = '0.8';
+    region.style.border = '2px solid #28a745';
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🎯 Starting whole-region drag:`);
+      console.log(`   Original region: ${targetRegion.start}-${targetRegion.end} (width: ${regionWidth} beats)`);
+      console.log(`   Click offset: ${clickOffsetBeat.toFixed(1)} beats from start`);
+    }
+
+    
+    const handleWholeRegionMouseMove = (e) => {
+      if (!isDragging) {
+        // Start dragging after small movement to distinguish from click
+        const dragDistance = Math.abs(e.clientX - dragStartX);
+        if (dragDistance > 5) {
+          isDragging = true;
+          if (DEBUG.EVENTS) {
+            console.log(`🖱️ Started whole-region drag (width: ${regionWidth} beats)`);
+          }
+        } else {
+          return; // Not enough movement yet
+        }
+      }
+      
+      const currentBeat = this.screenXToBeat(e.clientX);
+      const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+      
+      // Calculate new region start (maintain click offset)
+      let newRegionStart = snappedBeat - clickOffsetBeat;
+      let newRegionEnd = newRegionStart + regionWidth;
+      
+      // Clamp to timeline bounds (keep region width)
+      if (newRegionStart < 0) {
+        newRegionStart = 0;
+        newRegionEnd = regionWidth;
+      } else if (newRegionEnd > this.maxBeats) {
+        newRegionEnd = this.maxBeats;
+        newRegionStart = this.maxBeats - regionWidth;
+      }
+      
+      // Ensure non-negative values
+      newRegionStart = Math.max(0, newRegionStart);
+      newRegionEnd = Math.min(this.maxBeats, newRegionEnd);
+      
+      // Update visual position (preview)
+      this.updateWholeRegionPosition(region, newRegionStart, newRegionEnd);
+      
+      // Show position in tooltip
+      const timeMs = beatsToMs(newRegionStart, this.beatUnit, this.tempo);
+      const timeFormatted = formatMsToMMSS(timeMs);
+      
+      this.showDragTooltip(e.clientX, e.clientY, newRegionStart, timeFormatted, 'whole-region');
+    };
+    
+        const handleWholeRegionMouseUp = (e) => {
+      // Remove global listeners first
+      document.removeEventListener('mousemove', handleWholeRegionMouseMove);
+      document.removeEventListener('mouseup', handleWholeRegionMouseUp);
+      
+      if (isDragging) {
+        // Apply the drag operation
+        const currentBeat = this.screenXToBeat(e.clientX);
+        const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+        
+        let newRegionStart = snappedBeat - clickOffsetBeat;
+        let newRegionEnd = newRegionStart + regionWidth;
+        
+        // Clamp to timeline bounds
+        if (newRegionStart < 0) {
+          newRegionStart = 0;
+          newRegionEnd = regionWidth;
+        } else if (newRegionEnd > this.maxBeats) {
+          newRegionEnd = this.maxBeats;
+          newRegionStart = this.maxBeats - regionWidth;
+        }
+        
+        // NEW: Snap final positions to whole beat numbers
+        newRegionStart = Math.round(Math.max(0, newRegionStart));
+        newRegionEnd = Math.round(Math.min(this.maxBeats, newRegionEnd));
+        
+        // NEW: Ensure minimum region width of 1 beat
+        if (newRegionEnd <= newRegionStart) {
+          newRegionEnd = newRegionStart + 1;
+        }
+        
+        // Update events array
+        this.replaceRegionInEvents(regionIndex, newRegionStart, newRegionEnd);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`✅ Moved whole region to: ${newRegionStart}-${newRegionEnd} beats (snapped)`);
+        }
+      }
+      
+      // Reset visual state
+      region.style.boxShadow = '';
+      region.style.transform = '';
+      region.style.cursor = '';
+      region.style.opacity = '';
+      region.style.border = '';
+      
+      // Remove floating tooltip with fade effect
+      setTimeout(() => {
+        const dragTooltip = document.querySelector('.drag-tooltip');
+        if (dragTooltip) {
+          dragTooltip.style.transition = 'opacity 0.3s ease';
+          dragTooltip.style.opacity = '0';
+          setTimeout(() => dragTooltip.remove(), 300);
+        }
+      }, 800);
+      
+      // Refresh timeline to show final result
+      setTimeout(() => {
+        this.refresh();
+      }, 50);
+    };
+
+    
+    // Add global mouse listeners
+    document.addEventListener('mousemove', handleWholeRegionMouseMove);
+    document.addEventListener('mouseup', handleWholeRegionMouseUp);
+  }
+
+  // NEW: Update whole region position during drag (visual preview)
+  updateWholeRegionPosition(region, newStartBeat, newEndBeat) {
+    const leftPercent = (newStartBeat / this.maxBeats) * 100;
+    const rightPercent = (newEndBeat / this.maxBeats) * 100;
+    const width = rightPercent - leftPercent;
+    
+    region.style.left = `${leftPercent.toFixed(1)}%`;
+    region.style.width = `${Math.max(1, width).toFixed(1)}%`;
+    
+    // Update region label to show new position
+    const regionLabel = region.querySelector('.region-label');
+    if (regionLabel) {
+      regionLabel.textContent = `${newStartBeat.toFixed(0)}-${newEndBeat.toFixed(0)}`;
+    }
+  }
+
+
 
     // NEW: Update legacy millisecond storage
   updateLegacyStorage() {
@@ -11062,11 +11504,21 @@ makeTrackInteractive() {
     // Regions container
     const regionsContainer = document.createElement('div');
     regionsContainer.className = 'timeline-regions';
+    regionsContainer.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    `;
     
     // Render life span regions
     this.renderLifeSpanRegions(regionsContainer);
     
     track.appendChild(regionsContainer);
+
     
     // Playhead
     const playhead = document.createElement('div');
@@ -11126,86 +11578,196 @@ makeTrackInteractive() {
     return track;
   }
   
-  renderLifeSpanRegions(container) {
+    renderLifeSpanRegions(container) {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
     if (!lifeSpan) return;
     
-    console.log(`🔍 Rendering regions for Voice ${this.voiceIndex + 1}`);
-    console.log(`   Timeline maxBeats: ${this.maxBeats}`);
-    
-    // Collect all valid spans first
-    const validSpans = [];
-    
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpan[`lifeSpan${i}`];
-      if (!span || span.exitBeats <= 0) continue;
-      
-      const enterBeats = Math.max(0, span.enterBeats || 0);
-      const exitBeats = span.exitBeats >= 999999 ? this.maxBeats : Math.min(span.exitBeats, this.maxBeats);
-      
-      if (enterBeats < exitBeats) {
-        validSpans.push({
-          number: i,
-          enterBeats: enterBeats,
-          exitBeats: exitBeats,
-          isInfinity: span.exitBeats >= 999999
-        });
-      }
+    if (DEBUG.EVENTS) {
+      console.log(`🎬 Rendering regions from EVENTS for Voice ${this.voiceIndex + 1}`);
+      console.log(`   Timeline maxBeats: ${this.maxBeats}`);
+      console.log(`   Events array:`, lifeSpan.events);
     }
     
-    console.log(`   Found ${validSpans.length} valid spans:`, validSpans);
+    // NEW: Convert events array to playing regions
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
     
-    // Render each valid span with interactive styling
-    validSpans.forEach(span => {
-      const leftPercent = (span.enterBeats / this.maxBeats) * 100;
-      const rightPercent = (span.exitBeats / this.maxBeats) * 100;
-      console.log(`🔍 Region ${span.number} positioning:`); // ← Fixed: span.number instead of i
-      console.log(`   Enter: ${span.enterBeats} beats = ${leftPercent.toFixed(2)}%`);
-      console.log(`   Exit: ${span.exitBeats} beats = ${rightPercent.toFixed(2)}%`);
-      console.log(`   Width: ${(rightPercent - leftPercent).toFixed(2)}%`);
+    if (DEBUG.EVENTS) {
+      console.log(`   Converted to ${playingRegions.length} playing regions:`, playingRegions);
+    }
+    
+    // Render each playing region
+    playingRegions.forEach((region, index) => {
+      const leftPercent = (region.start / this.maxBeats) * 100;
+      const rightPercent = (region.end / this.maxBeats) * 100;
       
-      const region = document.createElement('div');
-      region.className = 'timeline-region playing interactive';
-      region.dataset.entrance = span.number;
+      if (DEBUG.EVENTS) {
+        console.log(`   Region ${index + 1}: ${region.start}-${region.end} beats = ${leftPercent.toFixed(1)}%-${rightPercent.toFixed(1)}%`);
+      }
+      
+            const regionElement = document.createElement('div');
+      regionElement.className = 'timeline-region playing interactive';
+      regionElement.dataset.regionIndex = index;
+      
+      // NEW: Ensure region is clickable and blocks event bubbling
+      regionElement.style.pointerEvents = 'auto';
+      regionElement.style.zIndex = '50';
+
       
       // Handle full-width vs partial-width regions
       if (leftPercent === 0 && rightPercent >= 99.5) {
-        region.style.cssText = `
+        regionElement.style.cssText = `
           position: absolute;
           left: 0;
           right: 0;
           top: 15px;
           bottom: 15px;
           border-radius: 6px;
-          cursor: inherit;
+          cursor: grab;
           transition: all 0.2s ease;
           user-select: none;
+          pointer-events: auto;
+          z-index: 100;
+          background: linear-gradient(45deg, #28a745, #34ce57);
         `;
       } else {
         const finalWidth = Math.max(1, rightPercent - leftPercent);
-        region.style.cssText = `
+        regionElement.style.cssText = `
           position: absolute;
           left: ${leftPercent.toFixed(1)}%;
           width: ${finalWidth.toFixed(1)}%;
           top: 15px;
           bottom: 15px;
           border-radius: 6px;
-          cursor: inherit;
+          cursor: grab;
           transition: all 0.2s ease;
           user-select: none;
+          pointer-events: auto;
+          z-index: 100;
+          background: linear-gradient(45deg, #28a745, #34ce57);
         `;
       }
-      
-      region.textContent = `Entrance ${span.number}`;
-      region.title = `Entrance ${span.number}: Beat ${span.enterBeats} - ${span.isInfinity ? '∞' : span.exitBeats}`;
 
       
-      container.appendChild(region);
+      // Clear text content to make room for handles
+      regionElement.textContent = '';
+      regionElement.title = `Playing region: Beat ${region.start} - ${region.end}`;
+      
+      // NEW: Add left drag handle
+      const leftHandle = document.createElement('div');
+      leftHandle.className = 'region-drag-handle left-handle';
+      leftHandle.dataset.regionIndex = index;
+      leftHandle.dataset.handleType = 'left';
+      leftHandle.style.cssText = `
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 8px;
+        background: rgba(255,255,255,0.8);
+        border-right: 2px solid #fff;
+        cursor: ew-resize;
+        z-index: 200;
+        border-radius: 6px 0 0 6px;
+        transition: all 0.2s ease;
+      `;
+      leftHandle.title = 'Drag to adjust start time';
+      
+      // NEW: Add right drag handle  
+      const rightHandle = document.createElement('div');
+      rightHandle.className = 'region-drag-handle right-handle';
+      rightHandle.dataset.regionIndex = index;
+      rightHandle.dataset.handleType = 'right';
+      rightHandle.style.cssText = `
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 8px;
+        background: rgba(255,255,255,0.8);
+        border-left: 2px solid #fff;
+        cursor: ew-resize;
+        z-index: 200;
+        border-radius: 0 6px 6px 0;
+        transition: all 0.2s ease;
+      `;
+      rightHandle.title = 'Drag to adjust end time';
+      
+      // NEW: Add region label in center
+      const regionLabel = document.createElement('div');
+      regionLabel.className = 'region-label';
+      regionLabel.style.cssText = `
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        pointer-events: none;
+        z-index: 150;
+      `;
+
+
+
+      regionLabel.textContent = `${region.start}-${region.end}`;
+      
+            // NEW: Handle hover effects (using timeline green colors)
+      leftHandle.onmouseenter = function() {
+        this.style.background = 'rgba(40,167,69,0.9)'; // Same green as timeline
+        this.style.borderRight = '2px solid #28a745';
+        this.style.width = '12px';
+      };
+      leftHandle.onmouseleave = function() {
+        this.style.background = 'rgba(40,167,69,0.7)'; // Slightly transparent green
+        this.style.borderRight = '2px solid #fff';
+        this.style.width = '8px';
+      };
+      
+      rightHandle.onmouseenter = function() {
+        this.style.background = 'rgba(40,167,69,0.9)'; // Same green as timeline
+        this.style.borderLeft = '2px solid #28a745';
+        this.style.width = '12px';
+      };
+      rightHandle.onmouseleave = function() {
+        this.style.background = 'rgba(40,167,69,0.7)'; // Slightly transparent green
+        this.style.borderLeft = '2px solid #fff';
+        this.style.width = '8px';
+      };
+
+      // NEW: Add drag functionality to handles
+      this.addHandleDragFunctionality(leftHandle, index, 'left');
+      this.addHandleDragFunctionality(rightHandle, index, 'right');
+      
+      // NEW: Add direct click handler to region element
+      regionElement.addEventListener('mousedown', (e) => {
+        // Only trigger if clicking the region itself (not handles)
+        if (!e.target.classList.contains('region-drag-handle')) {
+          e.preventDefault();
+          e.stopPropagation(); // Prevent track click handler
+          
+          console.log(`🖱️ REGION MOUSEDOWN: Starting whole-region drag`);
+          this.startWholeRegionDrag(e);
+        }
+      });
+      
+      // Add handles and label to region
+      regionElement.appendChild(leftHandle);
+      regionElement.appendChild(rightHandle);
+      regionElement.appendChild(regionLabel);
+      
+      container.appendChild(regionElement);
+
     });
+
     
     // Add muted regions if needed
-    if (validSpans.length > 0) {
-      this.renderMutedRegions(container, validSpans);
+    if (playingRegions.length > 0) {
+      this.renderMutedRegions(container, playingRegions);
     } else {
       // No playing regions - entire timeline is muted
       const mutedRegion = document.createElement('div');
@@ -11221,13 +11783,84 @@ makeTrackInteractive() {
         transition: all 0.2s ease;
         user-select: none;
       `;
-      mutedRegion.textContent = 'MUTED - Click to unmute';
-      mutedRegion.title = 'Timeline is muted - Click to create unmuted region';
+      mutedRegion.textContent = 'MUTED - Double-click to unmute';
+      mutedRegion.title = 'Timeline is muted - Double-click to create new playing region';
       
       container.appendChild(mutedRegion);
     }
   }
-  
+
+    // NEW: Convert events array to playing regions
+  convertEventsToRegions(events) {
+    if (!events || events.length === 0) {
+      if (DEBUG.EVENTS) {
+        console.log(`   No events found - timeline fully muted`);
+      }
+      return [];
+    }
+    
+    // Sort events by beat position
+    const sortedEvents = [...events]
+      .filter(event => event.type === 'mute') // Only process mute events for now
+      .sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`   Processing ${sortedEvents.length} mute events:`, sortedEvents);
+    }
+    
+    // Process events to determine playing regions
+    const playingRegions = [];
+    let isCurrentlyPlaying = false;
+    let currentRegionStart = null;
+    
+    sortedEvents.forEach(event => {
+      if (event.action === 'unmute' && !isCurrentlyPlaying) {
+        // Start a new playing region
+        isCurrentlyPlaying = true;
+        currentRegionStart = event.beatPosition;
+        
+        if (DEBUG.EVENTS) {
+          console.log(`     ▶️ Start playing at beat ${event.beatPosition}`);
+        }
+      } 
+      else if (event.action === 'mute' && isCurrentlyPlaying) {
+        // End current playing region
+        if (currentRegionStart !== null) {
+          playingRegions.push({
+            start: currentRegionStart,
+            end: event.beatPosition
+          });
+          
+          if (DEBUG.EVENTS) {
+            console.log(`     ⏹️ End playing at beat ${event.beatPosition} (region: ${currentRegionStart}-${event.beatPosition})`);
+          }
+        }
+        
+        isCurrentlyPlaying = false;
+        currentRegionStart = null;
+      }
+    });
+    
+    // Handle case where playing region extends to end of timeline
+    if (isCurrentlyPlaying && currentRegionStart !== null) {
+      playingRegions.push({
+        start: currentRegionStart,
+        end: this.maxBeats // Play until end of timeline
+      });
+      
+      if (DEBUG.EVENTS) {
+        console.log(`     ♾️ Playing region extends to end: ${currentRegionStart}-${this.maxBeats}`);
+      }
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`   Final playing regions:`, playingRegions);
+    }
+    
+    return playingRegions;
+  }
+
+ 
   renderMutedRegions(container, playingSpans) {
     const sortedSpans = playingSpans.sort((a, b) => a.enterBeats - b.enterBeats);
     const marginPercent = 0; // No gaps - snug regions
@@ -11370,47 +12003,483 @@ makeTrackInteractive() {
   }
   
   createControls() {
-    const controls = document.createElement('div');
-    controls.className = 'timeline-controls';
+      const controls = document.createElement('div');
+      controls.className = 'timeline-controls';
+      
+      const refreshBtn = document.createElement('button');
+      refreshBtn.className = 'timeline-control-btn';
+      refreshBtn.textContent = '🔄 Reset to Full';
+      refreshBtn.title = 'Reset timeline to full-width playing (clear all events)';
+      refreshBtn.onclick = () => this.resetToFullPlaying();
+      
+      // NEW: Add snap to beat toggle
+      const snapToggle = document.createElement('label');
+      snapToggle.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: #666;
+        cursor: pointer;
+      `;
+      
+      const snapCheckbox = document.createElement('input');
+      snapCheckbox.type = 'checkbox';
+      snapCheckbox.checked = this.snapToBeat;
+      snapCheckbox.style.cssText = 'width: 16px; height: 16px;';
+      snapCheckbox.onchange = (e) => {
+        this.snapToBeat = e.target.checked;
+        console.log(`📐 Snap to beat: ${this.snapToBeat ? 'ON' : 'OFF'}`);
+      };
+      
+      const snapLabel = document.createElement('span');
+      snapLabel.textContent = '📐 Snap to Beat';
+      
+      snapToggle.appendChild(snapCheckbox);
+      snapToggle.appendChild(snapLabel);
+      
+      controls.appendChild(refreshBtn);
+      controls.appendChild(snapToggle);
+      
+      return controls;
+    }
+  
+    // NEW: Start new region creation (double-click-and-drag)
+  startNewRegionCreation(e) {
+    e.preventDefault();
+    e.stopPropagation();
     
-    const refreshBtn = document.createElement('button');
-    refreshBtn.className = 'timeline-control-btn';
-    refreshBtn.textContent = '🔄 Refresh';
-    refreshBtn.title = 'Refresh timeline with current Life Span settings';
-    refreshBtn.onclick = () => this.refresh();
+    const startBeat = this.screenXToBeat(e.clientX);
+    const snappedStartBeat = this.snapToBeat ? this.snapBeatToGrid(startBeat) : startBeat;
+    const clampedStartBeat = Math.max(0, Math.min(this.maxBeats - 1, snappedStartBeat));
     
-    // NEW: Add snap to beat toggle
-    const snapToggle = document.createElement('label');
-    snapToggle.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: #666;
-      cursor: pointer;
-    `;
+    let isDragging = false;
+    let previewRegion = null;
     
-    const snapCheckbox = document.createElement('input');
-    snapCheckbox.type = 'checkbox';
-    snapCheckbox.checked = this.snapToBeat;
-    snapCheckbox.style.cssText = 'width: 16px; height: 16px;';
-    snapCheckbox.onchange = (e) => {
-      this.snapToBeat = e.target.checked;
-      console.log(`📐 Snap to beat: ${this.snapToBeat ? 'ON' : 'OFF'}`);
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Create new region`, true);
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🆕 Starting region creation at beat ${clampedStartBeat}`);
+    }
+    
+    // NEW: Show immediate visual feedback (1-beat width preview)
+    const initialEndBeat = Math.min(clampedStartBeat + 4, this.maxBeats); // Start with 4-beat region
+    this.showNewRegionPreview(clampedStartBeat, initialEndBeat);
+    
+    // NEW: Show initial tooltip
+    const initialTimeMs = beatsToMs(clampedStartBeat, this.beatUnit, this.tempo);
+    const initialTimeFormatted = formatMsToMMSS(initialTimeMs);
+    this.showDragTooltip(e.clientX, e.clientY, clampedStartBeat, 
+      `Creating: ${clampedStartBeat}-${initialEndBeat} (4 beats)`, 'creation');
+
+    const handleCreationMouseMove = (e) => {
+      const currentBeat = this.screenXToBeat(e.clientX);
+      const snappedCurrentBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+      const clampedCurrentBeat = Math.max(clampedStartBeat + 1, Math.min(this.maxBeats, snappedCurrentBeat));
+      
+      if (!isDragging) {
+        // Start dragging immediately (we already showed initial preview)
+        isDragging = true;
+        if (DEBUG.EVENTS) {
+          console.log(`🆕 Now sizing new region from beat ${clampedStartBeat}`);
+        }
+      }
+
+      
+      // Show preview of new region being created
+      this.showNewRegionPreview(clampedStartBeat, clampedCurrentBeat);
+      
+      // Show tooltip with region info
+      const width = clampedCurrentBeat - clampedStartBeat;
+      const timeMs = beatsToMs(clampedStartBeat, this.beatUnit, this.tempo);
+      const timeFormatted = formatMsToMMSS(timeMs);
+      
+      this.showDragTooltip(e.clientX, e.clientY, clampedStartBeat, 
+        `New: ${clampedStartBeat}-${clampedCurrentBeat} (${width} beats)`, 'creation');
     };
     
-    const snapLabel = document.createElement('span');
-    snapLabel.textContent = '📐 Snap to Beat';
+    const handleCreationMouseUp = (e) => {
+      // Remove global listeners
+      document.removeEventListener('mousemove', handleCreationMouseMove);
+      document.removeEventListener('mouseup', handleCreationMouseUp);
+      
+      // Clear preview
+      this.clearNewRegionPreview();
+      
+      if (isDragging) {
+        const endBeat = this.screenXToBeat(e.clientX);
+        const snappedEndBeat = this.snapToBeat ? this.snapBeatToGrid(endBeat) : endBeat;
+        const clampedEndBeat = Math.max(clampedStartBeat + 1, Math.min(this.maxBeats, snappedEndBeat));
+        
+        // Create the new region in events array
+        this.createNewRegionInEvents(clampedStartBeat, clampedEndBeat);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`✅ Created new region: ${clampedStartBeat}-${clampedEndBeat} beats`);
+        }
+        
+        // Refresh timeline
+        setTimeout(() => {
+          this.refresh();
+        }, 50);
+      }
+      
+      // Remove floating tooltip
+      setTimeout(() => {
+        const dragTooltip = document.querySelector('.drag-tooltip');
+        if (dragTooltip) {
+          dragTooltip.style.transition = 'opacity 0.3s ease';
+          dragTooltip.style.opacity = '0';
+          setTimeout(() => dragTooltip.remove(), 300);
+        }
+      }, 800);
+    };
     
-    snapToggle.appendChild(snapCheckbox);
-    snapToggle.appendChild(snapLabel);
-    
-    controls.appendChild(refreshBtn);
-    controls.appendChild(snapToggle);
-    
-    return controls;
+    // Add global mouse listeners
+    document.addEventListener('mousemove', handleCreationMouseMove);
+    document.addEventListener('mouseup', handleCreationMouseUp);
   }
-  
+
+  // NEW: Show preview of region being created
+  showNewRegionPreview(startBeat, endBeat) {
+    // Remove existing preview
+    this.clearNewRegionPreview();
+    
+    const track = this.container.querySelector('.visual-timeline-track');
+    if (!track) return;
+    
+    const leftPercent = (startBeat / this.maxBeats) * 100;
+    const rightPercent = (endBeat / this.maxBeats) * 100;
+    const width = rightPercent - leftPercent;
+    
+    const preview = document.createElement('div');
+    preview.className = 'new-region-preview';
+    preview.style.cssText = `
+      position: absolute;
+      left: ${leftPercent.toFixed(1)}%;
+      width: ${Math.max(1, width).toFixed(1)}%;
+      top: 15px;
+      bottom: 15px;
+      background: linear-gradient(45deg, rgba(40,167,69,0.5), rgba(52,206,87,0.5));
+      border: 2px dashed #28a745;
+      border-radius: 6px;
+      z-index: 250;
+      pointer-events: none;
+    `;
+    
+    track.appendChild(preview);
+  }
+
+  // NEW: Clear new region preview
+  clearNewRegionPreview() {
+    const preview = this.container.querySelector('.new-region-preview');
+    if (preview) {
+      preview.remove();
+    }
+  }
+
+  // NEW: Create new region in events array
+  createNewRegionInEvents(startBeat, endBeat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Generate unique IDs
+    const startEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+    const endEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+    
+    // Create events for new region
+    const newStartEvent = {
+      type: 'mute',
+      beatPosition: startBeat,
+      action: 'unmute',
+      id: startEventId
+    };
+    
+    const newEndEvent = {
+      type: 'mute',
+      beatPosition: endBeat,
+      action: 'mute',
+      id: endEventId
+    };
+    
+    // Add events and sort chronologically
+    lifeSpan.events.push(newStartEvent);
+    lifeSpan.events.push(newEndEvent);
+    lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`➕ Created new region events: unmute@${startBeat}, mute@${endBeat}`);
+      console.log(`   Total events:`, lifeSpan.events.length);
+    }
+  }  
+
+  // NEW: Show context menu for region (double-click region)
+  showRegionContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const region = e.target;
+    const regionIndex = parseInt(region.dataset.regionIndex);
+    const beat = this.screenXToBeat(e.clientX);
+    const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+    
+    // Get region info for menu
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    // Remove any existing context menu
+    const existingMenu = document.querySelector('.timeline-context-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+    
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'timeline-context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${e.clientX + 10}px;
+      top: ${e.clientY - 20}px;
+      background: white;
+      border: 2px solid #4a90e2;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      min-width: 180px;
+      overflow: hidden;
+    `;
+    
+    menu.innerHTML = `
+      <div style="background: #4a90e2; color: white; padding: 8px 12px; font-weight: 600; font-size: 12px;">
+        Region ${targetRegion.start}-${targetRegion.end}
+      </div>
+      <div class="menu-item" data-action="parameter-event" style="
+        padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #eee;
+        display: flex; align-items: center; gap: 8px; transition: background 0.2s ease;
+      ">
+        <span style="font-size: 14px;">💎</span>
+        <span>Set Parameter Event</span>
+      </div>
+      <div class="menu-item" data-action="delete-region" style="
+        padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+        transition: background 0.2s ease; color: #dc3545;
+      ">
+        <span style="font-size: 14px;">🗑️</span>
+        <span>Delete Region</span>
+      </div>
+    `;
+    
+    // Add hover effects
+    const menuItems = menu.querySelectorAll('.menu-item');
+    menuItems.forEach(item => {
+      item.onmouseenter = function() {
+        this.style.background = '#f8f9fa';
+      };
+      item.onmouseleave = function() {
+        this.style.background = '';
+      };
+      
+      item.onclick = (itemEvent) => {
+        itemEvent.preventDefault();
+        const action = item.dataset.action;
+        
+        if (action === 'parameter-event') {
+          this.handleParameterEventCreation(regionIndex, snappedBeat);
+        } else if (action === 'delete-region') {
+          this.handleRegionDeletion(regionIndex);
+        }
+        
+        // Remove menu
+        menu.remove();
+      };
+    });
+    
+    // Add to document
+    document.body.appendChild(menu);
+    
+    // Auto-remove menu when clicking elsewhere
+    const closeMenu = (closeEvent) => {
+      if (!menu.contains(closeEvent.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+    
+    setTimeout(() => {
+      document.addEventListener('click', closeMenu);
+    }, 100);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`📋 Context menu shown for region ${regionIndex} at beat ${snappedBeat}`);
+    }
+  }
+
+  // NEW: Handle quick parameter event (Shift+Click)
+  handleQuickParameterEvent(e) {
+    const region = e.target;
+    const regionIndex = parseInt(region.dataset.regionIndex);
+    const beat = this.screenXToBeat(e.clientX);
+    const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+    
+    console.log(`💎 Quick parameter event at beat ${snappedBeat} in region ${regionIndex}`);
+    
+    // For now, show placeholder - will implement parameter dialog later
+    this.showParameterEventPlaceholder(snappedBeat);
+  }
+  // NEW: Handle quick region deletion (Alt+Click)
+  handleQuickRegionDelete(e) {
+    const region = e.target;
+    const regionIndex = parseInt(region.dataset.regionIndex);
+    
+    // Get region info
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+    }
+    
+    // Delete immediately (no confirmation - Ctrl+Z available)
+    this.handleRegionDeletion(regionIndex);
+    
+    console.log(`🗑️ Quick deleted region: ${targetRegion.start}-${targetRegion.end} beats (Alt+Click)`);
+    
+    // Optional: Brief visual feedback
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #dc3545;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 10000;
+      animation: slideInRight 0.3s ease;
+    `;
+    feedback.textContent = `🗑️ Region Deleted`;
+    
+    document.body.appendChild(feedback);
+    
+    setTimeout(() => {
+      feedback.style.animation = 'slideOutRight 0.3s ease';
+      setTimeout(() => feedback.remove(), 300);
+    }, 1500);
+  }
+
+
+  // NEW: Handle parameter event creation (from menu or Shift+Click)
+  handleParameterEventCreation(regionIndex, beatPosition) {
+    console.log(`💎 Creating parameter event at beat ${beatPosition} in region ${regionIndex}`);
+    
+    // For Phase A.1, show placeholder dialog
+    this.showParameterEventPlaceholder(beatPosition);
+    
+    // TODO: In Phase A.2, this will open parameter selection dialog
+  }
+
+  // NEW: Handle region deletion (from menu or Alt+Click)
+  handleRegionDeletion(regionIndex) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // Get region to delete
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    // Remove events that define this region
+    lifeSpan.events = lifeSpan.events.filter(event => {
+      if (event.type !== 'mute') return true;
+      
+      // Remove unmute event at region start
+      if (event.action === 'unmute' && event.beatPosition === targetRegion.start) {
+        if (DEBUG.EVENTS) {
+          console.log(`   🗑️ Removed region start: unmute@${event.beatPosition}`);
+        }
+        return false;
+      }
+      
+      // Remove mute event at region end
+      if (event.action === 'mute' && event.beatPosition === targetRegion.end) {
+        if (DEBUG.EVENTS) {
+          console.log(`   🗑️ Removed region end: mute@${event.beatPosition}`);
+        }
+        return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort remaining events
+    lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🗑️ Deleted region ${regionIndex}: ${targetRegion.start}-${targetRegion.end} beats`);
+      console.log(`   Remaining events:`, lifeSpan.events.length);
+    }
+    
+    // Refresh timeline
+    setTimeout(() => {
+      this.refresh();
+    }, 50);
+  }
+
+  // NEW: Show parameter event placeholder (Phase A.1)
+  showParameterEventPlaceholder(beatPosition) {
+    // Create temporary notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      text-align: center;
+      max-width: 350px;
+    `;
+    
+    notification.innerHTML = `
+      <div style="font-size: 18px; margin-bottom: 10px;">💎</div>
+      <div style="font-weight: bold; margin-bottom: 8px;">Parameter Event</div>
+      <div style="color: #856404; margin-bottom: 15px;">
+        Beat ${beatPosition}<br>
+        <em>Parameter events will be implemented in Phase A.2</em>
+      </div>
+      <button onclick="this.parentElement.remove()" style="
+        background: #ffc107; color: #856404; border: none; padding: 8px 16px;
+        border-radius: 4px; font-weight: bold; cursor: pointer;
+      ">OK</button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 4000);
+  }
+
   updateVoiceData() {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
     if (!lifeSpan) {
@@ -11426,6 +12495,7 @@ makeTrackInteractive() {
       console.log(`📊 Updated timeline data: ${this.maxBeats} beats @ ${this.tempo} BPM`);
     }
   }
+  
   
   updatePlayhead() {
     if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
@@ -11460,6 +12530,7 @@ makeTrackInteractive() {
     }
   }
   
+
   refresh() {
     if (!this.container) return;
     
@@ -11521,7 +12592,57 @@ makeTrackInteractive() {
     }
   }
 
-  
+  // NEW: Reset timeline to full-width playing
+  resetToFullPlaying() {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan) return;
+    
+    // NEW: Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Reset to full playing`, true);
+    }
+    
+    // Reset events to default (play from 0 to maxBeats)
+    const maxBeats = lifeSpan.maxTimeBeats || 700;
+    
+    lifeSpan.events = [
+      {
+        type: 'mute',
+        beatPosition: 0,
+        action: 'unmute',
+        id: 'default-start'
+      },
+      {
+        type: 'mute',
+        beatPosition: maxBeats,
+        action: 'mute',
+        id: 'default-end'
+      }
+    ];
+    
+    lifeSpan.nextEventId = 1; // Reset event counter
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🔄 Reset Voice ${this.voiceIndex + 1} to full playing (0-${maxBeats} beats)`);
+      console.log(`   Events:`, lifeSpan.events);
+    }
+    
+    // Refresh timeline
+    this.refresh();
+    
+    // Show visual feedback
+    const refreshBtn = this.container.querySelector('.timeline-control-btn');
+    if (refreshBtn) {
+      const originalText = refreshBtn.textContent;
+      refreshBtn.textContent = '✅ Reset';
+      refreshBtn.style.background = '#28a745';
+      
+      setTimeout(() => {
+        refreshBtn.textContent = originalText;
+        refreshBtn.style.background = '';
+      }, 1500);
+    }
+  }
     // NEW: Update cursor based on position - CORRECTED TOOLTIPS
   updateCursorForPosition(beat) {
     const track = this.container.querySelector('.visual-timeline-track');
