@@ -2709,3 +2709,341 @@ FOOTER
   }
 }
 
+/* ===== CORRECTED ZOOM AND PARAMETER EVENTS STYLING ===== */
+
+.timeline-zoom-controls {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.zoom-btn {
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  min-width: 50px;
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #4a90e2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.zoom-btn:active:not(:disabled) {
+  transform: translateY(0);
+  background: #dee2e6;
+}
+
+.zoom-btn:disabled {
+  cursor: not-allowed;
+  color: #6c757d;
+  border-color: #e9ecef;
+  background: #f8f9fa;
+  transform: none;
+  opacity: 0.5;
+}
+
+.zoom-display {
+  background: white;
+  border: 2px solid #4a90e2;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-weight: bold;
+  color: #4a90e2;
+}
+
+.zoom-view-info {
+  font-style: italic;
+  background: rgba(255,255,255,0.8);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+}
+
+/* FIXED: Prevent region content from scaling (font distortion) */
+.timeline-regions {
+  transform-origin: left center;
+}
+
+.timeline-region {
+  /* FIXED: Prevent text scaling by using counter-transform */
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+/* FIXED: Apply counter-transform to text content in zoomed state */
+.visual-timeline-track.zoomed .region-label {
+  transform: scaleX(1) !important; /* Counter the horizontal scaling */
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* FIXED: Enhanced region handles for precise control */
+.visual-timeline-track.zoomed .region-drag-handle {
+  width: 10px;
+  border-width: 2px;
+  opacity: 0.9;
+}
+
+.visual-timeline-track.zoomed .region-drag-handle:hover {
+  width: 14px;
+  opacity: 1.0;
+  background: rgba(40,167,69,1.0) !important;
+}
+
+/* FIXED: Container overflow handling */
+.visual-timeline-track {
+  overflow: hidden !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+}
+
+.timeline-regions {
+  overflow: visible; /* Allow child positioning but parent clips */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* FIXED: Playhead scaling counter-transform */
+.timeline-playhead-container {
+  transform-origin: left center;
+}
+
+.visual-timeline-track.zoomed .timeline-playhead-container {
+  width: 3px !important; /* Maintain consistent width */
+}
+
+/* Unified beat tooltip (replaces all others) */
+.unified-beat-tooltip {
+  animation: unifiedTooltipFadeIn 0.2s ease;
+}
+
+@keyframes unifiedTooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ===== PARAMETER EVENT DIAMONDS - ENHANCED WITH DRAG FUNCTIONALITY ===== */
+
+.parameter-event-diamond {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #ffd700;
+  border: 2px solid #f39c12;
+  border-radius: 2px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  cursor: grab;
+  z-index: 300;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  user-select: none;
+}
+
+.parameter-event-diamond:hover {
+  background: #f1c40f;
+  border-color: #e67e22;
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.2);
+  box-shadow: 0 4px 12px rgba(243,156,18,0.5);
+  cursor: grab;
+}
+
+.parameter-event-diamond:active {
+  cursor: grabbing;
+}
+
+/* FIXED: Diamond scaling in zoomed view */
+.visual-timeline-track.zoomed .parameter-event-diamond {
+  /* Maintain fixed size regardless of zoom level */
+  width: 12px !important;
+  height: 12px !important;
+  transform: translate(-50%, -50%) rotate(45deg) scaleX(1) !important;
+  cursor: grab;
+}
+
+.visual-timeline-track.zoomed .parameter-event-diamond:hover {
+  transform: translate(-50%, -50%) rotate(45deg) scaleX(1) scale(1.2) !important;
+  cursor: grab;
+}
+
+/* NEW: Diamond drag states */
+.parameter-event-diamond.dragging {
+  cursor: grabbing !important;
+  z-index: 400 !important;
+  background: #f1c40f !important;
+  border-color: #e67e22 !important;
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.4) !important;
+  box-shadow: 0 8px 20px rgba(243,156,18,0.8) !important;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+  animation: diamondDragPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes diamondDragPulse {
+  from {
+    box-shadow: 0 6px 16px rgba(243,156,18,0.6);
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+  }
+  to {
+    box-shadow: 0 10px 24px rgba(243,156,18,0.9);
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.5));
+  }
+}
+
+/* NEW: Diamond drag constraint indicators */
+.diamond-drag-boundary {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: rgba(255,215,0,0.6);
+  z-index: 350;
+  pointer-events: none;
+  animation: boundaryPulse 1s ease-in-out infinite alternate;
+}
+
+.diamond-drag-boundary.left {
+  left: 2px;
+  border-left: 2px dashed #ffd700;
+}
+
+.diamond-drag-boundary.right {
+  right: 2px;
+  border-right: 2px dashed #ffd700;
+}
+
+@keyframes boundaryPulse {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 0.8;
+  }
+}
+
+/* NEW: Diamond position preview during drag */
+.diamond-drag-preview {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: rgba(241,196,15,0.6);
+  border: 3px dashed #f39c12;
+  border-radius: 3px;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  z-index: 380;
+  pointer-events: none;
+  animation: dragPreviewPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes dragPreviewPulse {
+  from {
+    background: rgba(241,196,15,0.4);
+    border-color: rgba(243,156,18,0.6);
+  }
+  to {
+    background: rgba(241,196,15,0.8);
+    border-color: rgba(243,156,18,1.0);
+  }
+}
+
+/* Enhanced time and beat labels - FIXED for zoom sync */
+.timeline-time-labels,
+.timeline-beat-labels {
+  transition: all 0.1s ease;
+}
+
+.timeline-time-labels span,
+.timeline-beat-labels span {
+  transition: none; /* Prevent label transition lag */
+  font-weight: 600;
+}
+
+/* Zoom-specific responsive adjustments */
+@media (max-width: 768px) {
+  .timeline-zoom-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 12px;
+  }
+  
+  .zoom-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    min-width: 40px;
+  }
+  
+  .zoom-view-info {
+    font-size: 10px;
+    margin-left: 5px;
+  }
+  
+  /* Mobile diamond adjustments */
+  .parameter-event-diamond {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .parameter-event-diamond:hover {
+    transform: translate(-50%, -50%) rotate(45deg) scale(1.3);
+  }
+}
+
+/* FIXED: Prevent tooltip cleanup race conditions */
+.beat-indicator-tooltip,
+.drag-tooltip,
+.parameter-event-tooltip {
+  display: none !important; /* Disable old tooltips in favor of unified system */
+}
+
+/* ===== REGION CREATION PREVIEW ANIMATION ===== */
+
+.region-creation-preview {
+  animation: creationPulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes creationPulse {
+  from {
+    opacity: 0.6;
+    border-color: #28a745;
+    background: linear-gradient(45deg, rgba(40,167,69,0.2), rgba(52,206,87,0.2));
+  }
+  to {
+    opacity: 0.9;
+    border-color: #34ce57;
+    background: linear-gradient(45deg, rgba(40,167,69,0.4), rgba(52,206,87,0.4));
+  }
+}
+
+.region-creation-preview .preview-label {
+  animation: labelPulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes labelPulse {
+  from {
+    border-color: #28a745;
+    background: rgba(255,255,255,0.9);
+  }
+  to {
+    border-color: #34ce57;
+    background: rgba(255,255,255,1.0);
+  }
+}

@@ -43,13 +43,13 @@ const DEBUG = {
   TIMELINE: false,         // Timeline View operations
   BEAT_CONVERSION: false,  // beatsToMs, msToBeats calculations
   SLIDER_CONNECTION: false, // Slider event handler connections
-  VOICE_CLOCK: true,      // Voice clock timing and scheduling
+  VOICE_CLOCK: false,      // Voice clock timing and scheduling
   MASTER_CLOCK: false,     // Master clock updates
   AUDIO: false,            // Audio node creation and cleanup
   PERFORMANCE: false,      // CPU, memory, oscillator pool stats
   PHRASE_STYLES: false,    // Phrase pattern generation (uses PHRASE_STYLES_DEBUG)
-  UNDO_REDO: true,        // NEW: Undo/redo operations and state capture
-  EVENTS: true,           // NEW: Events system operations and timeline interaction
+  UNDO_REDO: false,        // NEW: Undo/redo operations and state capture
+  EVENTS: false,           // NEW: Events system operations and timeline interaction
   ALL: false               // Master override - enables all logging
 };
 
@@ -398,6 +398,324 @@ class MasterClock {
 
   }
 
+  seekTo(targetTimeMs) {
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`🎯 MasterClock seeking to ${formatMsToMMSS(targetTimeMs)}`);
+  }
+  
+  const wasRunning = this.isRunning;
+  
+  // NEW: Stop all currently playing notes before seeking
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        const voiceClock = voiceClockManager.getVoiceClock(i);
+        if (voiceClock && voiceClock.activeNotes) {
+          this.stopActiveNotesInVoice(voiceClock);
+        }
+      }
+    }
+  }
+  
+  // MOVED: Apply parameter state BEFORE updating voice clocks
+  this.applyParameterStateAtTime(targetTimeMs);
+  
+  if (this.isRunning) {
+    // Seeking during playback - adjust timing but keep running
+    const now = Date.now();
+    this.masterStartTime = now - targetTimeMs;
+    this.currentTime = now;
+    this.elapsedTime = targetTimeMs;
+    this.lastUpdateTime = now;
+    this.lastParameterUpdate = now;
+    
+    // Ensure audioManager knows we're still playing
+    if (audioManager) {
+      audioManager.isPlaying = true;
+    }
+    
+    if (DEBUG.MASTER_CLOCK) {
+      console.log(`   Updated timing: masterStartTime adjusted for seamless playback`);
+      console.log(`   New elapsed time: ${formatMsToMMSS(this.elapsedTime)}`);
+    }
+  } else {
+    // Seeking while stopped - just set position
+    this.elapsedTime = targetTimeMs;
+    this.masterStartTime = Date.now() - targetTimeMs;
+    
+    if (DEBUG.MASTER_CLOCK) {
+      console.log(`   Set position while stopped: ${formatMsToMMSS(this.elapsedTime)}`);
+    }
+  }
+  
+  // Update all voice clocks AFTER parameter state is set
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        const voiceClock = voiceClockManager.getVoiceClock(i);
+        if (voiceClock && voiceClock.isActive) {
+          voiceClock.seekTo(targetTimeMs);
+        }
+      }
+    }
+  }
+  
+  // Update timeline playheads immediately
+  this.updateAllTimelines();
+  
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`✅ Seek complete to ${formatMsToMMSS(targetTimeMs)}`);
+  }
+}
+
+
+stopActiveNotesInVoice(voiceClock) {
+  if (!voiceClock.activeNotes) return;
+  
+  const notesToStop = Array.from(voiceClock.activeNotes);
+  
+  notesToStop.forEach(note => {
+    try {
+      // Stop oscillator immediately
+      if (note.oscillator && note.isActive) {
+        note.oscillator.stop();
+        note.isActive = false;
+      }
+    } catch (e) {
+      // Already stopped
+    }
+  });
+  
+  // Clear active notes tracking
+  voiceClock.activeNotes.clear();
+  
+  console.log(`🛑 Stopped ${notesToStop.length} active notes`);
+}
+
+
+applyParameterStateAtTime(targetTimeMs) {
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`🎛️ Applying parameter state at ${formatMsToMMSS(targetTimeMs)}`);
+  }
+  
+  let updatedVoices = 0;
+  
+  for (let i = 0; i < 16; i++) {
+    if (voiceData[i].enabled) {
+      const parameterState = this.getParameterStateAtTime(i, targetTimeMs);
+      this.applyParametersToVoice(i, parameterState);
+      updatedVoices++;
+    }
+  }
+  
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`✅ Applied parameter state to ${updatedVoices} voices`);
+  }
+}
+
+getParameterStateAtTime(voiceIndex, targetTimeMs) {
+  const lifeSpan = voiceData[voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    // No events - return current baseline parameters
+    return this.cloneBaselineParameters(voiceIndex);
+  }
+  
+  const beatUnit = lifeSpan.beatUnit || 7;
+  const tempo = getCurrentTempoForVoice(voiceIndex);
+  const targetBeat = msToBeats(targetTimeMs, beatUnit, tempo);
+  
+  // ALWAYS start fresh from baseline parameters (this ensures backward seeking works)
+const currentState = this.cloneBaselineParameters(voiceIndex);
+
+if (DEBUG.MASTER_CLOCK) {
+  console.log(`   🔄 Starting from baseline for Voice ${voiceIndex + 1} at beat ${targetBeat.toFixed(1)}`);
+}
+
+// Apply all parameter events up to targetBeat (chronological order)  
+const parameterEvents = lifeSpan.events
+  .filter(event => event.type === 'parameter' && event.beatPosition <= targetBeat)
+  .sort((a, b) => a.beatPosition - b.beatPosition);
+
+if (DEBUG.MASTER_CLOCK) {
+  console.log(`   📅 Found ${parameterEvents.length} parameter events to apply`);
+  parameterEvents.forEach(event => {
+    console.log(`     • Beat ${event.beatPosition}: ${event.parameter} = ${JSON.stringify(event.value)}`);
+  });
+}
+
+  
+  if (DEBUG.MASTER_CLOCK && parameterEvents.length > 0) {
+    console.log(`   Voice ${voiceIndex + 1}: Processing ${parameterEvents.length} parameter events up to beat ${targetBeat.toFixed(1)}`);
+  }
+  
+  // Apply each event (most recent wins)
+  parameterEvents.forEach(event => {
+    if (event.parameter && event.value) {
+      currentState[event.parameter] = event.value;
+      
+      if (DEBUG.MASTER_CLOCK) {
+        console.log(`     Applied: ${event.parameter} = ${JSON.stringify(event.value)} (beat ${event.beatPosition})`);
+      }
+    }
+  });
+  
+  return currentState;
+}
+
+cloneBaselineParameters(voiceIndex) {
+  const voice = voiceData[voiceIndex];
+  if (!voice) return {};
+  
+  // Create a deep copy of current parameter values
+  const baseline = {};
+  
+  Object.keys(voice.parameters).forEach(paramName => {
+    const param = voice.parameters[paramName];
+    
+    if (typeof param === 'object' && param !== null) {
+      // Handle different parameter types
+      if (typeof param.min === 'number' && typeof param.max === 'number') {
+        // Range parameter
+        baseline[paramName] = {
+          min: param.min,
+          max: param.max,
+          behavior: param.behavior || 0
+        };
+      } else if (param.selectedValues && Array.isArray(param.selectedValues)) {
+        // Multi-select parameter
+        baseline[paramName] = {
+          selectedValues: [...param.selectedValues],
+          behavior: param.behavior || 0
+        };
+      } else if (param.speed || param.depth) {
+        // Multi-dual parameter
+        baseline[paramName] = {
+          speed: param.speed ? { ...param.speed } : { min: 0, max: 0 },
+          depth: param.depth ? { ...param.depth } : { min: 0, max: 0 },
+          feedback: param.feedback ? { ...param.feedback } : { min: 0, max: 0 },
+          behavior: param.behavior || 0
+        };
+      } else {
+        // Complex parameter (copy as-is)
+        baseline[paramName] = JSON.parse(JSON.stringify(param));
+      }
+    } else {
+      // Simple parameter (number, string)
+      baseline[paramName] = param;
+    }
+  });
+  
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`📋 Cloned baseline parameters for Voice ${voiceIndex + 1}:`, Object.keys(baseline));
+  }
+  
+  // Log baseline volume specifically
+    if (baseline['VOLUME']) {
+      const vol = baseline['VOLUME'];
+      const avgVol = (vol.min + vol.max) / 2;
+      console.log(`   📊 Baseline VOLUME: ${vol.min}-${vol.max} (avg: ${avgVol.toFixed(1)})`);
+    }
+
+  return baseline;
+}
+
+applyParametersToVoice(voiceIndex, parameterState) {
+  if (!parameterState || Object.keys(parameterState).length === 0) return;
+
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`🎛️ Applying parameters to Voice ${voiceIndex + 1} voiceData`);
+  }
+
+  // UPDATE voiceData so new notes use correct parameters
+  Object.keys(parameterState).forEach(paramName => {
+    if (voiceData[voiceIndex].parameters[paramName]) {
+      const currentParam = voiceData[voiceIndex].parameters[paramName];
+      const newValue = parameterState[paramName];
+      
+      // Apply based on parameter type
+      if (typeof newValue === 'object' && newValue !== null) {
+        if (typeof newValue.min === 'number' && typeof newValue.max === 'number') {
+          // Range parameter - UPDATE voiceData
+          currentParam.min = newValue.min;
+          currentParam.max = newValue.max;
+          if (newValue.behavior !== undefined) {
+            currentParam.behavior = newValue.behavior;
+          }
+          
+          // Clear current interpolated value to force recalculation
+          delete currentParam.currentValue;
+          
+          if (DEBUG.MASTER_CLOCK && paramName === 'VOLUME') {
+            console.log(`     🔊 UPDATED voiceData ${paramName}: ${newValue.min}-${newValue.max}`);
+          }
+        }
+        // ... other parameter types unchanged
+      } else {
+        // Simple parameter
+        voiceData[voiceIndex].parameters[paramName] = newValue;
+      }
+    }
+  });
+
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`✅ voiceData updated - new notes will use these parameters`);
+  }
+}
+
+
+applyRealTimeAudioChanges(voiceIndex, parameterState) {
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`🔊 Applying real-time audio for Voice ${voiceIndex + 1}`);
+  }
+  
+  // Apply volume changes to active notes in voice clock
+  if (parameterState['VOLUME']) {
+    const volumeParam = parameterState['VOLUME'];
+    const newVolume = (volumeParam.min + volumeParam.max) / 2;
+    
+    console.log(`🔊 VOLUME UPDATE: Voice ${voiceIndex + 1} → ${newVolume.toFixed(1)} (updating active notes)`);
+    
+    // Update master volume control
+    if (audioManager && audioManager.setVolumeRealTime) {
+      audioManager.setVolumeRealTime(newVolume);
+    }
+    
+    // NEW: Update active notes in voice clock
+    if (voiceClockManager && voiceClockManager.isInitialized) {
+      const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+      if (voiceClock && voiceClock.updateVolumeForActiveNotes) {
+        voiceClock.updateVolumeForActiveNotes(newVolume);
+      }
+    }
+  }
+  
+  // Apply balance changes (existing code unchanged)
+  if (parameterState['STEREO BALANCE']) {
+    const balanceParam = parameterState['STEREO BALANCE'];
+    const newBalance = (balanceParam.min + balanceParam.max) / 2;
+    
+    console.log(`🔊 BALANCE UPDATE: Voice ${voiceIndex + 1} → ${newBalance.toFixed(1)}`);
+    
+    if (audioManager && audioManager.setBalanceRealTime) {
+      audioManager.setBalanceRealTime(newBalance);
+    }
+  }
+}
+
+
+  updateAllTimelines() {
+    // Update main timeline view playhead
+    if (timelineViewActive) {
+      updateTimelinePlayhead();
+    }
+    
+    // Update visual timeline playhead
+    if (visualTimeline && visualTimeline.isVisible) {
+      visualTimeline.updatePlayhead();
+    }
+  }
+
+
   update() {
     const now = Date.now();
     this.currentTime = now;
@@ -425,6 +743,105 @@ class MasterClock {
     this.lastUpdateTime = now;
   }
   
+  updateAllParameters() {
+  const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
+  
+  for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
+    if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
+      this.updateVoiceParameters(voiceIndex, deltaTime);
+      
+      // NEW: Apply real-time updates to currently playing notes
+      if (voiceClockManager && voiceClockManager.isInitialized) {
+        const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+        if (voiceClock && voiceClock.isActive) {
+          voiceClock.updateActiveNotesRealTime();
+        }
+      }
+    }
+  }
+}
+
+updateVoiceParameters(voiceIndex, deltaTime) {
+  const voice = voiceData[voiceIndex];
+  if (!voice) return;
+  
+  this.updateParameter(voice.parameters['VOLUME'], deltaTime);
+  this.updateParameter(voice.parameters['STEREO BALANCE'], deltaTime);
+  this.updateParameter(voice.parameters['MELODIC RANGE'], deltaTime);
+  this.updateParameter(voice.parameters['ATTACK VELOCITY'], deltaTime);
+  this.updateParameter(voice.parameters['DETUNING'], deltaTime);
+  this.updateParameter(voice.parameters['PORTAMENTO GLIDE TIME'], deltaTime);
+  this.updateParameter(voice.parameters['TEMPO (BPM)'], deltaTime);
+  this.updateParameter(voice.parameters['REVERB'], deltaTime);
+
+  this.updateEffectParameter(voice.parameters['TREMOLO'], deltaTime);
+  this.updateEffectParameter(voice.parameters['CHORUS'], deltaTime);
+  this.updateEffectParameter(voice.parameters['PHASER'], deltaTime);
+  this.updateEffectParameter(voice.parameters['DELAY'], deltaTime);
+  
+  if (voiceIndex === currentVoice && audioManager && audioManager.isPlaying) {
+    this.applyAudioChanges(voiceIndex);
+  }
+}
+
+updateParameter(param, deltaTime) {
+  if (!param || param.behavior <= 0) return;
+  
+  if (param.currentValue === undefined) {
+    param.currentValue = (param.min + param.max) / 2;
+  }
+  
+  param.currentValue = interpolateParameter(
+    param.currentValue,
+    param.min,
+    param.max,
+    param.behavior,
+    deltaTime * 2
+  );
+}
+
+updateEffectParameter(param, deltaTime) {
+  if (!param || param.behavior <= 0) return;
+  
+  if (param.speed) {
+    if (param.speed.currentValue === undefined) {
+      param.speed.currentValue = (param.speed.min + param.speed.max) / 2;
+    }
+    param.speed.currentValue = interpolateParameter(
+      param.speed.currentValue,
+      param.speed.min,
+      param.speed.max,
+      param.behavior,
+      deltaTime * 2
+    );
+  }
+  
+  if (param.depth) {
+    if (param.depth.currentValue === undefined) {
+      param.depth.currentValue = (param.depth.min + param.depth.max) / 2;
+    }
+    param.depth.currentValue = interpolateParameter(
+      param.depth.currentValue,
+      param.depth.min,
+      param.depth.max,
+      param.behavior,
+      deltaTime * 2
+    );
+  }
+}
+
+applyAudioChanges(voiceIndex) {
+  const voice = voiceData[voiceIndex];
+  
+  if (voice.parameters['VOLUME'].currentValue !== undefined && audioManager.setVolumeRealTime) {
+    audioManager.setVolumeRealTime(voice.parameters['VOLUME'].currentValue);
+  }
+  
+  if (voice.parameters['STEREO BALANCE'].currentValue !== undefined && audioManager.setBalanceRealTime) {
+    audioManager.setBalanceRealTime(voice.parameters['STEREO BALANCE'].currentValue);
+  }
+}
+
   getElapsedTime() {
     return this.elapsedTime;
   }
@@ -441,32 +858,38 @@ class MasterClock {
     return this.isRunning;
   }
   
-  // updateAllParameters() {
-  //   const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
-    
-  //   for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
-  //     if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
-  //       this.updateVoiceParameters(voiceIndex, deltaTime);
-  //     }
-  //   }
-  // }
-  updateAllParameters() {
-    const deltaTime = Math.min((this.currentTime - this.lastUpdateTime) / 1000, 0.05);
-    
-    for (let voiceIndex = 0; voiceIndex < 16; voiceIndex++) {
-      if (voiceData[voiceIndex] && voiceData[voiceIndex].enabled) {
-        this.updateVoiceParameters(voiceIndex, deltaTime);
+  applyParametersToVoice(voiceIndex, parameterState) {
+  if (!parameterState || Object.keys(parameterState).length === 0) return;
+
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`🎛️ Storing parameter state for Voice ${voiceIndex + 1} (NOT modifying voiceData)`);
+  }
+
+  // Store parameter state in voice clock for new notes (don't corrupt voiceData)
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
+    if (voiceClock) {
+      // Store the parameter state for use by new notes
+      voiceClock.currentParameterState = parameterState;
+      
+      if (DEBUG.MASTER_CLOCK) {
+        console.log(`   ✅ Stored parameter state in voice clock (voiceData preserved)`);
         
-        // NEW: Apply real-time updates to currently playing notes
-        if (voiceClockManager && voiceClockManager.isInitialized) {
-          const voiceClock = voiceClockManager.getVoiceClock(voiceIndex);
-          if (voiceClock && voiceClock.isActive) {
-            voiceClock.updateActiveNotesRealTime();
-          }
+        if (parameterState['VOLUME']) {
+          const vol = parameterState['VOLUME'];
+          const avg = (vol.min + vol.max) / 2;
+          console.log(`     🔊 Volume for new notes: ${vol.min}-${vol.max} (avg: ${avg.toFixed(1)})`);
         }
       }
     }
   }
+
+  // DON'T modify voiceData - it should stay as baseline
+  if (DEBUG.MASTER_CLOCK) {
+    console.log(`✅ Parameter state applied WITHOUT corrupting voiceData baseline`);
+  }
+}
+
 
   updateVoiceParameters(voiceIndex, deltaTime) {
     const voice = voiceData[voiceIndex];
@@ -595,7 +1018,7 @@ function initializeVoices() {
     maxTimeBeats: defaultMaxBeats,     
     beatUnit: defaultBeatUnit,         
     
-    // NEW: Events array system (will replace 3-entrance system)
+    // NEW: Enhanced Events array system (mute + parameter events)
     events: [
       { 
         type: 'mute', 
@@ -609,10 +1032,12 @@ function initializeVoices() {
         action: 'mute', 
         id: 'default-end' 
       }
-      // Two events = voice plays from beat 0 to maxTimeBeats, then stops
-      // This replicates current Voice 1 behavior: finite timeline
+      // Parameter events will be added here:
+      // { type: 'parameter', beatPosition: 64, parameter: 'VOLUME', 
+      //   changeType: 'range', value: {min: 80, max: 100}, id: 'evt-003' }
     ],
     nextEventId: 2, // Updated for 2 default events
+
 
     
     // LEGACY: Keep existing 3-entrance system (for rollback safety)
@@ -972,7 +1397,6 @@ settingsRow.innerHTML = `
   return wrapper;
 }
 
-
 function createLifeSpanBehaviorContainer(param, voiceIndex) {
   const wrapper = document.createElement('div');
   wrapper.className = 'behavior-container life-span-behavior';
@@ -1011,7 +1435,6 @@ function createLifeSpanBehaviorContainer(param, voiceIndex) {
   
  return wrapper;
 }
-
 
 // ===== TIMELINE VIEW HELPER FUNCTIONS =====
 
@@ -4172,26 +4595,27 @@ class InteractivePiano {
   }
   
   bindEvents() {
-    const keyboard = this.container.querySelector('.piano-keyboard');
+  const keyboard = this.container.querySelector('.piano-keyboard');
+  
+  keyboard.addEventListener('mousedown', (e) => {
+    if (!e.target.classList.contains('piano-key')) return;
     
-    keyboard.addEventListener('mousedown', (e) => {
-      if (!e.target.classList.contains('piano-key')) return;
-      
-      e.preventDefault();
-      const midiNote = parseInt(e.target.dataset.midi);
-      
-      this.toggleNote(midiNote);
-      
-      this.isDragging = false;
-      this.dragStartNote = midiNote;
-      this.dragMode = this.selectedNotes.has(midiNote) ? 'select' : 'deselect';
-      
-      document.addEventListener('mousemove', this.handleMouseMove);
-      document.addEventListener('mouseup', this.handleMouseUp);
-    });
+    e.preventDefault();
+    const midiNote = parseInt(e.target.dataset.midi);
     
-    keyboard.addEventListener('selectstart', (e) => e.preventDefault());
-  }
+    this.toggleNote(midiNote);
+    
+    this.isDragging = false;
+    this.dragStartNote = midiNote;
+    this.dragMode = this.selectedNotes.has(midiNote) ? 'select' : 'deselect';
+    
+    document.addEventListener('mousemove', this.handleMouseMove);
+    document.addEventListener('mouseup', this.handleMouseUp);
+  });
+  
+  keyboard.addEventListener('selectstart', (e) => e.preventDefault());
+}
+
   
   handleMouseMove = (e) => {
     if (!this.dragStartNote) return;
@@ -4208,61 +4632,22 @@ class InteractivePiano {
     this.selectRange(this.dragStartNote, currentNote, this.dragMode === 'select');
   }
   
-  handleMouseUp(e) {
-  const endBeat = this.screenXToBeat(e.clientX);
-  const snappedEndBeat = this.snapToBeat ? this.snapBeatToGrid(endBeat) : endBeat;
+  handleMouseUp = (e) => {
+  // This is for PIANO KEYBOARD, not timeline!
+  // Clean up global listeners
+  document.removeEventListener('mousemove', this.handleMouseMove);
+  document.removeEventListener('mouseup', this.handleMouseUp);
   
-  console.log(`🖱️ MOUSE UP at beat ${snappedEndBeat.toFixed(0)}`);
-  console.log(`   isDragging: ${this.isDragging}`);
-  console.log(`   dragStartBeat: ${this.dragStartBeat}`);
-  
-  if (!this.isDragging || this.dragStartBeat === null) {
-    console.log(`   → Not a drag operation, skipping`);
-    return;
-  }
-  
-  // Calculate drag distance
-  const dragDistance = Math.abs(snappedEndBeat - this.dragStartBeat);
-  
-  console.log(`   Drag distance: ${dragDistance.toFixed(1)} beats`);
-  
-      if (dragDistance < 0.5) {
-      // Very small drag or click - treat as click-release for Phase 3
-      console.log(`💎 CLICK-RELEASE (small drag) at beat ${snappedEndBeat.toFixed(0)} - Phase 3 event placeholder`);
-      console.log(`   🛑 EARLY RETURN - Should NOT execute drag operation`);
-      
-      this.showEventDiamond(snappedEndBeat);
-      
-      // IMPORTANT: Clean up drag state and return early
-      this.isDragging = false;
-      this.dragStartBeat = null;
-      this.currentMode = null;
-      this.clearDragPreview();
-      
-      console.log(`   🛑 Drag state cleaned, returning early`);
-      return;
-    }
-    
-    // This should NOT run for single clicks
-    console.log(`🖱️ DRAG COMPLETE - Range: ${this.dragStartBeat.toFixed(0)} → ${snappedEndBeat.toFixed(0)}`);
-    console.log(`   Mode: ${this.currentMode}`);
-    
-    // Execute the drag operation
-    this.executeDragOperation(this.dragStartBeat, snappedEndBeat, this.currentMode);
-
-  
-  // Clean up drag state
+  // Reset drag state for next interaction
   this.isDragging = false;
-  this.dragStartBeat = null;
-  this.currentMode = null;
-  this.clearDragPreview();
+  this.dragStartNote = null;
+  this.dragMode = null;
   
-  // Refresh timeline
-  setTimeout(() => {
-    this.refresh();
-  }, 100);
+  if (DEBUG.EVENTS) {
+    console.log(`🎹 Piano keyboard mouse up - drag state reset`);
+  }
 }
- 
+
 
   
   toggleNote(midiNote) {
@@ -5052,6 +5437,38 @@ if (this.lookaheadScheduler) {
     }
   }
   
+  seekTo(targetTimeMs) {
+  if (DEBUG.VOICE_CLOCK) {
+    console.log(`🎵 Voice ${this.voiceIndex + 1} seeking to ${formatMsToMMSS(targetTimeMs)}`);
+  }
+  
+  if (!this.isActive) {
+    if (DEBUG.VOICE_CLOCK) {
+      console.log(`   Voice ${this.voiceIndex + 1} not active - skipping seek`);
+    }
+    return;
+  }
+  
+  // Update timing for continuous playback
+  const masterTime = this.masterClock.getMasterTime();
+  this.lastNoteTime = masterTime;
+  this.nextNoteTime = masterTime + 50; // Schedule next note very soon (50ms)
+  
+  // Update tempo in case it changed
+  this.updateTempo();
+  
+  // Reset lookahead scheduler if it exists
+  if (this.lookaheadScheduler && this.lookaheadScheduler.isActive) {
+    const currentTime = audioManager.audioContext.currentTime;
+    this.lookaheadScheduler.nextNoteTime = currentTime + 0.050; // 50ms ahead
+    this.lookaheadScheduler.lastScheduledTime = currentTime;
+  }
+  
+  if (DEBUG.VOICE_CLOCK) {
+    console.log(`✅ Voice ${this.voiceIndex + 1} seek complete - playback should continue`);
+  }
+}
+
   updateTempo() {
     if (!this.isActive) return;
     
@@ -5074,7 +5491,7 @@ if (this.lookaheadScheduler) {
     this.lastTempoUpdate = this.masterClock.getMasterTime();
   }
   
-    shouldPlayNote() {
+  shouldPlayNote() {
     if (!this.isActive) return false;
     
     // Get elapsed time since master clock started
@@ -5084,7 +5501,7 @@ if (this.lookaheadScheduler) {
     const shouldPlay = this.isInLifeSpan(elapsedMs);
     
     // Enhanced debugging for mute testing
-    if (DEBUG.VOICE_CLOCK || Math.random() < 0.02) { // 2% of calls for debugging
+    if (DEBUG.VOICE_CLOCK) { 
       const lifeSpanParam = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
       const beatUnit = lifeSpanParam ? lifeSpanParam.beatUnit || 7 : 7;
       const tempo = this.currentTempo || 120;
@@ -5772,6 +6189,46 @@ updateActiveNotesRealTime() {
     }
   });
 }
+
+updateVolumeForActiveNotes(newVolume) {
+  if (!this.activeNotes || this.activeNotes.size === 0) {
+    console.log(`🔊 Voice ${this.voiceIndex + 1}: No active notes to update volume`);
+    return;
+  }
+  
+  const volumeGain = (newVolume / 100) * 0.15; // Same scaling as existing code
+  const now = audioManager.audioContext.currentTime;
+  
+  console.log(`🔊 Voice ${this.voiceIndex + 1}: Updating ${this.activeNotes.size} active notes to volume ${newVolume} (gain: ${volumeGain.toFixed(3)})`);
+  
+  let updatedCount = 0;
+  let failedCount = 0;
+  
+  this.activeNotes.forEach((note, index) => {
+    if (!note.isActive || !note.gainNode) {
+      console.log(`   ⚠️ Note ${index}: isActive=${note.isActive}, hasGainNode=${!!note.gainNode} - SKIPPED`);
+      failedCount++;
+      return;
+    }
+    
+    try {
+  // Update the note's gain node immediately - USE .value INSTEAD OF setValueAtTime
+  const oldGain = note.gainNode.gain.value;
+  note.gainNode.gain.value = volumeGain;
+  updatedCount++;
+  
+  console.log(`   ✓ Note ${index}: ${oldGain.toFixed(4)} → ${volumeGain.toFixed(4)} (direct .value)`);
+} catch (e) {
+  // Note might be disconnected
+  console.log(`   ❌ Note ${index}: Failed to update gain:`, e.message);
+  failedCount++;
+}
+
+  });
+  
+  console.log(`✅ Volume update complete: ${updatedCount} updated, ${failedCount} failed`);
+}
+
 
 
 // NEW: Simplified effect setup methods (add these to VoiceClock class)
@@ -6600,6 +7057,15 @@ calculateMaxTailTime(voiceParams, duration) {
   }
 
   getAllCurrentVoiceParameters() {
+    // NEW: Use stored parameter state if available (from seeking)
+    if (this.currentParameterState) {
+      if (DEBUG.VOICE_CLOCK) {
+        console.log(`🎵 Voice ${this.voiceIndex + 1}: Using stored parameter state from seek`);
+      }
+      
+      return this.convertParameterStateToVoiceParams(this.currentParameterState);
+    }
+
     const volumeParam = voiceData[this.voiceIndex].parameters['VOLUME'];
     const balanceParam = voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
     const polyphonyParam = voiceData[this.voiceIndex].parameters['POLYPHONY'];
@@ -6697,6 +7163,27 @@ calculateMaxTailTime(voiceParams, duration) {
         delayFeedback: delayFeedback
     };
   }
+
+  convertParameterStateToVoiceParams(parameterState) {
+  const volumeParam = parameterState['VOLUME'] || voiceData[this.voiceIndex].parameters['VOLUME'];
+  const balanceParam = parameterState['STEREO BALANCE'] || voiceData[this.voiceIndex].parameters['STEREO BALANCE'];
+  
+  const currentVolume = volumeParam.currentValue || (volumeParam.min + volumeParam.max) / 2;
+  const currentBalance = balanceParam.currentValue || (balanceParam.min + balanceParam.max) / 2;
+  
+  if (DEBUG.VOICE_CLOCK) {
+    console.log(`   🔊 Converted parameter state: Volume=${currentVolume.toFixed(1)}, Balance=${currentBalance.toFixed(1)}`);
+  }
+  
+  return {
+    volume: (currentVolume / 100) * 0.15,
+    balance: Math.max(-1, Math.min(1, currentBalance / 100)),
+    polyphonyScale: 1.0, // Default for now
+    velocityScale: 1.0   // Default for now
+    // Add other parameters as needed
+  };
+}
+
 
   getVelocitySensitiveWaveform(baseType, velocityNormalized, instrumentName) {
       if (instrumentName.includes('Piano')) {
@@ -9959,37 +10446,40 @@ class AudioHealthMonitor {
   }
   
   checkHealth() {
-    if (!this.audioContext || !this.isMonitoringActive) return true;
+  if (!this.audioContext || !this.isMonitoringActive) return true;
+  
+  const now = this.audioContext.currentTime;
+  
+  // Check audio context state
+  if (this.audioContext.state !== 'running') {
+    console.warn('⚠️ Audio context not running:', this.audioContext.state);
+    this.isHealthy = false;
+    return false;
+  }
+  
+  // Check timing gaps during active monitoring (playback) - RESTORED with seeking tolerance
+  if (this.lastCheckTime > 0) {
+    const timeDelta = now - this.lastCheckTime;
     
-    const now = this.audioContext.currentTime;
-    
-    // Check audio context state
-    if (this.audioContext.state !== 'running') {
-      console.warn('⚠️ Audio context not running:', this.audioContext.state);
+    // IMPROVED: More tolerant gap detection (1 second instead of 200ms)
+    // This accounts for seeking operations that legitimately cause timing jumps
+    if (timeDelta > 1.0) { // 1 second gap during playback is suspicious
+      console.warn('⚠️ Audio timing gap during playback:', timeDelta.toFixed(3), 'seconds');
+      this.dropoutCount++;
       this.isHealthy = false;
+      
+      if (audioManager && audioManager.performanceMonitor) {
+        audioManager.performanceMonitor.audioDropouts++;
+      }
+      
       return false;
     }
-    
-    // Only check timing gaps during active monitoring (playback)
-    if (this.lastCheckTime > 0) {
-      const timeDelta = now - this.lastCheckTime;
-      if (timeDelta > 0.200) { // 200ms gap during playback is suspicious
-        console.warn('⚠️ Audio timing gap during playback:', timeDelta.toFixed(3), 'seconds');
-        this.dropoutCount++;
-        this.isHealthy = false;
-        
-        if (audioManager && audioManager.performanceMonitor) {
-          audioManager.performanceMonitor.audioDropouts++;
-        }
-        
-        return false;
-      }
-    }
-    
-    this.lastCheckTime = now;
-    this.isHealthy = true;
-    return true;
   }
+  
+  this.lastCheckTime = now;
+  this.isHealthy = true;
+  return true;
+}
   
   getStats() {
     return {
@@ -10647,77 +11137,164 @@ let undoManager = null;
 
 // ===== VISUAL TIMELINE CLASS (Phase 1 + 2) =====
 
+// NEW: Emergency timeline recovery function
 
-class VisualTimeline {
-  constructor(voiceIndex) {
-    this.voiceIndex = voiceIndex;
-    this.container = null;
-    this.playhead = null;
-    this.isVisible = false;
-    this.updateInterval = null;
+function recoverVisualTimeline() {
+  console.log(`🚑 Timeline recovery initiated...`);
+  
+  try {
+    // Check if timeline container exists
+    const timelineContainer = document.getElementById('visual-timeline-container');
     
-    this.maxBeats = 700; // Default
-    this.beatUnit = 7;   // Quarter notes
-    this.tempo = 120;    // Default tempo
-    
-    // NEW: Interactive capabilities (Phase 2) - MOUSE-DRIVEN DESIGN
-    this.isInteractive = true;
-    this.snapToBeat = true;
-    
-    // Mouse interaction state
-    this.isDragging = false;
-    this.dragStartBeat = null;
-    this.currentMode = null; // 'mute' or 'unmute'
-    this.hoverBeat = null;
-    this.isHandleDragging = false; // NEW: Track handle drag state
-    
-    if (DEBUG.TIMELINE) {
-      console.log(`🎬 VisualTimeline created for Voice ${voiceIndex + 1}`);
-    }
-  }
-
-    render(container) {
-    if (!container) {
-      console.error('❌ VisualTimeline: No container provided');
+    if (!timelineContainer) {
+      console.log(`   Creating missing timeline container`);
+      showVisualTimeline();
       return;
     }
     
-    this.container = container;
-    this.updateVoiceData();
+    // Check if visualTimeline instance exists
+    if (!visualTimeline) {
+      console.log(`   Recreating visualTimeline instance`);
+      visualTimeline = new VisualTimeline(currentVoice);
+      visualTimeline.render(timelineContainer);
+      return;
+    }
     
-    container.innerHTML = '';
-    container.className = 'visual-timeline-container';
+    // Check if timeline is visible
+    if (!visualTimeline.isVisible) {
+      console.log(`   Timeline not visible, re-rendering`);
+      visualTimeline.render(timelineContainer);
+      return;
+    }
     
-    // Header
-    const header = this.createHeader();
-    container.appendChild(header);
+    console.log(`✅ Timeline recovery complete`);
     
-    // Timeline track
-    const track = this.createTrack();
-    container.appendChild(track);
+  } catch (error) {
+    console.error(`❌ Timeline recovery failed:`, error);
     
-    // Time labels
-    const labels = this.createTimeLabels();
-    container.appendChild(labels);
+    // Last resort: full timeline recreation
+    visualTimeline = null;
+    showVisualTimeline();
+  }
+}
+
+// Make recovery function available globally
+window.recoverTimeline = recoverVisualTimeline;
+
+class VisualTimeline {
+constructor(voiceIndex) {
+  this.voiceIndex = voiceIndex;
+  this.container = null;
+  this.playhead = null;
+  this.isVisible = false;
+  this.updateInterval = null;
+  
+  this.maxBeats = 700; // Default
+  this.beatUnit = 7;   // Quarter notes
+  this.tempo = 120;    // Default tempo
+  
+  // NEW: Interactive capabilities (Phase 2) - MOUSE-DRIVEN DESIGN
+  this.isInteractive = true;
+  this.snapToBeat = true;
+  
+  // NEW: Zoom capabilities
+  this.zoomLevel = 1.0;
+  this.minZoom = 0.1;   // 10% zoom out (show 10x more timeline)
+  this.maxZoom = 5.0;   // 500% zoom in (show precise beat details)
+  this.zoomStep = 0.1;  // 10% increment per wheel step
+  this.panOffset = 0;   // Horizontal pan position (0-100%)
+  
+  // NEW: Beat indicator
+  this.showBeatIndicator = true;
+  this.currentBeat = null;
+  this.beatIndicator = null;
+  
+  // Mouse interaction state
+  this.isDragging = false;
+  this.dragStartBeat = null;
+  this.currentMode = null; // 'mute' or 'unmute'
+  this.hoverBeat = null;
+  this.isHandleDragging = false; // NEW: Track handle drag state
+  
+  // NEW: Beat change tracking for tooltip throttling
+  this.lastDisplayedBeat = null;
+
+  // NEW: Beat change tracking for tooltip throttling
+  this.lastDisplayedBeat = null;
+
+  if (DEBUG.TIMELINE) {
+    console.log(`🎬 VisualTimeline created for Voice ${voiceIndex + 1} with zoom support`);
+  }
+}
+
+render(container) {
+  if (!container) {
+    console.error('❌ VisualTimeline: No container provided');
+    return;
+  }
+  
+  this.container = container;
+  this.updateVoiceData();
+  
+  container.innerHTML = '';
+  container.className = 'visual-timeline-container';
+  
+  // Calculate and set zoom constraints based on current voice data
+  this.calculateZoomConstraints();
+  
+  // Header with voice info
+  const header = this.createHeader();
+  container.appendChild(header);
+  
+  // Zoom controls (positioned after header, before timeline)
+  const zoomControls = this.createZoomControls();
+  container.appendChild(zoomControls);
+  
+  // Main timeline track
+  const track = this.createTrack();
+  container.appendChild(track);
+  
+  // Time labels (sync with zoom)
+  const timeLabels = this.createTimeLabels();
+  container.appendChild(timeLabels);
+  
+  // Beat labels (sync with zoom)
+  const beatLabels = this.createBeatLabels();
+  container.appendChild(beatLabels);
+  
+  // Timeline controls (reset, snap, etc.)
+  const controls = this.createControls();
+  container.appendChild(controls);
+  
+  // Initialize zoom system AFTER all elements are rendered
+  setTimeout(() => {
+    // Add zoom and interaction support
+    this.addZoomSupport();
     
-    // Beat labels (NEW)
-    const beatLabels = this.createBeatLabels();
-    container.appendChild(beatLabels);
+    // Initialize zoom state
+    this.applyZoomAndPan();
+    this.updateZoomControls();
+    this.updateLabelsForCurrentView();
     
-    // Controls
-    const controls = this.createControls();
-    container.appendChild(controls);
-    
-    // NEW: Make interactive after rendering
+    // Make track interactive for region editing
     this.makeTrackInteractive();
     
-    this.isVisible = true;
-    
     if (DEBUG.TIMELINE) {
-      console.log(`✅ VisualTimeline rendered for Voice ${this.voiceIndex + 1}`);
-      console.log(`   Max: ${this.maxBeats} beats @ ${this.tempo} BPM`);
+      console.log(`✅ VisualTimeline fully rendered and initialized for Voice ${this.voiceIndex + 1}`);
+      console.log(`   Timeline: ${this.maxBeats} beats @ ${this.tempo} BPM`);
+      console.log(`   Zoom: ${this.minZoom}x - ${this.maxZoom}x range`);
     }
+  }, 50);
+  
+  this.isVisible = true;
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🎬 VisualTimeline rendered for Voice ${this.voiceIndex + 1}`);
+    console.log(`   Max: ${this.maxBeats} beats @ ${this.tempo} BPM`);
   }
+}
+
+    
 
   makeTrackInteractive() {
   const track = this.container.querySelector('.visual-timeline-track');
@@ -10749,18 +11326,28 @@ class VisualTimeline {
     }
   });
   
-  // NEW: Double-click handler for context menu or region creation
-  track.addEventListener('dblclick', (e) => {
-    if (e.target.classList.contains('timeline-region')) {
-      // Double-click region → Context menu
-      console.log(`🖱️ DOUBLE-CLICK REGION: Show context menu`);
-      this.showRegionContextMenu(e);
-    } else if (!e.target.classList.contains('region-drag-handle')) {
-      // Double-click empty area → Create new region
-      console.log(`🖱️ DOUBLE-CLICK EMPTY: Starting new region creation`);
-      this.startNewRegionCreation(e);
-    }
-  });
+// NEW: Area-aware double-click handler
+track.addEventListener('dblclick', (e) => {
+  const beat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+  const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(snappedBeat);
+  
+  if (e.target.classList.contains('timeline-region') && e.target.classList.contains('playing')) {
+    // Double-click PLAYING region → Parameter Event Creation
+    console.log(`💎 DOUBLE-CLICK PLAYING REGION: Create parameter event at beat ${snappedBeat.toFixed(0)}`);
+    this.createParameterEventAtBeat(snappedBeat, e.clientX, e.clientY);
+  } else if (isInPlayingRegion) {
+    // Double-click inside playing region (but not on region element) → Parameter Event
+    console.log(`💎 DOUBLE-CLICK IN PLAYING AREA: Create parameter event at beat ${snappedBeat.toFixed(0)}`);
+    this.createParameterEventAtBeat(snappedBeat, e.clientX, e.clientY);
+  } else {
+    // Double-click in MUTED area → Start region creation directly (no popup)
+    console.log(`🖱️ DOUBLE-CLICK MUTED AREA: Start direct region creation at beat ${snappedBeat.toFixed(0)}`);
+    this.startDirectRegionCreation(e);
+  }
+});
+
+
   
   // Prevent context menu and selection
   track.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -10956,27 +11543,41 @@ snapBeatToGrid(beat) {
       }
     };
     
-    const handleMouseMove = (e) => {
-      if (!isDragging) return;
-      
-      const currentBeat = this.screenXToBeat(e.clientX);
-      const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
-      
-      // Clamp to timeline bounds
-      const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
-      
-      // Update handle position visually (preview)
-      this.updateHandlePosition(handle, handleType, clampedBeat);
-      
-      // NEW: Show real-time beat position and time in tooltip
-      const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
-      const timeFormatted = formatMsToMMSS(timeMs);
-      
-      handle.title = `${handleType === 'left' ? 'Start' : 'End'}: Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
-      
-      // NEW: Optional - show floating tooltip for better visibility
-      this.showDragTooltip(e.clientX, e.clientY, clampedBeat, timeFormatted, handleType);
-    };
+const handleMouseMove = (e) => {
+  if (!isDragging) return;
+  
+  const currentBeat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  
+  // Update handle position visually (preview)
+  this.updateHandlePosition(handle, handleType, clampedBeat);
+  
+  // NEW: Calculate what the new region boundaries would be
+  const region = handle.closest('.timeline-region');
+  const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
+  const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
+  
+  let previewStartBeat = originalStartBeat;
+  let previewEndBeat = originalEndBeat;
+  
+  if (handleType === 'left') {
+    previewStartBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
+  } else {
+    previewEndBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
+  }
+  
+  // NEW: Update diamonds during handle drag too
+  this.updateDiamondsForRegionDragRealTime(regionIndex, previewStartBeat, previewEndBeat);
+  
+  // Show tooltip
+  const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  handle.title = `${handleType === 'left' ? 'Start' : 'End'}: Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
+  this.showDragTooltip(e.clientX, e.clientY, clampedBeat, timeFormatted, handleType);
+};
+
 
     const handleMouseUp = (e) => {
       if (!isDragging) return;
@@ -11008,6 +11609,9 @@ snapBeatToGrid(beat) {
         dragTooltip.remove();
       }
 
+      // NEW: Update all labels before refresh
+      this.updateAllRegionLabels();
+
       // Refresh timeline to show final result
       setTimeout(() => {
         this.refresh();
@@ -11020,46 +11624,85 @@ snapBeatToGrid(beat) {
   }
   
     // NEW: Update handle position during drag (visual preview)
-  updateHandlePosition(handle, handleType, beat) {
-    const percentage = (beat / this.maxBeats) * 100;
-    const region = handle.closest('.timeline-region');
-    if (!region) return;
+updateHandlePosition(handle, handleType, beat) {
+  const percentage = (beat / this.maxBeats) * 100;
+  const region = handle.closest('.timeline-region');
+  if (!region) return;
+  
+  // Get stored original boundaries
+  const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
+  const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
+  
+  const originalLeftPercent = (originalStartBeat / this.maxBeats) * 100;
+  const originalRightPercent = (originalEndBeat / this.maxBeats) * 100;
+  
+  let newStartBeat = originalStartBeat;
+  let newEndBeat = originalEndBeat;
+  
+  if (handleType === 'left') {
+    // LEFT HANDLE: Move left edge, keep right edge fixed
+    const fixedRightPercent = originalRightPercent;
+    const newLeftPercent = Math.max(0, Math.min(percentage, fixedRightPercent - 1));
+    const newWidth = fixedRightPercent - newLeftPercent;
     
-    // NEW: Use stored original boundaries instead of CSS calculations
-    const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
-    const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
+    region.style.left = `${newLeftPercent.toFixed(1)}%`;
+    region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
     
-    const originalLeftPercent = (originalStartBeat / this.maxBeats) * 100;
-    const originalRightPercent = (originalEndBeat / this.maxBeats) * 100;
+    // Calculate new beat boundaries for label update
+    newStartBeat = Math.round((newLeftPercent / 100) * this.maxBeats);
+    newEndBeat = originalEndBeat;
     
-    if (handleType === 'left') {
-      // LEFT HANDLE: Move left edge, keep right edge fixed at original position
-      const fixedRightPercent = originalRightPercent;
-      const newLeftPercent = Math.max(0, Math.min(percentage, fixedRightPercent - 1));
-      const newWidth = fixedRightPercent - newLeftPercent;
-      
-      region.style.left = `${newLeftPercent.toFixed(1)}%`;
-      region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
-      
-      if (DEBUG.EVENTS && Math.random() < 0.1) {
-        console.log(`🖱️ LEFT drag: ${newLeftPercent.toFixed(1)}% → ${fixedRightPercent.toFixed(1)}%`);
-      }
-      
-    } else {
-      // RIGHT HANDLE: Keep left edge fixed at original position, move right edge
-      const fixedLeftPercent = originalLeftPercent;
-      const newRightPercent = Math.max(fixedLeftPercent + 1, Math.min(percentage, 100));
-      const newWidth = newRightPercent - fixedLeftPercent;
-      
-      // Keep original left position, just adjust width
-      region.style.left = `${fixedLeftPercent.toFixed(1)}%`;
-      region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
-      
-      if (DEBUG.EVENTS && Math.random() < 0.1) {
-        console.log(`🖱️ RIGHT drag: ${fixedLeftPercent.toFixed(1)}% → ${newRightPercent.toFixed(1)}%`);
-      }
-    }
+  } else {
+    // RIGHT HANDLE: Keep left edge fixed, move right edge
+    const fixedLeftPercent = originalLeftPercent;
+    const newRightPercent = Math.max(fixedLeftPercent + 1, Math.min(percentage, 100));
+    const newWidth = newRightPercent - fixedLeftPercent;
+    
+    region.style.left = `${fixedLeftPercent.toFixed(1)}%`;
+    region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
+    
+    // Calculate new beat boundaries for label update
+    newStartBeat = originalStartBeat;
+    newEndBeat = Math.round((newRightPercent / 100) * this.maxBeats);
   }
+
+  // NEW: Update the region label immediately during drag
+  this.updateRegionLabel(region, newStartBeat, newEndBeat);
+  
+  // NEW: Update diamonds during handle drag too
+  this.updateDiamondsForRegionDrag(region, newStartBeat, newEndBeat);
+  
+  if (DEBUG.EVENTS && Math.random() < 0.1) {
+    console.log(`🖱️ ${handleType.toUpperCase()} drag: Region now ${newStartBeat}-${newEndBeat} beats`);
+  }
+}
+
+// NEW: Method to update region label content
+updateRegionLabel(region, startBeat, endBeat) {
+  const regionLabel = region.querySelector('.region-label');
+  if (!regionLabel) return;
+  
+  // Calculate effective width for label sizing (accounts for zoom)
+  const regionWidthPercent = parseFloat(region.style.width) || 0;
+  const effectiveWidth = regionWidthPercent * this.zoomLevel;
+  
+  // Smart label content based on available space
+  if (effectiveWidth > 25) {
+    regionLabel.textContent = `Beat ${startBeat}-${endBeat}`;
+  } else if (effectiveWidth > 15) {
+    regionLabel.textContent = `${startBeat}-${endBeat}`;
+  } else if (effectiveWidth > 8) {
+    const beatCount = endBeat - startBeat;
+    regionLabel.textContent = `${beatCount}b`;
+  } else {
+    regionLabel.textContent = '▶'; // Just play icon for very narrow regions
+  }
+  
+  if (DEBUG.EVENTS && Math.random() < 0.05) {
+    console.log(`🏷️ Updated region label: "${regionLabel.textContent}" (width: ${effectiveWidth.toFixed(1)}%)`);
+  }
+}
+
 
 
   // NEW: Apply handle drag to events array
@@ -11098,82 +11741,98 @@ snapBeatToGrid(beat) {
     if (DEBUG.EVENTS) {
       console.log(`🔄 Updated region ${regionIndex}: ${region.start}-${region.end} → ${newStartBeat}-${newEndBeat}`);
     }
+
+    // NEW: Recalculate zoom constraints after region resize
+    const oldMaxZoom = this.maxZoom;
+    this.calculateZoomConstraints();
+    
+    // If region got smaller and current zoom is now too high, clamp it
+    if (this.zoomLevel > this.maxZoom) {
+      console.log(`🔍 Region resize requires zoom reduction: ${this.zoomLevel.toFixed(1)}x → ${this.maxZoom.toFixed(1)}x`);
+      this.zoomLevel = this.maxZoom;
+      
+      // Adjust pan to stay within new bounds
+      const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+      this.panOffset = Math.min(this.panOffset, maxPan);
+      
+      // Apply the new zoom immediately
+      this.applyZoomAndPan();
+      this.updateZoomControls();
+    }
+
   }
 
-    // NEW: Replace a region's events in the events array  
-  replaceRegionInEvents(regionIndex, newStart, newEnd) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return;
-    
-    // Get current playing regions to identify which events to replace
-    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-    const targetRegion = playingRegions[regionIndex];
-    
-    if (!targetRegion) return;
-    
-    if (DEBUG.EVENTS) {
-      console.log(`🔄 DRAG: Replacing region ${regionIndex}: ${targetRegion.start}-${targetRegion.end} → ${newStart}-${newEnd}`);
-      console.log(`   Before:`, lifeSpan.events.map(e => `${e.action}@${e.beatPosition}`));
-    }
-    
-    // STRATEGY: Remove events for this region, then add new events
-    // This prevents duplication and conflicts
-    
-    // Step 1: Remove events that define the target region
-    lifeSpan.events = lifeSpan.events.filter(event => {
-      if (event.type !== 'mute') return true; // Keep non-mute events
-      
-      // Remove the unmute event that starts this region
-      if (event.action === 'unmute' && event.beatPosition === targetRegion.start) {
-        if (DEBUG.EVENTS) {
-          console.log(`   🗑️ Removed start event: unmute@${event.beatPosition}`);
-        }
-        return false;
-      }
-      
-      // Remove the mute event that ends this region  
-      if (event.action === 'mute' && event.beatPosition === targetRegion.end) {
-        if (DEBUG.EVENTS) {
-          console.log(`   🗑️ Removed end event: mute@${event.beatPosition}`);
-        }
-        return false;
-      }
-      
-      return true; // Keep all other events
-    });
-    
-    // Step 2: Add new events for the resized region
-    const newStartEvent = {
-      type: 'mute',
-      beatPosition: newStart,
-      action: 'unmute',
-      id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
-    };
-    
-    const newEndEvent = {
-      type: 'mute', 
-      beatPosition: newEnd,
-      action: 'mute',
-      id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
-    };
-    
-    lifeSpan.events.push(newStartEvent);
-    lifeSpan.events.push(newEndEvent);
-    
-    // Step 3: Sort events chronologically
-    lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
-    
-    if (DEBUG.EVENTS) {
-      console.log(`   ✅ Added new events: unmute@${newStart}, mute@${newEnd}`);
-      console.log(`   After:`, lifeSpan.events.map(e => `${e.action}@${e.beatPosition}`));
-      
-      // Verify result
-      const newRegions = this.convertEventsToRegions(lifeSpan.events);
-      console.log(`   Result: ${newRegions.length} regions:`, newRegions.map(r => `${r.start}-${r.end}`));
-    }
-  }
-
+  // CLEAN: Replace a region's events and update parameter events
+replaceRegionInEvents(regionIndex, newStart, newEnd) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
   
+  // Get current playing regions
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[regionIndex];
+  
+  if (!targetRegion) return;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Moving region ${regionIndex}: ${targetRegion.start}-${targetRegion.end} → ${newStart}-${newEnd}`);
+  }
+  
+  // Step 1: Remove old mute events for this region
+  lifeSpan.events = lifeSpan.events.filter(event => {
+    if (event.type !== 'mute') return true;
+    
+    if (event.action === 'unmute' && event.beatPosition === targetRegion.start) {
+      return false; // Remove start event
+    }
+    if (event.action === 'mute' && event.beatPosition === targetRegion.end) {
+      return false; // Remove end event
+    }
+    
+    return true;
+  });
+  
+  // Step 2: Add new mute events
+  const newStartEvent = {
+    type: 'mute',
+    beatPosition: newStart,
+    action: 'unmute',
+    id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
+  };
+  
+  const newEndEvent = {
+    type: 'mute',
+    beatPosition: newEnd,
+    action: 'mute',
+    id: `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`
+  };
+  
+  lifeSpan.events.push(newStartEvent);
+  lifeSpan.events.push(newEndEvent);
+  
+  // Step 3: Update parameter events for this region to maintain relative positions
+  lifeSpan.events.forEach(event => {
+    if (event.type === 'parameter' && event.regionIndex === regionIndex) {
+      // Parameter events keep their relative position, just recalculate absolute
+      const newAbsoluteBeat = newStart + (event.relativePosition * (newEnd - newStart));
+      
+      if (DEBUG.EVENTS) {
+        console.log(`   📍 Parameter event ${event.parameter}: ${(event.relativePosition * 100).toFixed(1)}% = beat ${newAbsoluteBeat.toFixed(1)}`);
+      }
+    }
+  });
+  
+  // Step 4: Sort events chronologically
+  lifeSpan.events.sort((a, b) => {
+    const aBeat = a.beatPosition || 0;
+    const bBeat = b.beatPosition || 0;
+    return aBeat - bBeat;
+  });
+  
+  if (DEBUG.EVENTS) {
+    console.log(`   ✅ Region moved, parameter events follow at same relative positions`);
+  }
+}
+
 // NEW: Show floating tooltip during drag
   showDragTooltip(clientX, clientY, beat, timeFormatted, handleType) {
     // Remove existing drag tooltip
@@ -11209,68 +11868,105 @@ snapBeatToGrid(beat) {
   }
 
   // NEW: Start whole-region drag operation
-  startWholeRegionDrag(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const region = e.target;
-    const regionIndex = parseInt(region.dataset.regionIndex);
-    
-    // Get original region boundaries from events
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-    const targetRegion = playingRegions[regionIndex];
-    
-    if (!targetRegion) return;
-    
-    const regionWidth = targetRegion.end - targetRegion.start; // Width in beats
-    const dragStartX = e.clientX;
-    const dragStartBeat = this.screenXToBeat(dragStartX);
-    const clickOffsetBeat = dragStartBeat - targetRegion.start; // Where in region user clicked
-    
-    let isDragging = false;
-    
-    // Capture state for undo
-    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-      undoManager.captureState(`Timeline: Move region ${targetRegion.start}-${targetRegion.end}`, true);
-    }
-    
-        // Visual feedback - highlight entire region during drag
-    region.style.boxShadow = '0 0 12px rgba(40,167,69,0.8)';
-    region.style.transform = 'translateY(-2px)';
-    region.style.cursor = 'grabbing';
-    region.style.opacity = '0.8';
-    region.style.border = '2px solid #28a745';
-    
-    if (DEBUG.EVENTS) {
-      console.log(`🎯 Starting whole-region drag:`);
-      console.log(`   Original region: ${targetRegion.start}-${targetRegion.end} (width: ${regionWidth} beats)`);
-      console.log(`   Click offset: ${clickOffsetBeat.toFixed(1)} beats from start`);
-    }
+startWholeRegionDrag(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const region = e.target;
+  const regionIndex = parseInt(region.dataset.regionIndex);
+  
+  // Get original region boundaries from events
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[regionIndex];
+  
+  if (!targetRegion) return;
+  
+  const regionWidth = targetRegion.end - targetRegion.start; // Width in beats
+  const dragStartX = e.clientX;
+  const dragStartBeat = this.screenXToBeat(dragStartX);
+  const clickOffsetBeat = dragStartBeat - targetRegion.start; // Where in region user clicked
+  
+  let isDragging = false;
+  
+  // Capture state for undo
+  if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+    undoManager.captureState(`Timeline: Move region ${targetRegion.start}-${targetRegion.end}`, true);
+  }
+  
+  // Visual feedback - highlight entire region during drag
+  region.style.boxShadow = '0 0 12px rgba(40,167,69,0.8)';
+  region.style.transform = 'translateY(-2px)';
+  region.style.cursor = 'grabbing';
+  region.style.opacity = '0.8';
+  region.style.border = '2px solid #28a745';
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🎯 Starting whole-region drag:`);
+    console.log(`   Original region: ${targetRegion.start}-${targetRegion.end} (width: ${regionWidth} beats)`);
+    console.log(`   Click offset: ${clickOffsetBeat.toFixed(1)} beats from start`);
+  }
 
-    
-    const handleWholeRegionMouseMove = (e) => {
-      if (!isDragging) {
-        // Start dragging after small movement to distinguish from click
-        const dragDistance = Math.abs(e.clientX - dragStartX);
-        if (dragDistance > 5) {
-          isDragging = true;
-          if (DEBUG.EVENTS) {
-            console.log(`🖱️ Started whole-region drag (width: ${regionWidth} beats)`);
-          }
-        } else {
-          return; // Not enough movement yet
-        }
+const handleWholeRegionMouseMove = (e) => {
+  if (!isDragging) {
+    const dragDistance = Math.abs(e.clientX - dragStartX);
+    if (dragDistance > 5) {
+      isDragging = true;
+      if (DEBUG.EVENTS) {
+        console.log(`🖱️ Started whole-region drag (width: ${regionWidth} beats)`);
       }
-      
+    } else {
+      return;
+    }
+  }
+  
+  const currentBeat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+  
+  // Calculate new region position
+  let newRegionStart = snappedBeat - clickOffsetBeat;
+  let newRegionEnd = newRegionStart + regionWidth;
+  
+  // Clamp to timeline bounds
+  if (newRegionStart < 0) {
+    newRegionStart = 0;
+    newRegionEnd = regionWidth;
+  } else if (newRegionEnd > this.maxBeats) {
+    newRegionEnd = this.maxBeats;
+    newRegionStart = this.maxBeats - regionWidth;
+  }
+  
+  newRegionStart = Math.max(0, newRegionStart);
+  newRegionEnd = Math.min(this.maxBeats, newRegionEnd);
+  
+  // Update visual position with live label update
+  this.updateWholeRegionPosition(region, newRegionStart, newRegionEnd);
+  
+  // NEW: Update diamonds in real-time during region drag
+  this.updateDiamondsForRegionDragRealTime(regionIndex, newRegionStart, newRegionEnd);
+  
+  // Show position in tooltip
+  const timeMs = beatsToMs(newRegionStart, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  this.showDragTooltip(e.clientX, e.clientY, newRegionStart, timeFormatted, 'whole-region-move');
+};
+
+  
+  const handleWholeRegionMouseUp = (e) => {
+    // Remove global listeners first
+    document.removeEventListener('mousemove', handleWholeRegionMouseMove);
+    document.removeEventListener('mouseup', handleWholeRegionMouseUp);
+    
+    if (isDragging) {
+      // Apply the drag operation
       const currentBeat = this.screenXToBeat(e.clientX);
       const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
       
-      // Calculate new region start (maintain click offset)
       let newRegionStart = snappedBeat - clickOffsetBeat;
       let newRegionEnd = newRegionStart + regionWidth;
       
-      // Clamp to timeline bounds (keep region width)
+      // Clamp to timeline bounds
       if (newRegionStart < 0) {
         newRegionStart = 0;
         newRegionEnd = regionWidth;
@@ -11279,103 +11975,134 @@ snapBeatToGrid(beat) {
         newRegionStart = this.maxBeats - regionWidth;
       }
       
-      // Ensure non-negative values
-      newRegionStart = Math.max(0, newRegionStart);
-      newRegionEnd = Math.min(this.maxBeats, newRegionEnd);
+      // NEW: Snap final positions to whole beat numbers
+      newRegionStart = Math.round(Math.max(0, newRegionStart));
+      newRegionEnd = Math.round(Math.min(this.maxBeats, newRegionEnd));
       
-      // Update visual position (preview)
-      this.updateWholeRegionPosition(region, newRegionStart, newRegionEnd);
-      
-      // Show position in tooltip
-      const timeMs = beatsToMs(newRegionStart, this.beatUnit, this.tempo);
-      const timeFormatted = formatMsToMMSS(timeMs);
-      
-      this.showDragTooltip(e.clientX, e.clientY, newRegionStart, timeFormatted, 'whole-region');
-    };
-    
-        const handleWholeRegionMouseUp = (e) => {
-      // Remove global listeners first
-      document.removeEventListener('mousemove', handleWholeRegionMouseMove);
-      document.removeEventListener('mouseup', handleWholeRegionMouseUp);
-      
-      if (isDragging) {
-        // Apply the drag operation
-        const currentBeat = this.screenXToBeat(e.clientX);
-        const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
-        
-        let newRegionStart = snappedBeat - clickOffsetBeat;
-        let newRegionEnd = newRegionStart + regionWidth;
-        
-        // Clamp to timeline bounds
-        if (newRegionStart < 0) {
-          newRegionStart = 0;
-          newRegionEnd = regionWidth;
-        } else if (newRegionEnd > this.maxBeats) {
-          newRegionEnd = this.maxBeats;
-          newRegionStart = this.maxBeats - regionWidth;
-        }
-        
-        // NEW: Snap final positions to whole beat numbers
-        newRegionStart = Math.round(Math.max(0, newRegionStart));
-        newRegionEnd = Math.round(Math.min(this.maxBeats, newRegionEnd));
-        
-        // NEW: Ensure minimum region width of 1 beat
-        if (newRegionEnd <= newRegionStart) {
-          newRegionEnd = newRegionStart + 1;
-        }
-        
-        // Update events array
-        this.replaceRegionInEvents(regionIndex, newRegionStart, newRegionEnd);
-        
-        if (DEBUG.EVENTS) {
-          console.log(`✅ Moved whole region to: ${newRegionStart}-${newRegionEnd} beats (snapped)`);
-        }
+      // NEW: Ensure minimum region width of 1 beat
+      if (newRegionEnd <= newRegionStart) {
+        newRegionEnd = newRegionStart + 1;
       }
       
-      // Reset visual state
-      region.style.boxShadow = '';
-      region.style.transform = '';
-      region.style.cursor = '';
-      region.style.opacity = '';
-      region.style.border = '';
+      // Update events array
+      this.replaceRegionInEvents(regionIndex, newRegionStart, newRegionEnd);
       
-      // Remove floating tooltip with fade effect
-      setTimeout(() => {
-        const dragTooltip = document.querySelector('.drag-tooltip');
-        if (dragTooltip) {
-          dragTooltip.style.transition = 'opacity 0.3s ease';
-          dragTooltip.style.opacity = '0';
-          setTimeout(() => dragTooltip.remove(), 300);
-        }
-      }, 800);
-      
-      // Refresh timeline to show final result
-      setTimeout(() => {
-        this.refresh();
-      }, 50);
-    };
-
-    
-    // Add global mouse listeners
-    document.addEventListener('mousemove', handleWholeRegionMouseMove);
-    document.addEventListener('mouseup', handleWholeRegionMouseUp);
-  }
-
-  // NEW: Update whole region position during drag (visual preview)
-  updateWholeRegionPosition(region, newStartBeat, newEndBeat) {
-    const leftPercent = (newStartBeat / this.maxBeats) * 100;
-    const rightPercent = (newEndBeat / this.maxBeats) * 100;
-    const width = rightPercent - leftPercent;
-    
-    region.style.left = `${leftPercent.toFixed(1)}%`;
-    region.style.width = `${Math.max(1, width).toFixed(1)}%`;
-    
-    // Update region label to show new position
-    const regionLabel = region.querySelector('.region-label');
-    if (regionLabel) {
-      regionLabel.textContent = `${newStartBeat.toFixed(0)}-${newEndBeat.toFixed(0)}`;
+      if (DEBUG.EVENTS) {
+        console.log(`✅ Moved whole region to: ${newRegionStart}-${newRegionEnd} beats (snapped)`);
+      }
     }
-  }
+    
+    // Reset visual state
+    region.style.boxShadow = '';
+    region.style.transform = '';
+    region.style.cursor = '';
+    region.style.opacity = '';
+    region.style.border = '';
+    
+    // Remove floating tooltip with fade effect
+    setTimeout(() => {
+      const dragTooltip = document.querySelector('.drag-tooltip');
+      if (dragTooltip) {
+        dragTooltip.style.transition = 'opacity 0.3s ease';
+        dragTooltip.style.opacity = '0';
+        setTimeout(() => dragTooltip.remove(), 300);
+      }
+    }, 800);
+    
+    // NEW: Update all labels before refresh
+    this.updateAllRegionLabels();
+    
+    // Refresh timeline to show final result
+    setTimeout(() => {
+      this.refresh();
+    }, 50);
+  };
+
+  // Add global mouse listeners
+  document.addEventListener('mousemove', handleWholeRegionMouseMove);
+  document.addEventListener('mouseup', handleWholeRegionMouseUp);
+}
+
+
+updateWholeRegionPosition(region, newStartBeat, newEndBeat) {
+  const leftPercent = (newStartBeat / this.maxBeats) * 100;
+  const rightPercent = (newEndBeat / this.maxBeats) * 100;
+  const width = rightPercent - leftPercent;
+  
+  region.style.left = `${leftPercent.toFixed(1)}%`;
+  region.style.width = `${Math.max(1, width).toFixed(1)}%`;
+  
+  // Update region label
+  this.updateRegionLabel(region, Math.round(newStartBeat), Math.round(newEndBeat));
+  
+  // NEW: Update diamonds in real-time during region drag
+  this.updateDiamondsForRegionDrag(region, newStartBeat, newEndBeat);
+}
+
+// NEW: Update diamond positions during region drag
+updateDiamondsForRegionDrag(region, newStartBeat, newEndBeat) {
+  const regionIndex = parseInt(region.dataset.regionIndex);
+  const diamonds = region.querySelectorAll('.parameter-event-diamond');
+  
+  diamonds.forEach(diamond => {
+    const diamondRegionIndex = parseInt(diamond.dataset.regionIndex);
+    
+    // Only update diamonds that belong to this region
+    if (diamondRegionIndex === regionIndex) {
+      const relativePosition = parseFloat(diamond.dataset.relativePosition);
+      
+      // Calculate new absolute position
+      const newAbsoluteBeat = newStartBeat + (relativePosition * (newEndBeat - newStartBeat));
+      const newLeftPercent = (newAbsoluteBeat / this.maxBeats) * 100;
+      
+      // Update diamond position immediately
+      diamond.style.left = `${newLeftPercent.toFixed(2)}%`;
+      
+      // Update diamond title with new position
+      diamond.title = `💎 ${diamond.dataset.parameter} - Beat ${newAbsoluteBeat.toFixed(0)} (${(relativePosition * 100).toFixed(1)}% in region)`;
+      
+      if (DEBUG.EVENTS && Math.random() < 0.05) {
+        console.log(`   💎 Updated diamond ${diamond.dataset.parameter}: ${(relativePosition * 100).toFixed(1)}% = beat ${newAbsoluteBeat.toFixed(1)}`);
+      }
+    }
+  });
+}
+
+// NEW: Update diamonds in real-time during region drag (not just on mouseup)
+updateDiamondsForRegionDragRealTime(regionIndex, newStartBeat, newEndBeat) {
+  // Find all diamonds that belong to this region (now in track container)
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  const allDiamonds = track.querySelectorAll('.parameter-event-diamond');
+  
+  allDiamonds.forEach(diamond => {
+    const diamondRegionIndex = parseInt(diamond.dataset.regionIndex);
+    
+    // Only update diamonds that belong to this region
+    if (diamondRegionIndex === regionIndex) {
+      const relativePosition = parseFloat(diamond.dataset.relativePosition);
+      
+      if (!isNaN(relativePosition)) {
+        // Calculate new absolute position
+        const newAbsoluteBeat = newStartBeat + (relativePosition * (newEndBeat - newStartBeat));
+        const newLeftPercent = (newAbsoluteBeat / this.maxBeats) * 100;
+        
+        // Update diamond position immediately with smooth transition
+        diamond.style.transition = 'left 0.05s ease'; // Smooth movement
+        diamond.style.left = `${newLeftPercent.toFixed(2)}%`;
+        
+        // Update title
+        diamond.title = `💎 ${diamond.dataset.parameter} - Beat ${newAbsoluteBeat.toFixed(0)} (${(relativePosition * 100).toFixed(1)}% in region)`;
+        
+        if (DEBUG.EVENTS && Math.random() < 0.02) {
+          console.log(`   💎 Real-time: ${diamond.dataset.parameter} at beat ${newAbsoluteBeat.toFixed(1)}`);
+        }
+      }
+    }
+  });
+}
+
 
 
 
@@ -11493,302 +12220,804 @@ snapBeatToGrid(beat) {
   }
   
   createTrack() {
-    const track = document.createElement('div');
-    track.className = 'visual-timeline-track';
+  const track = document.createElement('div');
+  track.className = 'visual-timeline-track';
+  track.style.cssText = `
+    position: relative;
+    height: 80px;
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    margin: 10px 0;
+    overflow: hidden;
+  `;
+  
+  // TOP SEEK ZONE (15px)
+  const topSeekZone = document.createElement('div');
+  topSeekZone.className = 'seek-zone top-seek';
+  topSeekZone.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 15px;
+    cursor: pointer;
+    background: linear-gradient(to bottom, rgba(74,144,226,0.1), transparent);
+    border-bottom: 1px solid #dee2e6;
+    z-index: 300;
+    transition: background 0.2s ease;
+  `;
+  topSeekZone.title = 'Click to position playhead';
+  
+  // MIDDLE INTERACTION ZONE (50px) - for regions and diamonds
+  const interactionZone = document.createElement('div');
+  interactionZone.className = 'interaction-zone';
+  interactionZone.style.cssText = `
+    position: absolute;
+    top: 15px;
+    left: 0;
+    right: 0;
+    height: 50px;
+    z-index: 200;
+  `;
+  
+  // BOTTOM SEEK ZONE (15px)
+  const bottomSeekZone = document.createElement('div');
+  bottomSeekZone.className = 'seek-zone bottom-seek';
+  bottomSeekZone.style.cssText = `
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 15px;
+    cursor: pointer;
+    background: linear-gradient(to top, rgba(74,144,226,0.1), transparent);
+    border-top: 1px solid #dee2e6;
+    z-index: 300;
+    transition: background 0.2s ease;
+  `;
+  bottomSeekZone.title = 'Click to position playhead';
+  
+  // Add hover effects for seek zones
+  [topSeekZone, bottomSeekZone].forEach(zone => {
+    zone.onmouseenter = function() {
+      this.style.background = 'rgba(74,144,226,0.2)';
+      this.style.borderColor = '#4a90e2';
+    };
+    zone.onmouseleave = function() {
+      this.style.background = '';
+      this.style.borderColor = '#dee2e6';
+    };
     
-    // Grid background
-    const grid = document.createElement('div');
-    grid.className = 'timeline-grid';
-    track.appendChild(grid);
-    
-    // Regions container
-    const regionsContainer = document.createElement('div');
-    regionsContainer.className = 'timeline-regions';
-    regionsContainer.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      z-index: 10;
-    `;
-    
-    // Render life span regions
-    this.renderLifeSpanRegions(regionsContainer);
-    
-    track.appendChild(regionsContainer);
+    // Connect click handlers (we'll implement these next)
+    zone.onclick = (e) => this.handleSeekZoneClick(e);
+    zone.onmousemove = (e) => this.showSeekPreview(e);
+  });
+  
+  // Grid background (moved to interaction zone)
+  const grid = document.createElement('div');
+  grid.className = 'timeline-grid';
+  grid.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 19px,
+      rgba(0,0,0,0.1) 20px
+    );
+    pointer-events: none;
+  `;
+  interactionZone.appendChild(grid);
+  
+  // Regions container (moved to interaction zone)
+  const regionsContainer = document.createElement('div');
+  regionsContainer.className = 'timeline-regions';
+  regionsContainer.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+  `;
+  
+  // Render life span regions in interaction zone
+  this.renderLifeSpanRegions(regionsContainer);
+  interactionZone.appendChild(regionsContainer);
+  
+  // Playhead (spans full track height)
+  const playhead = document.createElement('div');
+  playhead.className = 'timeline-playhead-container';
+  playhead.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0%;
+    width: 3px;
+    height: 100%;
+    background: #dc3545;
+    transition: left 0.05s linear;
+    pointer-events: none;
+    z-index: 100;
+  `;
+  
+  const playheadArrow = document.createElement('div');
+  playheadArrow.style.cssText = `
+    position: absolute;
+    top: -8px;
+    left: -7px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid #dc3545;
+    z-index: 101;
+  `;
+  
+  playhead.appendChild(playheadArrow);
+  
+  const playheadTooltip = document.createElement('div');
+  playheadTooltip.textContent = '0:00';
+  playheadTooltip.style.cssText = `
+    position: absolute;
+    top: 16px;
+    left: 8px;
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  `;
+  playhead.appendChild(playheadTooltip);
+  
+  // Assemble track structure
+  track.appendChild(topSeekZone);
+  track.appendChild(interactionZone);
+  track.appendChild(bottomSeekZone);
+  track.appendChild(playhead);
+  
+  // Store references
+  this.playhead = playhead;
+  this.playheadTooltip = playheadTooltip;
+  
+  return track;
+}
 
-    
-    // Playhead
-    const playhead = document.createElement('div');
-    playhead.className = 'timeline-playhead-container';
-    playhead.style.cssText = `
-      position: absolute;
-      top: 15px;
-      left: 0%;
-      width: 3px;
-      height: calc(100% - 15px);
-      background: #dc3545;
-      transition: left 0.05s linear;
-      pointer-events: none;
-      z-index: 100;
-    `;
-
-    const playheadArrow = document.createElement('div');
-    playheadArrow.style.cssText = `
-      position: absolute;
-      top: -15px;
-      left: -7px;
-      width: 0;
-      height: 0;
-      border-left: 8px solid transparent;
-      border-right: 8px solid transparent;
-      border-top: 12px solid #dc3545;
-      z-index: 9999;
-    `;
-
-    playhead.appendChild(playheadArrow);
-
-    const playheadTooltip = document.createElement('div');
-    playheadTooltip.textContent = '0:00';
-    playheadTooltip.style.cssText = `
-      position: absolute;
-      top: 10px;
-      left: 8px;
-      background: #333;
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: 'Courier New', monospace;
-      white-space: nowrap;
-      pointer-events: none;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    `;
-    playhead.appendChild(playheadTooltip);
-
-    track.appendChild(playhead);
-
-    // Store references
-    this.playhead = playhead;
-    this.playheadTooltip = playheadTooltip;
-    
-    return track;
+handleSeekZoneClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const clickedBeat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(clickedBeat) : clickedBeat;
+  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🎯 Seek zone clicked: beat ${clampedBeat.toFixed(0)}`);
   }
   
-    renderLifeSpanRegions(container) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan) return;
+  // SEEK TO POSITION
+  this.seekToPosition(clampedBeat);
+  
+  // Visual feedback
+  this.showSeekFeedback(clampedBeat);
+}
+
+showSeekPreview(e) {
+  const beat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  
+  const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  // Update tooltip for current beat position
+  e.target.title = `🎯 Click to seek to Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
+  
+  // Optional: Show temporary vertical line preview
+  this.showSeekLinePreview(clampedBeat);
+}
+
+showSeekLinePreview(beat) {
+  // Remove existing preview
+  const existingPreview = this.container.querySelector('.seek-line-preview');
+  if (existingPreview) {
+    existingPreview.remove();
+  }
+  
+  // Show temporary vertical line
+  const preview = document.createElement('div');
+  preview.className = 'seek-line-preview';
+  preview.style.cssText = `
+    position: absolute;
+    left: ${(beat / this.maxBeats) * 100}%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(74,144,226,0.6);
+    transform: translateX(-50%);
+    z-index: 250;
+    pointer-events: none;
+    transition: left 0.1s ease;
+  `;
+  
+  const track = this.container.querySelector('.visual-timeline-track');
+  track.appendChild(preview);
+  
+  // Auto-remove after short delay
+  clearTimeout(this.seekPreviewTimeout);
+  this.seekPreviewTimeout = setTimeout(() => {
+    if (preview.parentElement) {
+      preview.remove();
+    }
+  }, 1000);
+}
+
+showSeekFeedback(beat) {
+  // Flash feedback at seek position
+  const seekIndicator = document.createElement('div');
+  seekIndicator.style.cssText = `
+    position: absolute;
+    left: ${(beat / this.maxBeats) * 100}%;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #ffc107;
+    transform: translateX(-50%);
+    z-index: 400;
+    pointer-events: none;
+    animation: seekFlash 0.8s ease;
+  `;
+  
+  const track = this.container.querySelector('.visual-timeline-track');
+  track.appendChild(seekIndicator);
+  
+  setTimeout(() => {
+    if (seekIndicator.parentElement) {
+      seekIndicator.remove();
+    }
+  }, 800);
+  
+  console.log(`💫 Seek feedback shown at beat ${beat.toFixed(0)}`);
+}
+
+seekToPosition(targetBeat) {
+  if (DEBUG.EVENTS) {
+    console.log(`🎯 VisualTimeline seeking to beat ${targetBeat.toFixed(0)}`);
+  }
+  
+  // Convert beat to milliseconds
+  const targetTimeMs = beatsToMs(targetBeat, this.beatUnit, this.tempo);
+  
+  // Update master clock (which will handle voice clocks and parameter state)
+  if (masterClock) {
+    masterClock.seekTo(targetTimeMs);
+  } else {
+    // No master clock - just move playhead visually
+    this.updatePlayheadPosition(targetBeat);
+    console.warn(`⚠️ No master clock available - visual-only seek`);
+  }
+  
+  // If we're viewing the current voice and UI is out of sync, refresh parameter rollups
+  if (this.voiceIndex === currentVoice) {
+    // Small delay to let parameter state settle, then refresh UI
+    setTimeout(() => {
+      this.refreshParameterRollupsIfNeeded();
+    }, 50);
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✅ VisualTimeline seek complete: beat ${targetBeat.toFixed(0)} = ${formatMsToMMSS(targetTimeMs)}`);
+  }
+}
+
+refreshParameterRollupsIfNeeded() {
+  // Check if parameter rollups are visible and might need updating
+  const parameterSection = document.getElementById('parameter-section');
+  if (parameterSection && parameterSection.style.display !== 'none') {
+    // For now, just log that we might need to refresh
+    // In Session 26, this will update rollups to show current parameter state
+    if (DEBUG.EVENTS) {
+      console.log(`🔄 Parameter rollups might need refresh for Voice ${this.voiceIndex + 1}`);
+    }
+  }
+}
+
+
+updatePlayheadPosition(beat) {
+  if (!this.playhead) return;
+  
+  const percentage = Math.min(100, (beat / this.maxBeats) * 100);
+  this.playhead.style.left = `${percentage}%`;
+  
+  // Update tooltip
+  if (this.playheadTooltip) {
+    const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+    const timeFormatted = formatMsToMMSS(timeMs);
+    this.playheadTooltip.textContent = timeFormatted;
+    this.playheadTooltip.title = `Beat ${beat.toFixed(0)}`;
+  }
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🎯 Playhead positioned at beat ${beat.toFixed(0)} (${percentage.toFixed(1)}%)`);
+  }
+}
+
+renderLifeSpanRegions(container) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan) return;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🎬 Rendering regions from EVENTS for Voice ${this.voiceIndex + 1}`);
+    console.log(`   Timeline maxBeats: ${this.maxBeats}`);
+    console.log(`   Events array:`, lifeSpan.events);
+  }
+  
+  // Convert events array to playing regions
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`   Converted to ${playingRegions.length} playing regions:`, playingRegions);
+  }
+  
+  // Render each playing region
+  playingRegions.forEach((region, index) => {
+    const leftPercent = (region.start / this.maxBeats) * 100;
+    const rightPercent = (region.end / this.maxBeats) * 100;
+    const regionWidth = rightPercent - leftPercent;
     
     if (DEBUG.EVENTS) {
-      console.log(`🎬 Rendering regions from EVENTS for Voice ${this.voiceIndex + 1}`);
-      console.log(`   Timeline maxBeats: ${this.maxBeats}`);
-      console.log(`   Events array:`, lifeSpan.events);
+      console.log(`   Region ${index + 1}: ${region.start}-${region.end} beats = ${leftPercent.toFixed(1)}%-${rightPercent.toFixed(1)}%`);
     }
     
-    // NEW: Convert events array to playing regions
-    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const regionElement = document.createElement('div');
+    regionElement.className = 'timeline-region playing interactive';
+    regionElement.dataset.regionIndex = index;
     
-    if (DEBUG.EVENTS) {
-      console.log(`   Converted to ${playingRegions.length} playing regions:`, playingRegions);
-    }
+    // UPDATED: Position regions within interaction zone (not full track)
+    const finalWidth = Math.max(0.5, regionWidth);
     
-    // Render each playing region
-    playingRegions.forEach((region, index) => {
-      const leftPercent = (region.start / this.maxBeats) * 100;
-      const rightPercent = (region.end / this.maxBeats) * 100;
-      
-      if (DEBUG.EVENTS) {
-        console.log(`   Region ${index + 1}: ${region.start}-${region.end} beats = ${leftPercent.toFixed(1)}%-${rightPercent.toFixed(1)}%`);
-      }
-      
-            const regionElement = document.createElement('div');
-      regionElement.className = 'timeline-region playing interactive';
-      regionElement.dataset.regionIndex = index;
-      
-      // NEW: Ensure region is clickable and blocks event bubbling
-      regionElement.style.pointerEvents = 'auto';
-      regionElement.style.zIndex = '50';
+    regionElement.style.cssText = `
+  position: absolute;
+  left: ${leftPercent.toFixed(2)}%;
+  width: ${finalWidth.toFixed(2)}%;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  cursor: context-menu;
+  transition: all 0.2s ease;
+  user-select: none;
+  pointer-events: auto;     /* ← Make sure this is auto */
+  z-index: 50;
+  background: linear-gradient(45deg, #28a745, #34ce57);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  overflow: hidden;
+  box-sizing: border-box;
+`;
 
-      
-      // Handle full-width vs partial-width regions
-      if (leftPercent === 0 && rightPercent >= 99.5) {
-        regionElement.style.cssText = `
-          position: absolute;
-          left: 0;
-          right: 0;
-          top: 15px;
-          bottom: 15px;
-          border-radius: 6px;
-          cursor: grab;
-          transition: all 0.2s ease;
-          user-select: none;
-          pointer-events: auto;
-          z-index: 100;
-          background: linear-gradient(45deg, #28a745, #34ce57);
-        `;
-      } else {
-        const finalWidth = Math.max(1, rightPercent - leftPercent);
-        regionElement.style.cssText = `
-          position: absolute;
-          left: ${leftPercent.toFixed(1)}%;
-          width: ${finalWidth.toFixed(1)}%;
-          top: 15px;
-          bottom: 15px;
-          border-radius: 6px;
-          cursor: grab;
-          transition: all 0.2s ease;
-          user-select: none;
-          pointer-events: auto;
-          z-index: 100;
-          background: linear-gradient(45deg, #28a745, #34ce57);
-        `;
-      }
+    
+    regionElement.title = `Playing region: Beat ${region.start} - ${region.end} (double-click for options)`;
+    
+    // Add region label and handles (existing code unchanged)
+    const regionLabel = this.createRegionLabel(region, finalWidth);
+    const leftHandle = this.createRegionHandle(index, 'left');
+    const rightHandle = this.createRegionHandle(index, 'right');
+    
+    regionElement.appendChild(leftHandle);
+    regionElement.appendChild(rightHandle);
+    regionElement.appendChild(regionLabel);
+    
+    container.appendChild(regionElement);
+    
+    // Render parameter event diamonds for this region
+    this.renderParameterEventsForRegion(container, region, index, region.start, region.end);
+  });
+  
+  // Add muted regions between playing regions
+  if (playingRegions.length > 0) {
+    this.renderMutedRegions(container, playingRegions);
+  } else {
+    // No playing regions - entire timeline is muted
+    const mutedRegion = this.createFullMutedRegion();
+    container.appendChild(mutedRegion);
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✅ Rendered ${playingRegions.length} playing regions for Voice ${this.voiceIndex + 1}`);
+  }
+}
 
-      
-      // Clear text content to make room for handles
-      regionElement.textContent = '';
-      regionElement.title = `Playing region: Beat ${region.start} - ${region.end}`;
-      
-      // NEW: Add left drag handle
-      const leftHandle = document.createElement('div');
-      leftHandle.className = 'region-drag-handle left-handle';
-      leftHandle.dataset.regionIndex = index;
-      leftHandle.dataset.handleType = 'left';
-      leftHandle.style.cssText = `
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 8px;
-        background: rgba(255,255,255,0.8);
-        border-right: 2px solid #fff;
-        cursor: ew-resize;
-        z-index: 200;
-        border-radius: 6px 0 0 6px;
-        transition: all 0.2s ease;
-      `;
-      leftHandle.title = 'Drag to adjust start time';
-      
-      // NEW: Add right drag handle  
-      const rightHandle = document.createElement('div');
-      rightHandle.className = 'region-drag-handle right-handle';
-      rightHandle.dataset.regionIndex = index;
-      rightHandle.dataset.handleType = 'right';
-      rightHandle.style.cssText = `
-        position: absolute;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 8px;
-        background: rgba(255,255,255,0.8);
-        border-left: 2px solid #fff;
-        cursor: ew-resize;
-        z-index: 200;
-        border-radius: 0 6px 6px 0;
-        transition: all 0.2s ease;
-      `;
-      rightHandle.title = 'Drag to adjust end time';
-      
-      // NEW: Add region label in center
-      const regionLabel = document.createElement('div');
-      regionLabel.className = 'region-label';
-      regionLabel.style.cssText = `
-        position: absolute;
-        left: 16px;
-        right: 16px;
-        top: 0;
-        bottom: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 600;
-        color: white;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        pointer-events: none;
-        z-index: 150;
-      `;
+createRegionLabel(region, regionWidthPercent) {
+  const regionLabel = document.createElement('div');
+  regionLabel.className = 'region-label';
+  regionLabel.style.cssText = `
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    pointer-events: none;
+    z-index: 60;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  `;
+  
+  // Adaptive label content based on available space
+  const effectiveWidth = regionWidthPercent * this.zoomLevel;
+  
+  if (effectiveWidth > 25) {
+    regionLabel.textContent = `Beat ${region.start}-${region.end}`;
+  } else if (effectiveWidth > 15) {
+    regionLabel.textContent = `${region.start}-${region.end}`;
+  } else if (effectiveWidth > 8) {
+    const beatCount = region.end - region.start;
+    regionLabel.textContent = `${beatCount}b`;
+  } else {
+    regionLabel.textContent = '▶';
+  }
+  
+  return regionLabel;
+}
+
+createRegionHandle(regionIndex, handleType) {
+  const handle = document.createElement('div');
+  handle.className = `region-drag-handle ${handleType}-handle`;
+  handle.dataset.regionIndex = regionIndex;
+  handle.dataset.handleType = handleType;
+  handle.style.cssText = `
+    position: absolute;
+    ${handleType}: 0;
+    top: 2px;
+    bottom: 2px;
+    width: 8px;
+    background: rgba(40,167,69,0.8);
+    border: 2px solid #fff;
+    cursor: ew-resize;
+    z-index: 200;
+    border-radius: ${handleType === 'left' ? '6px 2px 2px 6px' : '2px 6px 6px 2px'};
+    transition: all 0.2s ease;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+    pointer-events: auto;
+  `;
+  handle.title = `Drag to adjust ${handleType === 'left' ? 'start' : 'end'} time`;
+  
+  // Hover effects
+  handle.onmouseenter = function() {
+    this.style.background = 'rgba(40,167,69,1.0)';
+    this.style.width = '12px';
+    this.style.borderColor = '#28a745';
+  };
+  handle.onmouseleave = function() {
+    this.style.background = 'rgba(40,167,69,0.8)';
+    this.style.width = '8px';
+    this.style.borderColor = '#fff';
+  };
+  
+  // Connect drag functionality
+  this.addHandleDragFunctionality(handle, regionIndex, handleType);
+  
+  return handle;
+}
 
 
 
-      regionLabel.textContent = `${region.start}-${region.end}`;
-      
-            // NEW: Handle hover effects (using timeline green colors)
-      leftHandle.onmouseenter = function() {
-        this.style.background = 'rgba(40,167,69,0.9)'; // Same green as timeline
-        this.style.borderRight = '2px solid #28a745';
-        this.style.width = '12px';
-      };
-      leftHandle.onmouseleave = function() {
-        this.style.background = 'rgba(40,167,69,0.7)'; // Slightly transparent green
-        this.style.borderRight = '2px solid #fff';
-        this.style.width = '8px';
-      };
-      
-      rightHandle.onmouseenter = function() {
-        this.style.background = 'rgba(40,167,69,0.9)'; // Same green as timeline
-        this.style.borderLeft = '2px solid #28a745';
-        this.style.width = '12px';
-      };
-      rightHandle.onmouseleave = function() {
-        this.style.background = 'rgba(40,167,69,0.7)'; // Slightly transparent green
-        this.style.borderLeft = '2px solid #fff';
-        this.style.width = '8px';
-      };
-
-      // NEW: Add drag functionality to handles
-      this.addHandleDragFunctionality(leftHandle, index, 'left');
-      this.addHandleDragFunctionality(rightHandle, index, 'right');
-      
-      // NEW: Add direct click handler to region element
-      regionElement.addEventListener('mousedown', (e) => {
-        // Only trigger if clicking the region itself (not handles)
-        if (!e.target.classList.contains('region-drag-handle')) {
-          e.preventDefault();
-          e.stopPropagation(); // Prevent track click handler
-          
-          console.log(`🖱️ REGION MOUSEDOWN: Starting whole-region drag`);
-          this.startWholeRegionDrag(e);
-        }
-      });
-      
-      // Add handles and label to region
-      regionElement.appendChild(leftHandle);
-      regionElement.appendChild(rightHandle);
-      regionElement.appendChild(regionLabel);
-      
-      container.appendChild(regionElement);
-
+// FIXED: Create full muted region with proper tooltip support
+createFullMutedRegion() {
+  const mutedRegion = document.createElement('div');
+  mutedRegion.className = 'timeline-region muted interactive';
+  mutedRegion.style.cssText = `
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 15px;
+    bottom: 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    pointer-events: auto;
+    z-index: 40;
+    background: repeating-linear-gradient(
+      45deg,
+      #6c757d,
+      #6c757d 8px,
+      #495057 8px,
+      #495057 16px
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  `;
+  
+  mutedRegion.innerHTML = `
+    <div style="text-align: center; pointer-events: none;">
+      <div style="font-size: 14px; margin-bottom: 2px;">🔇</div>
+      <div style="font-size: 11px;">TIMELINE MUTED</div>
+      <div style="font-size: 9px; opacity: 0.8;">Double-click to create region</div>
+    </div>
+  `;
+  
+  // Add unified tooltip support
+  mutedRegion.addEventListener('mouseenter', (e) => {
+    const mutedBeat = this.screenXToBeat(e.clientX);
+    this.showUnifiedTooltip(e.clientX, e.clientY, {
+      type: 'context-help',
+      beat: mutedBeat,
+      operation: 'Muted Timeline',
+      additionalInfo: `Double-click to create playing region • Timeline is currently silent`
     });
+  });
+  
+  mutedRegion.addEventListener('mouseleave', () => {
+    this.hideUnifiedTooltip();
+  });
+  
+  mutedRegion.addEventListener('mousemove', (e) => {
+    const mutedBeat = this.screenXToBeat(e.clientX);
+    this.updateUnifiedTooltip(e.clientX, e.clientY, {
+      type: 'beat-indicator',
+      beat: mutedBeat,
+      additionalInfo: 'Timeline muted - double-click to unmute'
+    });
+  });
+  
+  return mutedRegion;
+}
 
+// CLEAN: Render parameter event diamonds for a specific region
+renderParameterEventsForRegion(container, region, regionIndex, regionStartBeat, regionEndBeat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  // Find parameter events for this specific region
+  const parameterEvents = lifeSpan.events.filter(event => 
+    event.type === 'parameter' && 
+    event.regionIndex === regionIndex
+  );
+  
+  if (parameterEvents.length === 0) return;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`   💎 Rendering ${parameterEvents.length} parameter events for region ${regionIndex}`);
+  }
+  
+  parameterEvents.forEach((event, eventIndex) => {
+    // Calculate current absolute position from relative position
+    const eventBeat = region.start + (event.relativePosition * (region.end - region.start));
+    const eventLeftPercent = (eventBeat / this.maxBeats) * 100;
     
-    // Add muted regions if needed
-    if (playingRegions.length > 0) {
-      this.renderMutedRegions(container, playingRegions);
+    // Create diamond marker
+    const diamond = document.createElement('div');
+    diamond.className = `parameter-event-diamond ${this.getParameterCategory(event.parameter)}`;
+    diamond.dataset.eventId = event.id;
+    diamond.dataset.parameter = event.parameter;
+    diamond.dataset.regionIndex = regionIndex;
+    diamond.dataset.relativePosition = event.relativePosition;
+    
+    diamond.style.cssText = `
+      position: absolute;
+      left: ${eventLeftPercent.toFixed(2)}%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      background: ${this.getParameterEventColor(event.parameter)};
+      border: 2px solid #f39c12;
+      border-radius: 2px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      cursor: grab;
+      z-index: 500;
+      transition: all 0.2s ease;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      opacity: 1.0;
+      pointer-events: auto;
+    `;
+    
+    diamond.title = `💎 ${event.parameter} Event - Beat ${eventBeat.toFixed(0)} (${(event.relativePosition * 100).toFixed(1)}% in region)`;
+    
+    // Add hover effects
+    diamond.onmouseenter = function() {
+      this.style.background = '#f1c40f';
+      this.style.borderColor = '#e67e22';
+      this.style.transform = 'translate(-50%, -50%) rotate(45deg) scale(1.3)';
+      this.style.boxShadow = '0 6px 16px rgba(243,156,18,0.6)';
+    };
+    
+    diamond.onmouseleave = function() {
+      this.style.background = this.dataset.originalColor || '#ffd700';
+      this.style.borderColor = '#f39c12';
+      this.style.transform = 'translate(-50%, -50%) rotate(45deg) scale(1)';
+      this.style.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
+    };
+    
+    diamond.dataset.originalColor = this.getParameterEventColor(event.parameter);
+    
+    // Add drag functionality
+    this.addDiamondDragFunctionality(diamond, event, regionStartBeat, regionEndBeat);
+    
+    // NEW: Add diamonds to timeline track (not region container)
+    // This prevents transform conflicts during region drag
+    const track = this.container.querySelector('.visual-timeline-track');
+    if (track) {
+      track.appendChild(diamond);
     } else {
-      // No playing regions - entire timeline is muted
-      const mutedRegion = document.createElement('div');
-      mutedRegion.className = 'timeline-region muted interactive';
-      mutedRegion.style.cssText = `
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 15px;
-        bottom: 15px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        user-select: none;
-      `;
-      mutedRegion.textContent = 'MUTED - Double-click to unmute';
-      mutedRegion.title = 'Timeline is muted - Double-click to create new playing region';
-      
+      container.appendChild(diamond); // Fallback
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`     💎 Event: ${event.parameter} at ${(event.relativePosition * 100).toFixed(1)}% = beat ${eventBeat.toFixed(1)}`);
+    }
+  });
+}
+
+// NEW: Get parameter category for styling
+getParameterCategory(parameterName) {
+  if (['VOLUME', 'STEREO BALANCE'].includes(parameterName)) {
+    return 'volume';
+  } else if (['TEMPO (BPM)', 'RHYTHMS', 'RESTS'].includes(parameterName)) {
+    return 'tempo';
+  } else if (['MELODIC RANGE', 'INSTRUMENT', 'ATTACK VELOCITY'].includes(parameterName)) {
+    return 'melodic';
+  } else if (['REVERB', 'DELAY', 'TREMOLO', 'CHORUS', 'PHASER'].includes(parameterName)) {
+    return 'effects';
+  } else {
+    return 'general';
+  }
+}
+
+// NEW: Get color for parameter event diamonds
+getParameterEventColor(parameterName) {
+  const colorMap = {
+    'VOLUME': 'linear-gradient(45deg, #ffd700, #f39c12)',
+    'STEREO BALANCE': 'linear-gradient(45deg, #ffd700, #f39c12)',
+    'TEMPO (BPM)': 'linear-gradient(45deg, #e74c3c, #c0392b)',
+    'RHYTHMS': 'linear-gradient(45deg, #e74c3c, #c0392b)',
+    'RESTS': 'linear-gradient(45deg, #e74c3c, #c0392b)',
+    'MELODIC RANGE': 'linear-gradient(45deg, #9b59b6, #8e44ad)',
+    'INSTRUMENT': 'linear-gradient(45deg, #9b59b6, #8e44ad)',
+    'ATTACK VELOCITY': 'linear-gradient(45deg, #9b59b6, #8e44ad)',
+    'REVERB': 'linear-gradient(45deg, #3498db, #2980b9)',
+    'DELAY': 'linear-gradient(45deg, #3498db, #2980b9)',
+    'TREMOLO': 'linear-gradient(45deg, #3498db, #2980b9)',
+    'CHORUS': 'linear-gradient(45deg, #3498db, #2980b9)',
+    'PHASER': 'linear-gradient(45deg, #3498db, #2980b9)'
+  };
+  
+  return colorMap[parameterName] || 'linear-gradient(45deg, #ffd700, #f39c12)';
+}
+
+// FIXED: Render muted regions with unified tooltip support  
+renderMutedRegions(container, playingRegions) {
+  const sortedRegions = [...playingRegions].sort((a, b) => a.start - b.start);
+  
+  // Muted region at start (if needed)
+  if (sortedRegions[0].start > 0) {
+    const mutedRegion = this.createMutedRegion(0, sortedRegions[0].start, 'start');
+    container.appendChild(mutedRegion);
+  }
+  
+  // Muted regions between playing regions
+  for (let i = 0; i < sortedRegions.length - 1; i++) {
+    const currentEnd = sortedRegions[i].end;
+    const nextStart = sortedRegions[i + 1].start;
+    
+    if (nextStart > currentEnd) {
+      const mutedRegion = this.createMutedRegion(currentEnd, nextStart, 'between');
       container.appendChild(mutedRegion);
     }
   }
+  
+  // Muted region at end (if needed)
+  const lastRegion = sortedRegions[sortedRegions.length - 1];
+  if (lastRegion.end < this.maxBeats) {
+    const mutedRegion = this.createMutedRegion(lastRegion.end, this.maxBeats, 'end');
+    container.appendChild(mutedRegion);
+  }
+}
+
+// NEW: Create individual muted region with unified tooltip
+createMutedRegion(startBeat, endBeat, position) {
+  const leftPercent = (startBeat / this.maxBeats) * 100;
+  const rightPercent = (endBeat / this.maxBeats) * 100;
+  const width = rightPercent - leftPercent;
+  
+  const mutedRegion = document.createElement('div');
+  mutedRegion.className = 'timeline-region muted interactive';
+  mutedRegion.style.cssText = `
+    position: absolute;
+    left: ${leftPercent.toFixed(2)}%;
+    width: ${Math.max(0.5, width).toFixed(2)}%;
+    top: 15px;
+    bottom: 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    pointer-events: auto;
+    z-index: 40;
+    background: repeating-linear-gradient(
+      45deg,
+      #6c757d,
+      #6c757d 6px,
+      #495057 6px,
+      #495057 12px
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    overflow: hidden;
+    box-sizing: border-box;
+  `;
+  
+  // Adaptive content based on width
+  const mutedWidth = width;
+  if (mutedWidth > 10) {
+    mutedRegion.innerHTML = `
+      <div style="text-align: center; pointer-events: none;">
+        <div style="font-size: 12px;">🔇 MUTED</div>
+        <div style="font-size: 9px; opacity: 0.8;">Double-click to unmute</div>
+      </div>
+    `;
+  } else if (mutedWidth > 5) {
+    mutedRegion.innerHTML = `
+      <div style="text-align: center; pointer-events: none; font-size: 10px;">
+        🔇
+      </div>
+    `;
+  } else {
+    mutedRegion.innerHTML = `<span style="font-size: 8px;">•</span>`;
+  }
+  
+  mutedRegion.title = `Muted region: Beat ${startBeat.toFixed(0)} - ${endBeat.toFixed(0)}`;
+  
+  // Add unified tooltip support
+  mutedRegion.addEventListener('mouseenter', (e) => {
+    const mutedBeat = this.screenXToBeat(e.clientX);
+    this.showUnifiedTooltip(e.clientX, e.clientY, {
+      type: 'context-help',
+      beat: mutedBeat,
+      operation: 'Muted Region',
+      additionalInfo: `Beats ${startBeat.toFixed(0)}-${endBeat.toFixed(0)} • Double-click to create playing region`
+    });
+  });
+  
+  mutedRegion.addEventListener('mouseleave', () => {
+    this.hideUnifiedTooltip();
+  });
+  
+  mutedRegion.addEventListener('mousemove', (e) => {
+    const mutedBeat = this.screenXToBeat(e.clientX);
+    this.updateUnifiedTooltip(e.clientX, e.clientY, {
+      type: 'beat-indicator',
+      beat: mutedBeat,
+      additionalInfo: `Muted region - double-click to unmute`
+    });
+  });
+  
+  return mutedRegion;
+}
+
 
     // NEW: Convert events array to playing regions
   convertEventsToRegions(events) {
@@ -12044,134 +13273,67 @@ snapBeatToGrid(beat) {
       return controls;
     }
   
-    // NEW: Start new region creation (double-click-and-drag)
-  startNewRegionCreation(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const startBeat = this.screenXToBeat(e.clientX);
-    const snappedStartBeat = this.snapToBeat ? this.snapBeatToGrid(startBeat) : startBeat;
-    const clampedStartBeat = Math.max(0, Math.min(this.maxBeats - 1, snappedStartBeat));
-    
-    let isDragging = false;
-    let previewRegion = null;
-    
-    // Capture state for undo
-    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-      undoManager.captureState(`Timeline: Create new region`, true);
-    }
-    
-    if (DEBUG.EVENTS) {
-      console.log(`🆕 Starting region creation at beat ${clampedStartBeat}`);
-    }
-    
-    // NEW: Show immediate visual feedback (1-beat width preview)
-    const initialEndBeat = Math.min(clampedStartBeat + 4, this.maxBeats); // Start with 4-beat region
-    this.showNewRegionPreview(clampedStartBeat, initialEndBeat);
-    
-    // NEW: Show initial tooltip
-    const initialTimeMs = beatsToMs(clampedStartBeat, this.beatUnit, this.tempo);
-    const initialTimeFormatted = formatMsToMMSS(initialTimeMs);
-    this.showDragTooltip(e.clientX, e.clientY, clampedStartBeat, 
-      `Creating: ${clampedStartBeat}-${initialEndBeat} (4 beats)`, 'creation');
-
-    const handleCreationMouseMove = (e) => {
-      const currentBeat = this.screenXToBeat(e.clientX);
-      const snappedCurrentBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
-      const clampedCurrentBeat = Math.max(clampedStartBeat + 1, Math.min(this.maxBeats, snappedCurrentBeat));
-      
-      if (!isDragging) {
-        // Start dragging immediately (we already showed initial preview)
-        isDragging = true;
-        if (DEBUG.EVENTS) {
-          console.log(`🆕 Now sizing new region from beat ${clampedStartBeat}`);
-        }
-      }
-
-      
-      // Show preview of new region being created
-      this.showNewRegionPreview(clampedStartBeat, clampedCurrentBeat);
-      
-      // Show tooltip with region info
-      const width = clampedCurrentBeat - clampedStartBeat;
-      const timeMs = beatsToMs(clampedStartBeat, this.beatUnit, this.tempo);
-      const timeFormatted = formatMsToMMSS(timeMs);
-      
-      this.showDragTooltip(e.clientX, e.clientY, clampedStartBeat, 
-        `New: ${clampedStartBeat}-${clampedCurrentBeat} (${width} beats)`, 'creation');
-    };
-    
-    const handleCreationMouseUp = (e) => {
-      // Remove global listeners
-      document.removeEventListener('mousemove', handleCreationMouseMove);
-      document.removeEventListener('mouseup', handleCreationMouseUp);
-      
-      // Clear preview
-      this.clearNewRegionPreview();
-      
-      if (isDragging) {
-        const endBeat = this.screenXToBeat(e.clientX);
-        const snappedEndBeat = this.snapToBeat ? this.snapBeatToGrid(endBeat) : endBeat;
-        const clampedEndBeat = Math.max(clampedStartBeat + 1, Math.min(this.maxBeats, snappedEndBeat));
-        
-        // Create the new region in events array
-        this.createNewRegionInEvents(clampedStartBeat, clampedEndBeat);
-        
-        if (DEBUG.EVENTS) {
-          console.log(`✅ Created new region: ${clampedStartBeat}-${clampedEndBeat} beats`);
-        }
-        
-        // Refresh timeline
-        setTimeout(() => {
-          this.refresh();
-        }, 50);
-      }
-      
-      // Remove floating tooltip
-      setTimeout(() => {
-        const dragTooltip = document.querySelector('.drag-tooltip');
-        if (dragTooltip) {
-          dragTooltip.style.transition = 'opacity 0.3s ease';
-          dragTooltip.style.opacity = '0';
-          setTimeout(() => dragTooltip.remove(), 300);
-        }
-      }, 800);
-    };
-    
-    // Add global mouse listeners
-    document.addEventListener('mousemove', handleCreationMouseMove);
-    document.addEventListener('mouseup', handleCreationMouseUp);
-  }
 
   // NEW: Show preview of region being created
-  showNewRegionPreview(startBeat, endBeat) {
-    // Remove existing preview
-    this.clearNewRegionPreview();
-    
-    const track = this.container.querySelector('.visual-timeline-track');
-    if (!track) return;
-    
-    const leftPercent = (startBeat / this.maxBeats) * 100;
-    const rightPercent = (endBeat / this.maxBeats) * 100;
-    const width = rightPercent - leftPercent;
-    
-    const preview = document.createElement('div');
-    preview.className = 'new-region-preview';
-    preview.style.cssText = `
-      position: absolute;
-      left: ${leftPercent.toFixed(1)}%;
-      width: ${Math.max(1, width).toFixed(1)}%;
-      top: 15px;
-      bottom: 15px;
-      background: linear-gradient(45deg, rgba(40,167,69,0.5), rgba(52,206,87,0.5));
-      border: 2px dashed #28a745;
-      border-radius: 6px;
-      z-index: 250;
-      pointer-events: none;
-    `;
-    
-    track.appendChild(preview);
+ showNewRegionPreview(startBeat, endBeat) {
+  // Remove existing preview
+  this.clearNewRegionPreview();
+  
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  const leftPercent = (startBeat / this.maxBeats) * 100;
+  const rightPercent = (endBeat / this.maxBeats) * 100;
+  const width = rightPercent - leftPercent;
+  
+  const preview = document.createElement('div');
+  preview.className = 'new-region-preview';
+  preview.style.cssText = `
+    position: absolute;
+    left: ${leftPercent.toFixed(1)}%;
+    width: ${Math.max(1, width).toFixed(1)}%;
+    top: 15px;
+    bottom: 15px;
+    background: linear-gradient(45deg, rgba(40,167,69,0.5), rgba(52,206,87,0.5));
+    border: 2px dashed #28a745;
+    border-radius: 6px;
+    z-index: 250;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  
+  // NEW: Add live updating label to preview
+  const previewLabel = document.createElement('div');
+  previewLabel.className = 'preview-region-label';
+  previewLabel.style.cssText = `
+    color: #28a745;
+    font-weight: bold;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.9);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #28a745;
+  `;
+  
+  // Calculate appropriate label content
+  const beatWidth = endBeat - startBeat;
+  const effectiveWidth = width * this.zoomLevel;
+  
+  if (effectiveWidth > 20) {
+    previewLabel.textContent = `${startBeat.toFixed(0)}-${endBeat.toFixed(0)}`;
+  } else if (effectiveWidth > 10) {
+    previewLabel.textContent = `${beatWidth.toFixed(0)}b`;
+  } else {
+    previewLabel.textContent = '▶';
   }
+  
+  preview.appendChild(previewLabel);
+  track.appendChild(preview);
+}
+
 
   // NEW: Clear new region preview
   clearNewRegionPreview() {
@@ -12392,6 +13554,10 @@ snapBeatToGrid(beat) {
 
   // NEW: Handle region deletion (from menu or Alt+Click)
   handleRegionDeletion(regionIndex) {
+    // NEW: Clear any lingering tooltips
+    this.clearCreationTooltip();
+    this.hideBeatIndicator();
+
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
     if (!lifeSpan || !lifeSpan.events) return;
     
@@ -12530,17 +13696,1270 @@ snapBeatToGrid(beat) {
     }
   }
   
+// ===== CORRECTED ZOOM AND PAN SYSTEM =====
 
-  refresh() {
-    if (!this.container) return;
-    
-    if (DEBUG.TIMELINE) {
-      console.log(`🔄 Refreshing Visual Timeline for Voice ${this.voiceIndex + 1}`);
+addZoomSupport() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  // Add wheel event listener for zooming
+  track.addEventListener('wheel', (e) => this.handleZoom(e));
+  
+  // Add mouse move for beat indicator
+  track.addEventListener('mousemove', (e) => this.updateBeatIndicator(e));
+  track.addEventListener('mouseleave', () => this.hideBeatIndicator());
+  
+  // Add pan support (middle mouse or Shift+drag)
+  track.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || e.shiftKey) { // Middle mouse or Shift+left click
+      e.preventDefault();
+      this.startPanning(e);
     }
-    
-    this.render(this.container);
+  });
+  
+  // Initialize zoom constraints
+  this.calculateZoomConstraints();
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔍 Zoom support added: ${this.minZoom}x - ${this.maxZoom}x range`);
+  }
+}
+
+calculateZoomConstraints() {
+  // Minimum zoom: Always allow 100% (full timeline view)
+  this.minZoom = 1.0;
+  
+  // Maximum zoom: Calculate based on smallest region and handle visibility
+  this.maxZoom = this.calculateMaxZoomForRegions();
+  
+  // Fallback constraints
+  this.maxZoom = Math.max(2.0, Math.min(this.maxZoom, 20.0));
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📏 Zoom constraints: ${this.minZoom}x (100% min) - ${this.maxZoom.toFixed(1)}x max`);
+    console.log(`   Based on region handle visibility requirements`);
+  }
+}
+
+calculateMaxZoomForRegions() {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    return 5.0; // Default if no regions
   }
   
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  if (playingRegions.length === 0) {
+    return 5.0; // Default if no playing regions
+  }
+  
+  // Find the smallest region
+  let smallestRegionBeats = this.maxBeats;
+  
+  playingRegions.forEach(region => {
+    const regionWidth = region.end - region.start;
+    if (regionWidth < smallestRegionBeats) {
+      smallestRegionBeats = regionWidth;
+    }
+  });
+  
+  // Calculate max zoom based on handle visibility requirements
+  // We need at least 40px total width for both handles (8px each) + some content
+  // At maximum zoom, the smallest region should be at least 40px wide
+  
+  const minRequiredPixels = 50; // 40px for handles + 10px buffer
+  const containerWidth = 400; // Approximate timeline track width
+  
+  // Calculate what zoom level would make smallest region = minRequiredPixels
+  const smallestRegionPercent = (smallestRegionBeats / this.maxBeats) * 100;
+  const smallestRegionPixelsAt100 = (smallestRegionPercent / 100) * containerWidth;
+  
+  const maxZoomForSmallest = minRequiredPixels / smallestRegionPixelsAt100;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📐 Smallest region: ${smallestRegionBeats} beats (${smallestRegionPercent.toFixed(1)}%)`);
+    console.log(`   At 100% zoom: ${smallestRegionPixelsAt100.toFixed(1)}px`);
+    console.log(`   Max zoom for visibility: ${maxZoomForSmallest.toFixed(1)}x`);
+  }
+  
+  return Math.max(2.0, maxZoomForSmallest);
+}
+
+handleZoom(e) {
+  e.preventDefault();
+  
+  const track = this.container.querySelector('.visual-timeline-track');
+  const rect = track.getBoundingClientRect();
+  
+  // Get mouse position relative to track (0-1)
+  const mouseX = e.clientX - rect.left;
+  const mousePercent = mouseX / rect.width;
+  
+  // Calculate zoom change
+  const zoomDirection = e.deltaY > 0 ? -1 : 1; // Inverted: scroll up = zoom in
+  const oldZoom = this.zoomLevel;
+  const proposedZoom = this.zoomLevel + (zoomDirection * this.zoomStep);
+  
+  // NEW: Calculate zoom limit based on handle visibility
+  const maxAllowedZoom = this.calculateMaxZoomForHandleVisibility();
+  
+  // Apply zoom with handle-aware constraints
+  this.zoomLevel = Math.max(this.minZoom, Math.min(maxAllowedZoom, proposedZoom));
+  
+  if (this.zoomLevel !== oldZoom) {
+    // NEW: Apply intelligent panning to keep handles visible
+    this.applyIntelligentZoomAndPan(mousePercent, oldZoom);
+    
+    if (DEBUG.EVENTS) {
+      const currentBeat = this.screenXToBeat(e.clientX);
+      console.log(`🔍 Smart zoom: ${oldZoom.toFixed(1)}x → ${this.zoomLevel.toFixed(1)}x at beat ${currentBeat.toFixed(1)}`);
+      console.log(`   Max allowed: ${maxAllowedZoom.toFixed(1)}x (handle visibility limit)`);
+    }
+  } else if (proposedZoom > maxAllowedZoom) {
+    // Show feedback when hitting handle visibility limit
+    this.showZoomLimitFeedback('handle-visibility');
+  }
+
+  // NEW: Verify handles are still visible after zoom
+setTimeout(() => {
+  if (!this.areHandlesVisible()) {
+    console.log(`⚠️ Handles not visible after zoom - adjusting...`);
+    
+    // Reduce zoom slightly to bring handles back into view
+    this.zoomLevel = Math.max(this.minZoom, this.zoomLevel - (this.zoomStep / 2));
+    this.applyIntelligentZoomAndPan(mousePercent, oldZoom);
+  }
+}, 10);
+
+
+}
+
+calculateMaxZoomForHandleVisibility() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return 10.0;
+  
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return 10.0;
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  if (playingRegions.length === 0) return 10.0;
+  
+  // Get actual track width in pixels
+  const trackRect = track.getBoundingClientRect();
+  const trackWidthPx = trackRect.width;
+  
+  if (trackWidthPx === 0) return 10.0; // Track not rendered yet
+  
+  // Calculate current view window
+  const currentViewWidth = 1 / this.zoomLevel;
+  const currentViewStart = this.panOffset;
+  const currentViewEnd = currentViewStart + currentViewWidth;
+  
+  // Find regions that are currently visible or partially visible
+  const visibleRegions = playingRegions.filter(region => {
+    const regionStart = region.start / this.maxBeats;
+    const regionEnd = region.end / this.maxBeats;
+    
+    // Region is visible if it overlaps with current view
+    return !(regionEnd <= currentViewStart || regionStart >= currentViewEnd);
+  });
+  
+  if (visibleRegions.length === 0) return 10.0; // No visible regions
+  
+  // For each visible region, calculate maximum zoom before handles disappear
+  let minAllowedZoom = 20.0;
+  
+  visibleRegions.forEach((region, index) => {
+    const regionStartPercent = region.start / this.maxBeats;
+    const regionEndPercent = region.end / this.maxBeats;
+    const regionWidthPercent = regionEndPercent - regionStartPercent;
+    
+    // Calculate required container width to show both handles + content
+    const handleWidthPx = 16; // 8px handle + padding
+    const minContentWidthPx = 20; // Minimum content between handles
+    const totalRequiredPx = (2 * handleWidthPx) + minContentWidthPx; // 52px minimum
+    
+    // What zoom level would make this region exactly totalRequiredPx wide?
+    const regionWidthAtZoom1 = regionWidthPercent * trackWidthPx; // Pixels at 1x zoom
+    const maxZoomForThisRegion = totalRequiredPx / regionWidthAtZoom1;
+    
+    if (maxZoomForThisRegion < minAllowedZoom) {
+      minAllowedZoom = maxZoomForThisRegion;
+    }
+    
+    if (DEBUG.EVENTS && Math.random() < 0.1) {
+      console.log(`   Region ${index} (${region.start}-${region.end}): max zoom ${maxZoomForThisRegion.toFixed(1)}x`);
+      console.log(`     Width: ${regionWidthPercent.toFixed(3)}% = ${regionWidthAtZoom1.toFixed(1)}px at 1x`);
+      console.log(`     Required: ${totalRequiredPx}px for handles`);
+    }
+  });
+  
+  return Math.max(2.0, minAllowedZoom);
+}
+
+
+applyIntelligentZoomAndPan(mousePercent, oldZoom) {
+  // NEW: Smart panning algorithm to keep handles visible
+  const newPanOffset = this.calculateSmartPanOffset();
+  this.panOffset = newPanOffset;
+  
+  // Apply the transform
+  const track = this.container.querySelector('.visual-timeline-track');
+  const regions = this.container.querySelector('.timeline-regions');
+  const playhead = this.container.querySelector('.timeline-playhead-container');
+  
+  if (!regions) return;
+  
+  const viewStartPercent = this.panOffset * 100;
+  const transform = `scaleX(${this.zoomLevel}) translateX(${-viewStartPercent}%)`;
+  
+  regions.style.transform = transform;
+  regions.style.transformOrigin = 'left center';
+  
+  if (playhead) {
+    playhead.style.transform = transform;
+    playhead.style.transformOrigin = 'left center';
+  }
+  
+  // Update track classes
+  if (this.zoomLevel > 1.5) {
+    track.classList.add('zoomed');
+  } else {
+    track.classList.remove('zoomed');
+  }
+  
+  // Update controls and labels
+  this.updateZoomControls();
+  this.updateLabelsForCurrentView();
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🎯 Applied smart pan: ${viewStartPercent.toFixed(1)}% (keeps handles visible)`);
+  }
+}
+
+calculateSmartPanOffset() {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return 0;
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  if (playingRegions.length === 0) return 0;
+  
+  const newViewWidth = 1 / this.zoomLevel;
+  const maxPanOffset = Math.max(0, 1 - newViewWidth);
+  
+  // Strategy: Find the leftmost and rightmost regions that need to be visible
+  let leftmostRegionStart = 1;
+  let rightmostRegionEnd = 0;
+  
+  playingRegions.forEach(region => {
+    const regionStartPercent = region.start / this.maxBeats;
+    const regionEndPercent = region.end / this.maxBeats;
+    
+    if (regionStartPercent < leftmostRegionStart) {
+      leftmostRegionStart = regionStartPercent;
+    }
+    if (regionEndPercent > rightmostRegionEnd) {
+      rightmostRegionEnd = regionEndPercent;
+    }
+  });
+  
+  // Calculate required view to show all regions with handle padding
+  const handlePadding = 0.02; // 2% padding for handles
+  const requiredStart = Math.max(0, leftmostRegionStart - handlePadding);
+  const requiredEnd = Math.min(1, rightmostRegionEnd + handlePadding);
+  const requiredWidth = requiredEnd - requiredStart;
+  
+  if (requiredWidth <= newViewWidth) {
+    // All regions can fit in view - center them
+    const idealViewStart = requiredStart - ((newViewWidth - requiredWidth) / 2);
+    return Math.max(0, Math.min(maxPanOffset, idealViewStart));
+  }
+  
+  // Not all regions can fit - prioritize keeping the current view regions visible
+  const currentViewStart = this.panOffset;
+  const currentViewEnd = currentViewStart + (1 / this.zoomLevel);
+  
+  // Find regions currently in view
+  const currentlyVisibleRegions = playingRegions.filter(region => {
+    const regionStart = region.start / this.maxBeats;
+    const regionEnd = region.end / this.maxBeats;
+    return !(regionEnd <= currentViewStart || regionStart >= currentViewEnd);
+  });
+  
+  if (currentlyVisibleRegions.length > 0) {
+    // Keep currently visible regions in view
+    const visibleStart = Math.min(...currentlyVisibleRegions.map(r => r.start / this.maxBeats));
+    const visibleEnd = Math.max(...currentlyVisibleRegions.map(r => r.end / this.maxBeats));
+    
+    // Try to center the visible regions in the new view
+    const visibleCenter = (visibleStart + visibleEnd) / 2;
+    const idealViewStart = visibleCenter - (newViewWidth / 2);
+    
+    return Math.max(0, Math.min(maxPanOffset, idealViewStart));
+  }
+  
+  // Fallback: maintain current pan ratio
+  return Math.max(0, Math.min(maxPanOffset, this.panOffset));
+}
+
+// NEW: Check if handles are actually visible in current view
+areHandlesVisible() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return true;
+  
+  const trackRect = track.getBoundingClientRect();
+  const handles = track.querySelectorAll('.region-drag-handle');
+  
+  let allHandlesVisible = true;
+  
+  handles.forEach(handle => {
+    const handleRect = handle.getBoundingClientRect();
+    
+    // Check if handle is within track bounds
+    const isLeftVisible = handleRect.left >= trackRect.left;
+    const isRightVisible = handleRect.right <= trackRect.right;
+    
+    if (!isLeftVisible || !isRightVisible) {
+      allHandlesVisible = false;
+      
+      if (DEBUG.EVENTS && Math.random() < 0.1) {
+        const handleType = handle.dataset.handleType;
+        console.log(`👁️ Handle ${handleType} not visible: left=${isLeftVisible}, right=${isRightVisible}`);
+      }
+    }
+  });
+  
+  return allHandlesVisible;
+}
+
+calculateIntelligentPanOffset(mousePercent, oldZoom) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    return 0; // No regions to consider
+  }
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  if (playingRegions.length === 0) {
+    return 0; // No regions to consider
+  }
+  
+  // Find the region that needs the most attention (smallest or closest to mouse)
+  const currentViewWidth = 1 / oldZoom;
+  const currentViewStart = this.panOffset;
+  const mouseBeatInTimeline = currentViewStart + (mousePercent * currentViewWidth);
+  
+  // Find which region the mouse is over or closest to
+  let targetRegion = null;
+  let minDistance = this.maxBeats;
+  
+  playingRegions.forEach(region => {
+    const regionCenter = (region.start + region.end) / 2;
+    const distance = Math.abs(mouseBeatInTimeline - regionCenter);
+    
+    if (distance < minDistance) {
+      minDistance = distance;
+      targetRegion = region;
+    }
+  });
+  
+  if (!targetRegion) return this.panOffset; // Fallback
+  
+  // NEW: Calculate pan to keep target region's handles visible
+  const newViewWidth = 1 / this.zoomLevel;
+  const regionStartPercent = targetRegion.start / this.maxBeats;
+  const regionEndPercent = targetRegion.end / this.maxBeats;
+  const regionWidthPercent = regionEndPercent - regionStartPercent;
+  
+  // We need some padding around the region for handles
+  const handlePadding = 0.02; // 2% padding on each side
+  const requiredViewWidth = regionWidthPercent + (2 * handlePadding);
+  
+  if (newViewWidth < requiredViewWidth) {
+    // Region won't fit in view even with optimal panning
+    // Center the region as best we can
+    const idealViewStart = regionStartPercent - handlePadding;
+    const maxPanOffset = Math.max(0, 1 - newViewWidth);
+    
+    return Math.max(0, Math.min(maxPanOffset, idealViewStart));
+  }
+  
+  // Region will fit - calculate optimal pan to keep it centered in view
+  const regionCenterPercent = (regionStartPercent + regionEndPercent) / 2;
+  const idealViewStart = regionCenterPercent - (newViewWidth / 2);
+  const maxPanOffset = Math.max(0, 1 - newViewWidth);
+  
+  return Math.max(0, Math.min(maxPanOffset, idealViewStart));
+}
+
+
+applyZoomAndPan() {
+  const track = this.container.querySelector('.visual-timeline-track');
+  const regions = this.container.querySelector('.timeline-regions');
+  const playhead = this.container.querySelector('.timeline-playhead-container');
+  
+  if (!track || !regions) return;
+  
+  // FIXED: Apply transform to regions container only (not track itself)
+  // This keeps the container boundaries intact
+  const viewWidth = 1 / this.zoomLevel;
+  const viewStartPercent = this.panOffset * 100;
+  
+  // Apply zoom and pan transform to regions and playhead only
+  const transform = `scaleX(${this.zoomLevel}) translateX(${-viewStartPercent}%)`;
+  
+  regions.style.transform = transform;
+  regions.style.transformOrigin = 'left center';
+  
+  if (playhead) {
+    playhead.style.transform = transform;
+    playhead.style.transformOrigin = 'left center';
+  }
+  
+  // FIXED: Ensure track container clips content properly
+  track.style.overflow = 'hidden';
+  track.style.position = 'relative';
+  
+  // FIXED: Add zoom level class for responsive styling
+  if (this.zoomLevel > 1.5) {
+    track.classList.add('zoomed');
+  } else {
+    track.classList.remove('zoomed');
+  }
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🔍 Applied zoom: ${this.zoomLevel.toFixed(1)}x, pan: ${viewStartPercent.toFixed(1)}%`);
+  }
+}
+
+updateLabelsForCurrentView() {
+  const viewWidth = 1 / this.zoomLevel;
+  const viewStart = this.panOffset;
+  const viewEnd = Math.min(1, viewStart + viewWidth);
+  
+  // Update time labels
+  const timeLabels = this.container.querySelector('.timeline-time-labels');
+  if (timeLabels) {
+    const intervals = 5;
+    const labels = timeLabels.querySelectorAll('span');
+    
+    for (let i = 0; i <= intervals; i++) {
+      if (labels[i]) {
+        const percent = (i / intervals);
+        const timelinePercent = viewStart + (percent * (viewEnd - viewStart));
+        const timeMs = timelinePercent * beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+        const timeFormatted = formatMsToMMSS(timeMs);
+        const beats = Math.round(timelinePercent * this.maxBeats);
+        
+        labels[i].textContent = timeFormatted;
+        labels[i].title = `Beat ${beats} - ${timeFormatted}`;
+      }
+    }
+  }
+  
+  // Update beat labels
+  const beatLabels = this.container.querySelector('.timeline-beat-labels');
+  if (beatLabels) {
+    const intervals = 5;
+    const labels = beatLabels.querySelectorAll('span');
+    
+    for (let i = 0; i <= intervals; i++) {
+      if (labels[i]) {
+        const percent = (i / intervals);
+        const timelinePercent = viewStart + (percent * (viewEnd - viewStart));
+        const beats = Math.round(timelinePercent * this.maxBeats);
+        
+        labels[i].textContent = `Beat ${beats}`;
+        labels[i].title = `Beat ${beats}`;
+      }
+    }
+  }
+}
+
+startPanning(e) {
+  e.preventDefault();
+  
+  const startX = e.clientX;
+  const startPan = this.panOffset;
+  let isPanning = false;
+  
+  const handlePanMove = (e) => {
+    if (!isPanning) {
+      isPanning = true;
+      document.body.style.cursor = 'grabbing';
+    }
+    
+    const deltaX = e.clientX - startX;
+    const track = this.container.querySelector('.visual-timeline-track');
+    const panSensitivity = 1 / (track.offsetWidth * this.zoomLevel);
+    
+    const newPan = startPan - (deltaX * panSensitivity);
+    const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+    
+    this.panOffset = Math.max(0, Math.min(maxPan, newPan));
+    this.applyZoomAndPan();
+    this.updateLabelsForCurrentView(); // Update labels during pan
+  };
+  
+  const handlePanEnd = () => {
+    document.removeEventListener('mousemove', handlePanMove);
+    document.removeEventListener('mouseup', handlePanEnd);
+    document.body.style.cursor = '';
+  };
+  
+  document.addEventListener('mousemove', handlePanMove);
+  document.addEventListener('mouseup', handlePanEnd);
+}
+
+// ===== UNIFIED BEAT INDICATOR SYSTEM (NO TIMEOUTS) =====
+
+updateBeatIndicator(e) {
+  if (!this.showBeatIndicator) {
+    this.hideUnifiedTooltip();
+    return;
+  }
+  
+  const beat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  const roundedBeat = Math.round(clampedBeat);
+  
+  // NEW: Only update tooltip when beat number actually changes
+  if (this.lastDisplayedBeat !== roundedBeat) {
+    this.lastDisplayedBeat = roundedBeat;
+    this.currentBeat = clampedBeat;
+    
+    // Only update tooltip when beat changes
+    this.showUnifiedBeatTooltip(e.clientX, e.clientY, clampedBeat);
+    
+    // Update cursor (also only when beat changes)
+    this.updateCursorWithBeat(clampedBeat);
+    
+    if (DEBUG.EVENTS && Math.random() < 0.1) {
+      console.log(`📍 Beat changed to: ${roundedBeat} (tooltip updated)`);
+    }
+  } else {
+    // Beat hasn't changed - just update tooltip position without recreating content
+    this.updateTooltipPosition(e.clientX, e.clientY);
+  }
+}
+
+// NEW: Update tooltip position without changing content
+updateTooltipPosition(clientX, clientY) {
+  const existingTooltip = document.querySelector('.unified-beat-tooltip');
+  if (existingTooltip) {
+    existingTooltip.style.left = `${clientX + 15}px`;
+    existingTooltip.style.top = `${clientY - 45}px`;
+  }
+}
+
+
+showUnifiedBeatTooltip(clientX, clientY, beat) {
+  // Remove existing tooltip
+  const existingTooltip = document.querySelector('.unified-beat-tooltip');
+  if (existingTooltip) {
+    existingTooltip.remove();
+  }
+  
+  // Create persistent tooltip (no timeout)
+  const tooltip = document.createElement('div');
+  tooltip.className = 'unified-beat-tooltip';
+  tooltip.style.cssText = `
+    position: fixed;
+    left: ${clientX + 15}px;
+    top: ${clientY - 45}px;
+    background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
+    color: #ffd700;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10000;
+    pointer-events: none;
+    white-space: nowrap;
+    border: 2px solid #ffd700;
+    min-width: 120px;
+  `;
+  
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  const isInPlaying = this.checkIfBeatIsInPlayingRegion(beat);
+  const zoomInfo = this.zoomLevel !== 1.0 ? ` | ${Math.round(this.zoomLevel * 100)}%` : '';
+  
+  tooltip.innerHTML = `
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <div style="flex: 1;">
+      <div style="color: #ffd700; font-weight: bold; font-size: 14px;">Beat ${beat.toFixed(0)}</div>
+      <div style="color: #bdc3c7; font-size: 11px;">${timeFormatted}${zoomInfo}</div>
+    </div>
+    <div style="color: ${isInPlaying ? '#2ecc71' : '#e74c3c'}; font-size: 16px;">
+      ${isInPlaying ? '▶' : '⏸'}
+    </div>
+  </div>
+  <div style="color: #17a2b8; font-size: 10px; text-align: center; margin-top: 4px; font-weight: 600; border-top: 1px solid #555; padding-top: 4px;">
+    ${this.getRegionDescription(beat)}
+  </div>
+`;
+
+  
+  document.body.appendChild(tooltip);
+}
+
+// NEW: Show tooltip specifically for region creation
+showCreationTooltip(clientX, clientY, startBeat, endBeat) {
+  // Remove existing tooltip
+  const existingTooltip = document.querySelector('.creation-tooltip');
+  if (existingTooltip) {
+    existingTooltip.remove();
+  }
+  
+  const tooltip = document.createElement('div');
+  tooltip.className = 'creation-tooltip';
+  tooltip.style.cssText = `
+    position: fixed;
+    left: ${clientX + 15}px;
+    top: ${clientY - 50}px;
+    background: linear-gradient(135deg, #28a745 0%, #34ce57 100%);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10000;
+    pointer-events: none;
+    border: 2px solid #28a745;
+  `;
+  
+  const width = endBeat - startBeat;
+  const startTimeMs = beatsToMs(startBeat, this.beatUnit, this.tempo);
+  const endTimeMs = beatsToMs(endBeat, this.beatUnit, this.tempo);
+  const startTime = formatMsToMMSS(startTimeMs);
+  const endTime = formatMsToMMSS(endTimeMs);
+  
+  tooltip.innerHTML = `
+    <div style="font-weight: bold; margin-bottom: 4px;">🆕 Creating Region</div>
+    <div style="font-size: 11px;">Start: Beat ${startBeat.toFixed(0)} (${startTime})</div>
+    <div style="font-size: 11px;">End: Beat ${endBeat.toFixed(0)} (${endTime})</div>
+    <div style="font-size: 10px; opacity: 0.9; margin-top: 4px; text-align: center;">
+      Width: ${width.toFixed(1)} beats
+    </div>
+  `;
+  
+  document.body.appendChild(tooltip);
+}
+
+// NEW: Show tooltip specifically for diamond dragging
+showDiamondDragTooltip(clientX, clientY, beat, parameterName) {
+  // Remove existing diamond tooltip
+  this.clearDiamondDragTooltip();
+  
+  const tooltip = document.createElement('div');
+  tooltip.className = 'diamond-drag-tooltip';
+  tooltip.style.cssText = `
+    position: fixed;
+    left: ${clientX + 15}px;
+    top: ${clientY - 55}px;
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 6px 18px rgba(243,156,18,0.6);
+    z-index: 10001;
+    pointer-events: none;
+    border: 2px solid #ffd700;
+  `;
+  
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  tooltip.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+      <span style="font-size: 14px;">💎</span>
+      <div style="font-weight: bold;">${parameterName}</div>
+    </div>
+    <div style="font-size: 11px; text-align: center;">
+      Moving to Beat ${beat.toFixed(0)}
+    </div>
+    <div style="font-size: 10px; opacity: 0.9; text-align: center;">
+      ${timeFormatted}
+    </div>
+  `;
+  
+  document.body.appendChild(tooltip);
+}
+
+// NEW: Clear diamond drag tooltip
+clearDiamondDragTooltip() {
+  const tooltip = document.querySelector('.diamond-drag-tooltip');
+  if (tooltip) {
+    tooltip.remove();
+  }
+}
+
+
+// ENHANCED: Clear all creation-related tooltips
+clearCreationTooltip() {
+  const tooltipSelectors = [
+    '.creation-tooltip',
+    '.unified-beat-tooltip',
+    '.diamond-drag-tooltip'
+  ];
+  
+  tooltipSelectors.forEach(selector => {
+    const tooltip = document.querySelector(selector);
+    if (tooltip) {
+      tooltip.remove();
+    }
+  });
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🧹 Cleared all creation tooltips`);
+  }
+}
+
+
+// NEW: Show brief success message for region creation
+showRegionCreatedSuccess(startBeat, endBeat) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  const width = endBeat - startBeat;
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 16px;">🎵</span>
+      <div>
+        <div>Region Created</div>
+        <div style="font-size: 11px; opacity: 0.9;">Beats ${startBeat.toFixed(0)}-${endBeat.toFixed(0)} (${width.toFixed(0)} beats)</div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 2000);
+}
+
+getRegionDescription(beat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    return `Full timeline: Beat 0-${this.maxBeats}`;
+  }
+  
+  // Find which region this beat belongs to using your existing convertEventsToRegions
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  // Check if beat is in any playing region
+  for (let i = 0; i < playingRegions.length; i++) {
+    const region = playingRegions[i];
+    if (beat >= region.start && beat < region.end) {
+      return `Playing region: Beat ${region.start}-${region.end}`;
+    }
+  }
+  
+  // If not in playing region, determine muted region
+  if (playingRegions.length === 0) {
+    return `Muted timeline: Beat 0-${this.maxBeats}`;
+  }
+  
+  // Find which muted gap this beat is in
+  const sorted = [...playingRegions].sort((a, b) => a.start - b.start);
+  
+  // Check if in start gap
+  if (beat < sorted[0].start) {
+    return `Muted start: Beat 0-${sorted[0].start}`;
+  }
+  
+  // Check gaps between playing regions
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const currentEnd = sorted[i].end;
+    const nextStart = sorted[i + 1].start;
+    
+    if (beat >= currentEnd && beat < nextStart) {
+      return `Muted gap: Beat ${currentEnd}-${nextStart}`;
+    }
+  }
+  
+  // Check end gap
+  const lastRegion = sorted[sorted.length - 1];
+  if (beat >= lastRegion.end) {
+    return `Muted end: Beat ${lastRegion.end}-${this.maxBeats}`;
+  }
+  
+  return `Timeline: Beat ${beat.toFixed(0)} of ${this.maxBeats}`;
+}
+
+// NEW: Find which region index contains a specific beat
+findRegionIndexForBeat(beat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return -1;
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  for (let i = 0; i < playingRegions.length; i++) {
+    const region = playingRegions[i];
+    if (beat >= region.start && beat < region.end) {
+      return i;
+    }
+  }
+  
+  return -1; // Beat not in any playing region
+}
+
+hideBeatIndicator() {
+  // Clear all tooltip types
+  const tooltipSelectors = [
+    '.unified-beat-tooltip',
+    '.creation-tooltip', 
+    '.diamond-drag-tooltip'
+  ];
+  
+  tooltipSelectors.forEach(selector => {
+    const tooltip = document.querySelector(selector);
+    if (tooltip) {
+      tooltip.style.transition = 'opacity 0.2s ease';
+      tooltip.style.opacity = '0';
+      setTimeout(() => tooltip.remove(), 200);
+    }
+  });
+  
+  this.currentBeat = null;
+  this.lastDisplayedBeat = null;
+}
+
+
+updateCursorWithBeat(beat) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  const isInPlaying = this.checkIfBeatIsInPlayingRegion(beat);
+  
+  if (isInPlaying) {
+    track.style.cursor = 'crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Double-click for parameter event | Drag to mute`;
+  } else {
+    track.style.cursor = 'crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Double-click for parameter event | Drag to unmute`;
+  }
+}
+
+// ===== CORRECTED ZOOM CONTROLS =====
+
+createZoomControls() {
+  const controls = document.createElement('div');
+  controls.className = 'timeline-zoom-controls';
+  controls.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    border-top: 1px solid #dee2e6;
+  `;
+  
+  // Zoom out button
+  const zoomOutBtn = document.createElement('button');
+  zoomOutBtn.textContent = '🔍−';
+  zoomOutBtn.className = 'zoom-btn zoom-out-btn';
+  zoomOutBtn.title = 'Zoom out (scroll wheel down)';
+  zoomOutBtn.onclick = () => this.zoomOut();
+  
+  // Zoom level display with better formatting
+  const zoomDisplay = document.createElement('span');
+  zoomDisplay.className = 'zoom-display';
+  zoomDisplay.style.cssText = `
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    min-width: 60px;
+    text-align: center;
+    background: white;
+    border: 1px solid #4a90e2;
+    border-radius: 3px;
+    padding: 4px 8px;
+  `;
+  zoomDisplay.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+  
+  // Zoom in button
+  const zoomInBtn = document.createElement('button');
+  zoomInBtn.textContent = '🔍+';
+  zoomInBtn.className = 'zoom-btn zoom-in-btn';
+  zoomInBtn.title = 'Zoom in (scroll wheel up)';
+  zoomInBtn.onclick = () => this.zoomIn();
+  
+  // Reset zoom button
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = '🔍 100%';
+  resetBtn.className = 'zoom-btn zoom-reset-btn';
+  resetBtn.title = 'Reset zoom to 100%';
+  resetBtn.onclick = () => this.resetZoom();
+  
+  // Fit to timeline button
+  const fitBtn = document.createElement('button');
+  fitBtn.textContent = '🔍 Fit';
+  fitBtn.className = 'zoom-btn zoom-fit-btn';
+  fitBtn.title = 'Fit entire timeline in view';
+  fitBtn.onclick = () => this.fitToView();
+  
+  // View info display
+  const viewInfo = document.createElement('span');
+  viewInfo.className = 'zoom-view-info';
+  viewInfo.style.cssText = `
+    font-size: 11px;
+    color: #666;
+    font-family: 'Courier New', monospace;
+    margin-left: 15px;
+  `;
+  this.updateViewInfo(viewInfo);
+  
+  // Beat indicator toggle
+  const indicatorToggle = document.createElement('label');
+  indicatorToggle.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    margin-left: auto;
+  `;
+  
+  const indicatorCheckbox = document.createElement('input');
+  indicatorCheckbox.type = 'checkbox';
+  indicatorCheckbox.checked = this.showBeatIndicator;
+  indicatorCheckbox.style.cssText = 'width: 16px; height: 16px;';
+  indicatorCheckbox.onchange = (e) => {
+    this.showBeatIndicator = e.target.checked;
+    if (!this.showBeatIndicator) {
+      this.hideBeatIndicator();
+    }
+    console.log(`💎 Beat indicator: ${this.showBeatIndicator ? 'ON' : 'OFF'}`);
+  };
+  
+  const indicatorLabel = document.createElement('span');
+  indicatorLabel.textContent = '💎 Beat Tooltip';
+  
+  indicatorToggle.appendChild(indicatorCheckbox);
+  indicatorToggle.appendChild(indicatorLabel);
+  
+  controls.appendChild(zoomOutBtn);
+  controls.appendChild(zoomDisplay);
+  controls.appendChild(zoomInBtn);
+  controls.appendChild(resetBtn);
+  controls.appendChild(fitBtn);
+  controls.appendChild(viewInfo);
+  controls.appendChild(indicatorToggle);
+  
+  return controls;
+}
+
+zoomIn() {
+  const oldZoom = this.zoomLevel;
+  this.zoomLevel = Math.min(this.maxZoom, this.zoomLevel + this.zoomStep);
+  
+  if (this.zoomLevel !== oldZoom) {
+    // FIXED: Prevent pan drift during button zoom
+    const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+    this.panOffset = Math.min(this.panOffset, maxPan);
+    
+    this.applyZoomAndPan();
+    this.updateZoomControls();
+    this.updateLabelsForCurrentView();
+  }
+}
+
+zoomOut() {
+  const oldZoom = this.zoomLevel;
+  this.zoomLevel = Math.max(this.minZoom, this.zoomLevel - this.zoomStep);
+  
+  if (this.zoomLevel !== oldZoom) {
+    // FIXED: Prevent pan drift during button zoom
+    const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+    this.panOffset = Math.min(this.panOffset, maxPan);
+    
+    this.applyZoomAndPan();
+    this.updateZoomControls();
+    this.updateLabelsForCurrentView();
+  }
+}
+
+resetZoom() {
+  this.zoomLevel = 1.0;
+  this.panOffset = 0;
+  this.applyZoomAndPan();
+  this.updateZoomControls();
+  this.updateLabelsForCurrentView();
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔍 Zoom reset to 100%`);
+  }
+}
+
+fitToView() {
+  this.zoomLevel = 1.0;
+  this.panOffset = 0;
+  this.applyZoomAndPan();
+  this.updateZoomControls();
+  this.updateLabelsForCurrentView();
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔍 Fit to view: 100%`);
+  }
+}
+
+updateZoomControls() {
+  const zoomDisplay = this.container.querySelector('.zoom-display');
+  if (zoomDisplay) {
+    zoomDisplay.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+  }
+  
+  // Update view info
+  const viewInfo = this.container.querySelector('.zoom-view-info');
+  if (viewInfo) {
+    this.updateViewInfo(viewInfo);
+  }
+  
+  // Update button states
+  const zoomInBtn = this.container.querySelector('.zoom-in-btn');
+  const zoomOutBtn = this.container.querySelector('.zoom-out-btn');
+  
+  if (zoomInBtn) {
+    zoomInBtn.disabled = (this.zoomLevel >= this.maxZoom);
+    zoomInBtn.style.opacity = zoomInBtn.disabled ? '0.5' : '1.0';
+    zoomInBtn.style.cursor = zoomInBtn.disabled ? 'not-allowed' : 'pointer';
+  }
+  
+  if (zoomOutBtn) {
+    zoomOutBtn.disabled = (this.zoomLevel <= this.minZoom);
+    zoomOutBtn.style.opacity = zoomOutBtn.disabled ? '0.5' : '1.0';
+    zoomOutBtn.style.cursor = zoomOutBtn.disabled ? 'not-allowed' : 'pointer';
+  }
+}
+
+showZoomLimitFeedback(limitType) {
+  // Remove existing feedback
+  const existingFeedback = document.querySelector('.zoom-limit-feedback');
+  if (existingFeedback) {
+    existingFeedback.remove();
+  }
+  
+  const feedback = document.createElement('div');
+  feedback.className = 'zoom-limit-feedback';
+  feedback.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #856404;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    text-align: center;
+  `;
+  
+  if (limitType === 'max') {
+    const smallestRegion = this.findSmallestRegion();
+    feedback.innerHTML = `
+      <div style="margin-bottom: 8px;">🔍 Maximum Zoom Reached</div>
+      <div style="font-size: 12px; color: #666;">
+        Limited by smallest region (${smallestRegion} beats)<br>
+        Region handles need to remain visible
+      </div>
+    `;
+  } else {
+    feedback.innerHTML = `
+      <div style="margin-bottom: 8px;">🔍 Minimum Zoom Reached</div>
+      <div style="font-size: 12px; color: #666;">
+        Cannot zoom out beyond full timeline view (100%)
+      </div>
+    `;
+  }
+
+  document.body.appendChild(feedback);
+  
+  // NEW: Clear any timeout and store reference
+clearTimeout(this.tooltipTimeout);
+this.tooltipTimeout = setTimeout(() => {
+  if (tooltip.parentElement) {
+    tooltip.remove();
+  }
+}, 2000);
+
+  // Auto-remove after 2 seconds
+  setTimeout(() => {
+    feedback.style.transition = 'opacity 0.3s ease';
+    feedback.style.opacity = '0';
+    setTimeout(() => feedback.remove(), 300);
+  }, 2000);
+}
+
+findSmallestRegion() {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return this.maxBeats;
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  if (playingRegions.length === 0) return this.maxBeats;
+  
+  let smallest = this.maxBeats;
+  playingRegions.forEach(region => {
+    const width = region.end - region.start;
+    if (width < smallest) {
+      smallest = width;
+    }
+  });
+  
+  return smallest;
+}
+
+
+updateViewInfo(viewInfo) {
+  const viewWidth = 1 / this.zoomLevel;
+  const viewStartBeat = Math.round(this.panOffset * this.maxBeats);
+  const viewEndBeat = Math.round((this.panOffset + viewWidth) * this.maxBeats);
+  
+  if (this.zoomLevel === 1.0) {
+    viewInfo.textContent = `Showing full timeline (0-${this.maxBeats} beats)`;
+  } else {
+    viewInfo.textContent = `Showing beats ${viewStartBeat}-${viewEndBeat} of ${this.maxBeats}`;
+  }
+}
+
+// ===== ENHANCED SCREEN COORDINATE CONVERSION (ZOOM-AWARE) =====
+screenXToBeat(screenX) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return 0;
+  
+  const rect = track.getBoundingClientRect();
+  const relativeX = screenX - rect.left;
+  const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+  
+  // FIXED: Apply zoom and pan transformation correctly
+  const viewWidth = 1 / this.zoomLevel;
+  const viewStart = this.panOffset;
+  const actualTimelinePercent = viewStart + (percentage * viewWidth);
+  
+  // Clamp to valid timeline range
+  const clampedPercent = Math.max(0, Math.min(1, actualTimelinePercent));
+  const beat = clampedPercent * this.maxBeats;
+  
+  return beat;
+}
+
+
+refresh() {
+  if (!this.container) {
+    console.error(`❌ Cannot refresh: container is null`);
+    return;
+  }
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🔄 Refreshing Visual Timeline for Voice ${this.voiceIndex + 1}`);
+    console.log(`   Container exists: ${!!this.container}`);
+    console.log(`   Is visible: ${this.isVisible}`);
+  }
+  
+  try {
+    // Store current zoom state
+    const currentZoom = this.zoomLevel;
+    const currentPan = this.panOffset;
+    const currentBeatIndicator = this.showBeatIndicator;
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`   Storing state: zoom=${currentZoom}x, pan=${(currentPan*100).toFixed(1)}%`);
+    }
+    
+    // Recalculate zoom constraints when regions change
+    const oldMaxZoom = this.maxZoom;
+    this.calculateZoomConstraints();
+    
+    // If current zoom exceeds new maximum, clamp it
+    if (this.zoomLevel > this.maxZoom) {
+      if (DEBUG.EVENTS) {
+        console.log(`🔍 Clamping zoom: ${this.zoomLevel.toFixed(1)}x → ${this.maxZoom.toFixed(1)}x (region handles require visibility)`);
+      }
+      this.zoomLevel = this.maxZoom;
+      
+      // Adjust pan to stay within bounds
+      const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+      this.panOffset = Math.min(this.panOffset, maxPan);
+    }
+    
+    // Re-render with preserved state
+    this.render(this.container);
+    
+    // Restore zoom state after render
+    this.zoomLevel = currentZoom;
+    this.panOffset = currentPan;
+    this.showBeatIndicator = currentBeatIndicator;
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`✅ Timeline refreshed successfully`);
+    }
+    
+  } catch (error) {
+    console.error(`❌ Error during timeline refresh:`, error);
+    console.error(`   Error message:`, error.message);
+    console.error(`   Container state:`, !!this.container);
+    
+    // Try to recover by re-showing timeline
+    setTimeout(() => {
+      console.log(`🔧 Attempting timeline recovery...`);
+      showVisualTimeline();
+    }, 500);
+  }
+}
+
+
+  // NEW: Force update all region labels to current state
+  updateAllRegionLabels() {
+    const regions = this.container.querySelectorAll('.timeline-region.playing');
+    
+    regions.forEach((region, index) => {
+      const regionIndex = parseInt(region.dataset.regionIndex);
+      if (isNaN(regionIndex)) return;
+      
+      // Get current region data from events
+      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+      const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+      
+      if (playingRegions[regionIndex]) {
+        const currentRegion = playingRegions[regionIndex];
+        this.updateRegionLabel(region, currentRegion.start, currentRegion.end);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`🏷️ Force-updated region ${regionIndex} label: ${currentRegion.start}-${currentRegion.end}`);
+        }
+      }
+    });
+  }
+
   startUpdating() {
     if (this.updateInterval) return;
     
@@ -12643,7 +15062,935 @@ snapBeatToGrid(beat) {
       }, 1500);
     }
   }
-    // NEW: Update cursor based on position - CORRECTED TOOLTIPS
+ 
+ // ===== PARAMETER EVENT CREATION SYSTEM =====
+
+createParameterEventAtBeat(beat, clientX, clientY) {
+  // Show parameter selection dialog
+  this.showParameterSelectionDialog(beat, clientX, clientY);
+}
+
+// FIXED: Direct region creation with proper click-drag-release behavior
+startDirectRegionCreation(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const startBeat = this.screenXToBeat(e.clientX);
+  const snappedStartBeat = this.snapToBeat ? this.snapBeatToGrid(startBeat) : startBeat;
+  const clampedStartBeat = Math.max(0, Math.min(this.maxBeats - 1, snappedStartBeat));
+  
+  let isDragging = false;
+  let currentEndBeat = clampedStartBeat; // Start with same position
+  
+  // Capture state for undo
+  if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+    undoManager.captureState(`Timeline: Create region at beat ${clampedStartBeat}`, true);
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🆕 Region creation starting at beat ${clampedStartBeat} - waiting for drag`);
+  }
+  
+  // Don't show preview initially - wait for user to start dragging
+  
+  const handleDirectCreationMove = (moveEvent) => {
+    const currentBeat = this.screenXToBeat(moveEvent.clientX);
+    const snappedCurrentBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+    const clampedCurrentBeat = Math.max(clampedStartBeat + 1, Math.min(this.maxBeats, snappedCurrentBeat));
+    
+    if (!isDragging) {
+      // Start dragging when mouse moves
+      isDragging = true;
+      if (DEBUG.EVENTS) {
+        console.log(`🆕 Started dragging region creation from beat ${clampedStartBeat}`);
+      }
+    }
+    
+    currentEndBeat = clampedCurrentBeat;
+    
+    // Show dashed green preview - left side FIXED at start, right side follows mouse
+    this.showRegionCreationPreview(clampedStartBeat, currentEndBeat);
+    
+    // Update tooltip with current size
+    const width = currentEndBeat - clampedStartBeat;
+    this.showCreationTooltip(moveEvent.clientX, moveEvent.clientY, clampedStartBeat, currentEndBeat);
+    
+    if (DEBUG.EVENTS && Math.random() < 0.1) {
+      console.log(`🆕 Creating region: ${clampedStartBeat}-${currentEndBeat} (${width.toFixed(1)} beats)`);
+    }
+  };
+  
+  const handleDirectCreationEnd = (endEvent) => {
+  // Remove global listeners
+  document.removeEventListener('mousemove', handleDirectCreationMove);
+  document.removeEventListener('mouseup', handleDirectCreationEnd);
+  
+  // Clear dashed preview
+  this.clearRegionCreationPreview();
+  
+  // NEW: Clear creation tooltip immediately
+  this.clearCreationTooltip();
+  
+  if (isDragging && currentEndBeat > clampedStartBeat + 0.5) {
+    // User dragged to create a region - convert to solid green region
+    const finalEndBeat = Math.max(clampedStartBeat + 1, Math.round(currentEndBeat));
+    
+    // Create the region in events array
+    this.createNewRegionInEvents(clampedStartBeat, finalEndBeat);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`✅ Created solid region: ${clampedStartBeat}-${finalEndBeat} beats`);
+    }
+    
+    // Show brief success message (not tooltip)
+    this.showRegionCreatedSuccess(clampedStartBeat, finalEndBeat);
+    
+    // Refresh timeline to show solid green region
+    setTimeout(() => {
+      this.refresh();
+    }, 50);
+    
+  } else {
+    // No drag or very small drag - no region created
+    if (DEBUG.EVENTS) {
+      console.log(`❌ No region created - insufficient drag distance`);
+    }
+    // Already cleared tooltip above
+  }
+};
+
+  
+  // Add global mouse listeners immediately for drag detection
+  document.addEventListener('mousemove', handleDirectCreationMove);
+  document.addEventListener('mouseup', handleDirectCreationEnd);
+}
+
+
+// FIXED: Show region creation preview with proper drag visualization
+showRegionCreationPreview(startBeat, endBeat) {
+  // Remove existing preview
+  this.clearRegionCreationPreview();
+  
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  const leftPercent = (startBeat / this.maxBeats) * 100;
+  const rightPercent = (endBeat / this.maxBeats) * 100;
+  const width = Math.max(0.1, rightPercent - leftPercent); // Minimum tiny width
+  
+  const preview = document.createElement('div');
+  preview.className = 'region-creation-preview';
+  preview.style.cssText = `
+    position: absolute;
+    left: ${leftPercent.toFixed(2)}%;
+    width: ${width.toFixed(2)}%;
+    top: 15px;
+    bottom: 15px;
+    background: linear-gradient(45deg, rgba(40,167,69,0.3), rgba(52,206,87,0.3));
+    border: 3px dashed #28a745;
+    border-radius: 6px;
+    z-index: 250;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: creationPulse 1.5s ease-in-out infinite alternate;
+  `;
+  
+  // Add live updating label
+  const previewLabel = document.createElement('div');
+  previewLabel.className = 'preview-region-label';
+  previewLabel.style.cssText = `
+    color: #28a745;
+    font-weight: bold;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.95);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 2px solid #28a745;
+    animation: labelPulse 1.5s ease-in-out infinite alternate;
+  `;
+  
+  const beatWidth = endBeat - startBeat;
+  const effectiveWidth = width * this.zoomLevel;
+  
+  // Show different content based on drag progress
+  if (beatWidth < 1) {
+    previewLabel.textContent = 'Drag to size →';
+    previewLabel.style.color = '#ffc107';
+    previewLabel.style.borderColor = '#ffc107';
+  } else if (effectiveWidth > 20) {
+    previewLabel.textContent = `${startBeat.toFixed(0)}-${endBeat.toFixed(0)} (${beatWidth.toFixed(0)} beats)`;
+  } else if (effectiveWidth > 10) {
+    previewLabel.textContent = `${beatWidth.toFixed(0)}b`;
+  } else {
+    previewLabel.textContent = '▶';
+  }
+  
+  preview.appendChild(previewLabel);
+  track.appendChild(preview);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🎬 Preview: ${startBeat.toFixed(1)}-${endBeat.toFixed(1)} beats (${width.toFixed(1)}% width)`);
+  }
+}
+
+
+// NEW: Clear region creation preview
+clearRegionCreationPreview() {
+  const preview = this.container.querySelector('.region-creation-preview');
+  if (preview) {
+    preview.remove();
+  }
+}
+
+// CLEAN: Diamond drag functionality (region-relative)
+addDiamondDragFunctionality(diamond, eventData, regionStartBeat, regionEndBeat) {
+  diamond.onmousedown = (e) => {
+    if (e.button !== 0) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    let isDragging = false;
+    const dragStartX = e.clientX;
+    
+    // Disable ALL region interactions
+    const allRegions = this.container.querySelectorAll('.timeline-region');
+    allRegions.forEach(r => r.style.pointerEvents = 'none');
+    
+    // Keep diamond interactive
+    diamond.style.pointerEvents = 'auto';
+    diamond.style.cursor = 'grabbing';
+    diamond.style.zIndex = '600';
+    diamond.style.transform = 'translate(-50%, -50%) rotate(45deg) scale(1.5)';
+    diamond.style.boxShadow = '0 10px 30px rgba(243,156,18,1.0)';
+    diamond.style.filter = 'brightness(1.3)';
+    
+    console.log(`💎 DIAMOND drag started: ${eventData.parameter}`);
+    
+    const moveHandler = (moveEvent) => {
+  const dragDistance = Math.abs(moveEvent.clientX - dragStartX);
+  
+  if (!isDragging && dragDistance > 5) {
+    isDragging = true;
+    console.log(`💎 Diamond is now dragging`);
+  }
+  
+  if (isDragging) {
+    const currentBeat = this.screenXToBeat(moveEvent.clientX);
+    const clampedBeat = Math.max(regionStartBeat + 0.1, Math.min(regionEndBeat - 0.1, currentBeat));
+    
+    // Calculate new relative position
+    const newRelativePosition = (clampedBeat - regionStartBeat) / (regionEndBeat - regionStartBeat);
+    
+    // Update diamond position and data immediately
+    this.updateDiamondPosition(diamond, clampedBeat);
+    diamond.dataset.relativePosition = newRelativePosition;
+    
+    // Update title to show new position
+    diamond.title = `💎 ${eventData.parameter} - Beat ${clampedBeat.toFixed(0)} (${(newRelativePosition * 100).toFixed(1)}% in region)`;
+    
+    if (DEBUG.EVENTS && Math.random() < 0.1) {
+      console.log(`💎 Diamond at ${(newRelativePosition * 100).toFixed(1)}% in region (beat ${clampedBeat.toFixed(1)})`);
+    }
+  }
+};
+
+    
+    const upHandler = () => {
+      document.removeEventListener('mousemove', moveHandler);
+      document.removeEventListener('mouseup', upHandler);
+      
+      // Re-enable all region interactions
+      allRegions.forEach(r => r.style.pointerEvents = 'auto');
+      
+      // Reset diamond appearance
+      diamond.style.cursor = 'grab';
+      diamond.style.zIndex = '500';
+      diamond.style.transform = 'translate(-50%, -50%) rotate(45deg) scale(1)';
+      diamond.style.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
+      diamond.style.filter = 'none';
+      
+      if (isDragging) {
+        // Update events array with new relative position
+        const newRelativePosition = parseFloat(diamond.dataset.relativePosition);
+        this.updateParameterEventRelativePosition(eventData.id, newRelativePosition);
+        
+        console.log(`✅ Diamond moved to ${(newRelativePosition * 100).toFixed(1)}% in region`);
+      }
+      
+      console.log(`💎 Diamond drag ended - regions re-enabled`);
+    };
+    
+    document.addEventListener('mousemove', moveHandler);
+    document.addEventListener('mouseup', upHandler);
+  };
+}
+
+
+// NEW: Update diamond position during drag
+updateDiamondPosition(diamond, newBeat) {
+  const newLeftPercent = (newBeat / this.maxBeats) * 100;
+  diamond.style.left = `${newLeftPercent.toFixed(2)}%`;
+  
+  // Update dataset for reference
+  diamond.dataset.beatPosition = newBeat;
+  
+  if (DEBUG.EVENTS && Math.random() < 0.05) {
+    console.log(`💎 Diamond positioned at ${newLeftPercent.toFixed(1)}% (beat ${newBeat.toFixed(1)})`);
+  }
+}
+
+// CLEAN: Update parameter event relative position (not absolute)
+updateParameterEventPosition(eventId, newBeat) {
+  // This method is now deprecated - use updateParameterEventRelativePosition instead
+  console.warn(`⚠️ updateParameterEventPosition is deprecated - use relative positioning`);
+}
+
+// NEW: Update parameter event relative position
+updateParameterEventRelativePosition(eventId, newRelativePosition) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  const eventIndex = lifeSpan.events.findIndex(event => event.id === eventId);
+  
+  if (eventIndex !== -1) {
+    const oldRelativePosition = lifeSpan.events[eventIndex].relativePosition;
+    lifeSpan.events[eventIndex].relativePosition = newRelativePosition;
+    
+    if (DEBUG.EVENTS) {
+      console.log(`📝 Updated event ${eventId} relative position: ${(oldRelativePosition * 100).toFixed(1)}% → ${(newRelativePosition * 100).toFixed(1)}%`);
+    }
+  } else {
+    console.error(`❌ Could not find event ${eventId} to update`);
+  }
+}
+
+// NEW: Update parameter event relative position
+updateParameterEventRelativePosition(eventId, newRelativePosition) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  const eventIndex = lifeSpan.events.findIndex(event => event.id === eventId);
+  
+  if (eventIndex !== -1) {
+    lifeSpan.events[eventIndex].relativePosition = newRelativePosition;
+    
+    if (DEBUG.EVENTS) {
+      console.log(`📝 Updated event ${eventId} relative position: ${(newRelativePosition * 100).toFixed(1)}%`);
+    }
+  } else {
+    console.error(`❌ Could not find event ${eventId} to update`);
+  }
+}
+
+showParameterSelectionDialog(beat, clientX, clientY) {
+  // Remove any existing dialog
+  const existingDialog = document.querySelector('.parameter-selection-dialog');
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+  
+  // Create parameter selection dialog
+  const dialog = document.createElement('div');
+  dialog.className = 'parameter-selection-dialog';
+  dialog.style.cssText = `
+    position: fixed;
+    left: ${clientX + 15}px;
+    top: ${Math.max(20, clientY - 100)}px;
+    background: white;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 10001;
+    min-width: 280px;
+    max-height: 500px;
+    height: auto;
+    min-height: 450px;
+    overflow-y: auto;
+  `;
+  
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  dialog.innerHTML = `
+    <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 10px 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between;">
+      
+      <!-- Left side: Icon and title -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>💎</span>
+        <span>Parameter Event - Beat ${beat.toFixed(0)}</span>
+      </div>
+      
+      <!-- Right side: Delete button and time info -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
+          <span style="font-size: 10px; color: #666;">${timeFormatted}</span>
+        </div>
+        <button class="delete-region-btn" style="
+          background: #dc3545; color: white; border: none; padding: 4px 8px;
+          border-radius: 3px; font-size: 10px; font-weight: 600; cursor: pointer;
+          transition: all 0.2s ease;
+        " title="Delete this entire playing region">Delete Region</button>
+      </div>
+    </div>
+    
+    <div style="padding: 15px; max-height: 375px; overflow-y: auto;">
+      <div style="margin-bottom: 15px; color: #666; font-size: 12px; font-style: italic; text-align: center;">
+        Select a parameter to automate at this beat position:
+      </div>
+      
+      <!-- INSTRUMENT & SOUND PARAMETERS -->
+      <div class="param-category" style="margin-bottom: 15px;">
+        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+          🎼 Instrument & Sound
+        </div>
+        <div class="param-option" data-param="INSTRUMENT" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Instrument</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Switch to different GM sound</span>
+        </div>
+        <div class="param-option" data-param="MELODIC RANGE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Melodic Range</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note range or apply scale/chord filter</span>
+        </div>
+        <div class="param-option" data-param="POLYPHONY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Polyphony</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change number of simultaneous notes</span>
+        </div>
+        <div class="param-option" data-param="ATTACK VELOCITY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Attack Velocity</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note attack strength (0-127)</span>
+        </div>
+        <div class="param-option" data-param="DETUNING" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Detuning</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Adjust pitch offset in cents (±50)</span>
+        </div>
+        <div class="param-option" data-param="PORTAMENTO GLIDE TIME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Portamento Glide</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pitch bend time between notes</span>
+        </div>
+      </div>
+      
+      <!-- RHYTHM & TIMING PARAMETERS -->
+      <div class="param-category" style="margin-bottom: 15px;">
+        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+          🎵 Rhythm & Timing  
+        </div>
+        <div class="param-option" data-param="TEMPO (BPM)" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Tempo</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change BPM range (40-240)</span>
+        </div>
+        <div class="param-option" data-param="RHYTHMS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Rhythms</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected note durations</span>
+        </div>
+        <div class="param-option" data-param="RESTS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Rests</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected rest durations</span>
+        </div>
+      </div>
+      
+      <!-- MIXING & LEVELS PARAMETERS -->
+      <div class="param-category" style="margin-bottom: 15px;">
+        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+          🔊 Mixing & Levels
+        </div>
+        <div class="param-option" data-param="VOLUME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Volume</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change volume range (0-100%)</span>
+        </div>
+        <div class="param-option" data-param="STEREO BALANCE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Stereo Balance</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pan position (-100 to +100)</span>
+        </div>
+      </div>
+      
+      <!-- MODULATION EFFECTS PARAMETERS -->
+      <div class="param-category" style="margin-bottom: 15px;">
+        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+          🌊 Modulation Effects
+        </div>
+        <div class="param-option" data-param="TREMOLO" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Tremolo</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change tremolo speed/depth</span>
+        </div>
+        <div class="param-option" data-param="CHORUS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Chorus</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change chorus speed/depth</span>
+        </div>
+        <div class="param-option" data-param="PHASER" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Phaser</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change phaser speed/depth</span>
+        </div>
+      </div>
+      
+      <!-- SPATIAL EFFECTS PARAMETERS -->
+      <div class="param-category" style="margin-bottom: 8px;">
+        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+          🎛️ Spatial Effects
+        </div>
+        <div class="param-option" data-param="REVERB" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+          <span style="font-weight: 500;">Reverb</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change reverb time/mix</span>
+        </div>
+        <div class="param-option" data-param="DELAY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease; margin-bottom: 0;">
+          <span style="font-weight: 500;">Delay</span>
+          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change delay time/mix/feedback</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="padding: 12px; border-top: 1px solid #eee; background: #f8f9fa; text-align: center; position: sticky; bottom: 0;">
+      <button onclick="this.closest('.parameter-selection-dialog').remove()" style="
+        background: #6c757d; color: white; border: none; padding: 8px 20px;
+        border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;
+      ">Cancel</button>
+    </div>
+  `;
+  
+  // Add hover effects and click handlers for parameter options
+  const options = dialog.querySelectorAll('.param-option');
+  options.forEach(option => {
+    option.onmouseenter = function() {
+      this.style.background = '#e7f3ff';
+      this.style.borderLeft = '3px solid #4a90e2';
+      this.style.paddingLeft = '7px';
+    };
+    option.onmouseleave = function() {
+      this.style.background = '';
+      this.style.borderLeft = '';
+      this.style.paddingLeft = '10px';
+    };
+    
+    option.onclick = (e) => {
+      const parameterName = option.dataset.param;
+      console.log(`💎 Selected parameter: ${parameterName} at beat ${beat.toFixed(0)}`);
+      
+      // Close dialog and proceed to value selection
+      dialog.remove();
+      this.showParameterValueDialog(parameterName, beat, clientX, clientY);
+    };
+  });
+  
+  // Connect delete region button (in top-right of header)
+  const deleteBtn = dialog.querySelector('.delete-region-btn');
+  if (deleteBtn) {
+    deleteBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Find which region this beat belongs to
+      const targetRegionIndex = this.findRegionIndexForBeat(beat);
+      
+      if (targetRegionIndex !== -1) {
+        const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+        const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+        const targetRegion = playingRegions[targetRegionIndex];
+        
+        const confirmDelete = confirm(
+          `🗑️ Delete Playing Region?\n\n` +
+          `Beat ${targetRegion.start} to ${targetRegion.end} will be muted.\n\n` +
+          `Continue?`
+        );
+        
+        if (confirmDelete) {
+          // Capture for undo
+          if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+            undoManager.captureState(`Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+          }
+          
+          // Delete the region
+          this.handleRegionDeletion(targetRegionIndex);
+          
+          // Close dialog
+          dialog.remove();
+          
+          console.log(`🗑️ Region deleted: ${targetRegion.start}-${targetRegion.end}`);
+        }
+      } else {
+        alert('❌ Could not find region to delete.');
+      }
+    };
+    
+    // Hover effect for delete button
+    deleteBtn.onmouseenter = function() {
+      this.style.background = '#c82333';
+      this.style.transform = 'scale(1.1)';
+    };
+    
+    deleteBtn.onmouseleave = function() {
+      this.style.background = '#dc3545';
+      this.style.transform = 'scale(1)';
+    };
+  }
+  
+  document.body.appendChild(dialog);
+  
+  // Auto-close when clicking elsewhere
+  const closeDialog = (e) => {
+    if (!dialog.contains(e.target)) {
+      dialog.remove();
+      document.removeEventListener('click', closeDialog);
+    }
+  };
+  
+  setTimeout(() => {
+    document.addEventListener('click', closeDialog);
+  }, 100);
+}
+
+showParameterValueDialog(parameterName, beat, clientX, clientY) {
+  // Get current parameter data
+  const paramData = voiceData[this.voiceIndex].parameters[parameterName];
+  if (!paramData) {
+    console.error(`Parameter ${parameterName} not found for Voice ${this.voiceIndex + 1}`);
+    return;
+  }
+  
+  // Remove any existing dialog
+  const existingDialog = document.querySelector('.parameter-value-dialog');
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+  
+  const dialog = document.createElement('div');
+  dialog.className = 'parameter-value-dialog';
+  dialog.style.cssText = `
+    position: fixed;
+    left: ${Math.min(clientX + 20, window.innerWidth - 350)}px;
+    top: ${Math.max(20, clientY - 50)}px;
+    background: white;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 10002;
+    width: 320px;
+  `;
+  
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+
+dialog.innerHTML = `
+  <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 12px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+    <span>💎</span>
+    <span>${parameterName} Event</span>
+    <span style="font-size: 12px; color: #666; margin-left: auto;">Beat ${beat.toFixed(0)}</span>
+  </div>
+          
+    <div style="padding: 20px;">
+      <div style="margin-bottom: 20px; text-align: center; color: #666; font-size: 13px;">
+        Set new values for <strong>${parameterName}</strong> starting at beat ${beat.toFixed(0)} (${timeFormatted})
+      </div>
+      
+      <div id="parameter-value-inputs">
+        <!-- Dynamic content based on parameter type -->
+      </div>
+      
+      <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+        <button class="create-event-btn" style="
+          background: #28a745; color: white; border: none; padding: 8px 20px;
+          border-radius: 4px; font-weight: 600; cursor: pointer;
+        ">Create Event</button>
+        <button onclick="this.closest('.parameter-value-dialog').remove()" style="
+          background: #6c757d; color: white; border: none; padding: 8px 16px;
+          border-radius: 4px; cursor: pointer;
+        ">Cancel</button>
+      </div>
+    </div>
+  `;
+  
+  // Generate appropriate input interface
+  const inputsContainer = dialog.querySelector('#parameter-value-inputs');
+  this.createParameterInputInterface(parameterName, paramData, inputsContainer);
+  
+  // Connect create button
+  const createBtn = dialog.querySelector('.create-event-btn');
+  createBtn.onclick = () => {
+    const eventData = this.collectParameterEventData(parameterName, inputsContainer);
+    if (eventData) {
+      this.insertParameterEvent(beat, parameterName, eventData);
+      dialog.remove();
+      
+      // Show success feedback
+      this.showParameterEventCreated(beat, parameterName);
+      
+      // Refresh timeline
+      setTimeout(() => this.refresh(), 100);
+    }
+  };
+  
+  document.body.appendChild(dialog);
+
+  document.body.appendChild(dialog);
+
+// Connect delete region button
+const deleteBtn = dialog.querySelector('.delete-region-btn');
+if (deleteBtn) {
+  deleteBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Find which region this beat belongs to
+    const targetRegionIndex = this.findRegionIndexForBeat(beat);
+    
+    if (targetRegionIndex !== -1) {
+      // Confirm deletion
+      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+      const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+      const targetRegion = playingRegions[targetRegionIndex];
+      
+      const confirmDelete = confirm(
+        `🗑️ Delete Playing Region?\n\n` +
+        `This will delete the playing region from Beat ${targetRegion.start} to ${targetRegion.end}.\n\n` +
+        `The timeline will be muted in this area.\n\n` +
+        `Continue with deletion?`
+      );
+      
+      if (confirmDelete) {
+        // Capture state for undo
+        if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+          undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+        }
+        
+        // Delete the region
+        this.handleRegionDeletion(targetRegionIndex);
+        
+        // Close dialog
+        dialog.remove();
+        
+        // Show success feedback
+        setTimeout(() => {
+          this.showUnifiedBeatTooltip(window.innerWidth / 2, 100, {
+            type: 'context-help',
+            beat: beat,
+            operation: 'Region Deleted',
+            additionalInfo: `Playing region ${targetRegion.start}-${targetRegion.end} removed`
+          });
+          
+          setTimeout(() => {
+            this.hideUnifiedTooltip();
+          }, 3000);
+        }, 200);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`🗑️ Deleted region via popup button: ${targetRegion.start}-${targetRegion.end}`);
+        }
+      }
+    } else {
+      alert('❌ Could not find region to delete.');
+    }
+  };
+  
+  // Add hover effect to delete button
+  deleteBtn.onmouseenter = function() {
+    this.style.background = '#c82333';
+    this.style.transform = 'scale(1.05)';
+  };
+  
+  deleteBtn.onmouseleave = function() {
+    this.style.background = '#dc3545';
+    this.style.transform = 'scale(1)';
+  };
+}
+
+}
+
+createParameterInputInterface(parameterName, paramData, container) {
+  container.innerHTML = '';
+  
+  if (typeof paramData.min === 'number' && typeof paramData.max === 'number') {
+    // Range parameter (Volume, Tempo, Melodic Range, etc.)
+    this.createRangeInputInterface(parameterName, paramData, container);
+  } else if (paramData.selectedValues && Array.isArray(paramData.selectedValues)) {
+    // Multi-select parameter (Rhythms, Rests)
+    this.createMultiSelectInterface(parameterName, paramData, container);
+  } else if (typeof paramData === 'number') {
+    // Simple dropdown (Instrument)
+    this.createDropdownInterface(parameterName, paramData, container);
+  } else if (paramData.speed || paramData.depth) {
+    // Multi-dual parameter (Effects)
+    this.createEffectInterface(parameterName, paramData, container);
+  } else {
+    // Placeholder for complex parameters
+    container.innerHTML = `
+      <div style="text-align: center; color: #666; padding: 20px;">
+        <div>📋</div>
+        <div style="margin-top: 8px;">Parameter event interface for <strong>${parameterName}</strong><br>will be implemented in Phase A.2</div>
+      </div>
+    `;
+  }
+}
+
+createRangeInputInterface(parameterName, paramData, container) {
+  const currentMin = paramData.currentValue !== undefined ? paramData.currentValue : paramData.min;
+  const currentMax = paramData.currentValue !== undefined ? paramData.currentValue : paramData.max;
+  
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 15px;">
+      <div style="text-align: center; color: #666; font-size: 12px;">
+        Current: ${currentMin.toFixed(0)} - ${currentMax.toFixed(0)}
+      </div>
+      
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <div style="flex: 1;">
+          <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">New Minimum:</label>
+          <input type="number" class="new-min-input" value="${paramData.min}" 
+                 min="${parameterName === 'TEMPO (BPM)' ? 40 : 0}" 
+                 max="${parameterName === 'TEMPO (BPM)' ? 240 : 127}"
+                 style="width: 100%; padding: 6px 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">New Maximum:</label>
+          <input type="number" class="new-max-input" value="${paramData.max}"
+                 min="${parameterName === 'TEMPO (BPM)' ? 40 : 0}" 
+                 max="${parameterName === 'TEMPO (BPM)' ? 240 : 127}"
+                 style="width: 100%; padding: 6px 8px; border: 1px solid #dee2e6; border-radius: 4px;">
+        </div>
+      </div>
+      
+      <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; font-size: 12px; color: #856404;">
+        <div style="font-weight: 600; margin-bottom: 4px;">💡 Parameter Event Behavior:</div>
+        <div>This will change the parameter's min/max range starting at beat ${Math.round(this.currentBeat || 0)}.</div>
+        <div style="margin-top: 4px;">The voice will smoothly transition to the new range over time.</div>
+      </div>
+    </div>
+  `;
+}
+
+collectParameterEventData(parameterName, container) {
+  const minInput = container.querySelector('.new-min-input');
+  const maxInput = container.querySelector('.new-max-input');
+  
+  if (minInput && maxInput) {
+    const minValue = parseFloat(minInput.value);
+    const maxValue = parseFloat(maxInput.value);
+    
+    if (isNaN(minValue) || isNaN(maxValue)) {
+      alert('Please enter valid numbers for min and max values.');
+      return null;
+    }
+    
+    if (minValue > maxValue) {
+      alert('Minimum value cannot be greater than maximum value.');
+      return null;
+    }
+    
+    return {
+      changeType: 'range',
+      value: {
+        min: minValue,
+        max: maxValue
+      }
+    };
+  }
+  
+  // TODO: Add handlers for other parameter types
+  return null;
+}
+
+insertParameterEvent(beat, parameterName, eventData) {
+  console.log(`💎 Creating region-relative parameter event`);
+  
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    console.error(`❌ No life span or events array`);
+    return;
+  }
+  
+  // Find which region this beat belongs to
+  const targetRegionIndex = this.findRegionIndexForBeat(beat);
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[targetRegionIndex];
+
+  if (!targetRegion) {
+    console.error(`❌ Cannot create parameter event - no region found at beat ${beat}`);
+    alert(`Cannot create parameter event - beat ${beat.toFixed(0)} is not in a playing region.`);
+    return;
+  }
+
+  // Calculate RELATIVE position within region (0.0 to 1.0)
+  const relativePosition = (beat - targetRegion.start) / (targetRegion.end - targetRegion.start);
+  
+  // Capture state for undo
+  if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+    undoManager.captureState(`Parameter event: ${parameterName} at beat ${beat.toFixed(0)}`, true);
+  }
+  
+  // Generate unique ID
+  const eventId = `param-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+  
+  // Create parameter event - REGION-RELATIVE
+  const newEvent = {
+    type: 'parameter',
+    regionIndex: targetRegionIndex,
+    relativePosition: relativePosition, // 0.0 = start of region, 1.0 = end of region
+    parameter: parameterName,
+    changeType: eventData.changeType,
+    value: eventData.value,
+    id: eventId
+  };
+  
+  // Insert in events array (position doesn't matter for parameter events)
+  lifeSpan.events.push(newEvent);
+  
+  console.log(`💎 Parameter event created: ${parameterName} at ${(relativePosition * 100).toFixed(1)}% in region ${targetRegionIndex}`);
+  console.log(`   Region: ${targetRegion.start}-${targetRegion.end} beats`);
+  console.log(`   Event ID: ${eventId}`);
+  
+  // Show success notification
+  this.showParameterEventCreated(beat, parameterName);
+}
+
+showParameterEventCreated(beat, parameterName) {
+  // Clear any lingering tooltips first
+  this.clearCreationTooltip();
+  this.hideBeatIndicator();
+  
+  // Show success notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 16px;">💎</span>
+      <div>
+        <div>Parameter Event Created</div>
+        <div style="font-size: 11px; opacity: 0.9;">${parameterName} at Beat ${beat.toFixed(0)}</div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 2500);
+  
+  console.log(`✅ Parameter event created - timeline should remain stable`);
+  
+  // DON'T refresh automatically - just show the notification
+}
+
+
+  // NEW: Update cursor based on position - CORRECTED TOOLTIPS
   updateCursorForPosition(beat) {
     const track = this.container.querySelector('.visual-timeline-track');
     const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
