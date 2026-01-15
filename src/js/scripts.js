@@ -988,6 +988,8 @@ let currentVoice = 0;
 let voiceData = [];
 let timelineViewActive = false; // Track if timeline view is open
 
+
+
 function initializeVoices() {
   voiceData = [];
   for (let i = 0; i < 16; i++) {
@@ -2754,15 +2756,42 @@ function createVoiceTabs() {
 
 function selectVoice(voiceIndex) {
   if (currentVoice !== voiceIndex) {
+    // Capture current visual timeline state before switching
+    if (viewStateManager && visualTimeline && visualTimeline.isVisible) {
+      const currentState = viewStateManager.states.parameter;
+      currentState.visualTimelineState = {
+        zoomLevel: visualTimeline.zoomLevel,
+        panOffset: visualTimeline.panOffset,
+        showBeatIndicator: visualTimeline.showBeatIndicator
+      };
+    }
+    
     currentVoice = voiceIndex;
     updateVoiceTabs();
     renderParameters();
     
-    // NEW: Update visual timeline for new voice
+    // NEW: Update visual timeline for new voice with preserved state
     updateVisualTimelineForVoiceChange(voiceIndex);
     
     setTimeout(() => {
       connectAllSliders();
+      
+      // Restore visual timeline state for new voice
+      if (viewStateManager && visualTimeline && visualTimeline.isVisible) {
+        const savedState = viewStateManager.states.parameter.visualTimelineState;
+        if (savedState) {
+          visualTimeline.zoomLevel = savedState.zoomLevel;
+          visualTimeline.panOffset = savedState.panOffset;
+          visualTimeline.showBeatIndicator = savedState.showBeatIndicator;
+          
+          if (visualTimeline.applyZoomAndPan) {
+            visualTimeline.applyZoomAndPan();
+          }
+          if (visualTimeline.updateZoomControls) {
+            visualTimeline.updateZoomControls();
+          }
+        }
+      }
     }, 100);
   }
 }
@@ -5380,7 +5409,6 @@ class VoiceClock {
 
     this.lookaheadScheduler = null;
   }
-
 
   start() {
     if (!this.masterClock.isActive()) {
@@ -11131,6 +11159,472 @@ class UndoManager {
   }
 }
 
+// ===== VIEW STATE MANAGER CLASS =====
+class ViewStateManager {
+  constructor() {
+    this.currentMode = 'parameter';
+    this.states = {
+      parameter: {
+        currentVoice: 0,
+        rollupStates: new Map(),
+        scrollPosition: 0,
+        playheadPosition: 0,
+        visualTimelineState: {
+          zoomLevel: 1.0,
+          panOffset: 0,
+          showBeatIndicator: true
+        },
+        preservedSliders: new Map()
+      },
+      timeline: {
+        selectedVoices: new Set(),
+        masterScrollPosition: 0,
+        voiceTrackStates: new Map(),
+        playheadPosition: 0
+      }
+    };
+    
+    this.isTransitioning = false;
+
+    // NEW: Initialize button to correct state immediately
+    setTimeout(() => {
+      this.updateToggleButton('parameter');
+    }, 100);
+  }
+  
+  captureCurrentState() {
+    const currentState = this.states[this.currentMode];
+    
+    if (this.currentMode === 'parameter') {
+      // Capture parameter view state
+      currentState.currentVoice = currentVoice;
+      currentState.playheadPosition = masterClock ? masterClock.getElapsedTime() : 0;
+      
+      // Capture rollup states (only changed ones for performance)
+      Object.keys(parameterRollupState).forEach(paramName => {
+        if (parameterRollupState[paramName] !== false) { // Only store non-default
+          currentState.rollupStates.set(paramName, parameterRollupState[paramName]);
+        }
+      });
+      
+      // Capture scroll position
+      const parameterSection = document.getElementById('parameter-section');
+      if (parameterSection) {
+        currentState.scrollPosition = parameterSection.scrollTop;
+      }
+      
+      // Capture visual timeline state
+      if (visualTimeline && visualTimeline.isVisible) {
+        currentState.visualTimelineState = {
+          zoomLevel: visualTimeline.zoomLevel,
+          panOffset: visualTimeline.panOffset,
+          showBeatIndicator: visualTimeline.showBeatIndicator
+        };
+      }
+      
+      // NEW: Preserve slider instances for performance
+      currentState.preservedSliders = this.preserveSliderInstances();
+
+
+      if (DEBUG.TIMELINE) {
+        console.log(`💾 Captured Parameter View state: voice ${currentState.currentVoice + 1}`);
+        console.log(`   Rollups: ${currentState.rollupStates.size} expanded`);
+        console.log(`   Scroll: ${currentState.scrollPosition}px`);
+        console.log(`   Zoom: ${currentState.visualTimelineState.zoomLevel}x`);
+      }
+    } else {
+      // Capture timeline view state
+      currentState.playheadPosition = masterClock ? masterClock.getElapsedTime() : 0;
+      
+      // Capture enabled voices
+      currentState.selectedVoices.clear();
+      voiceData.forEach((voice, index) => {
+        if (voice.enabled) {
+          currentState.selectedVoices.add(index);
+        }
+      });
+      
+      // Capture master scroll position
+      const tracksArea = document.querySelector('.master-tracks-area');
+      if (tracksArea) {
+        currentState.masterScrollPosition = tracksArea.scrollTop;
+      }
+      
+      if (DEBUG.TIMELINE) {
+        console.log(`💾 Captured Timeline View state`);
+        console.log(`   Selected voices: ${Array.from(currentState.selectedVoices).map(i => i + 1).join(', ')}`);
+        console.log(`   Scroll: ${currentState.masterScrollPosition}px`);
+      }
+    }
+  }
+  
+  restoreState(targetMode) {
+    const targetState = this.states[targetMode];
+    
+    if (targetMode === 'parameter') {
+      // Restore parameter view state
+      if (targetState.currentVoice !== currentVoice) {
+        selectVoice(targetState.currentVoice);
+      }
+      
+      // Restore rollup states
+      targetState.rollupStates.forEach((isExpanded, paramName) => {
+        if (parameterRollupState[paramName] !== isExpanded) {
+          toggleParameterRollup(paramName);
+        }
+      });
+      
+      // Restore scroll position (with delay for DOM to settle)
+      setTimeout(() => {
+        const parameterSection = document.getElementById('parameter-section');
+        if (parameterSection) {
+          parameterSection.scrollTop = targetState.scrollPosition;
+        }
+      }, 100);
+      
+      // Restore visual timeline state
+      if (visualTimeline && targetState.visualTimelineState) {
+        visualTimeline.zoomLevel = targetState.visualTimelineState.zoomLevel;
+        visualTimeline.panOffset = targetState.visualTimelineState.panOffset;
+        visualTimeline.showBeatIndicator = targetState.visualTimelineState.showBeatIndicator;
+        
+        if (visualTimeline.isVisible) {
+          visualTimeline.applyZoomAndPan();
+          visualTimeline.updateZoomControls();
+        }
+      }
+      
+      // NEW: Restore slider instances for performance
+setTimeout(() => {
+  this.restoreSliderInstances(targetState.preservedSliders);
+}, 150); // After connectAllSliders() completes
+
+
+      if (DEBUG.TIMELINE) {
+        console.log(`♻️ Restored Parameter View state`);
+      }
+    } else {
+      // Restore timeline view state  
+      // Restore scroll position
+      setTimeout(() => {
+        const tracksArea = document.querySelector('.master-tracks-area');
+        if (tracksArea) {
+          tracksArea.scrollTop = targetState.masterScrollPosition;
+        }
+      }, 100);
+      
+      if (DEBUG.TIMELINE) {
+        console.log(`♻️ Restored Timeline View state`);
+      }
+    }
+  }
+  
+preserveSliderInstances() {
+  const sliderMap = new Map();
+  const parameterSection = document.getElementById('parameter-section');
+  
+  if (!parameterSection) return sliderMap;
+  
+  const sliders = parameterSection.querySelectorAll('.noUi-target');
+  
+  sliders.forEach(slider => {
+    if (slider.noUiSlider) {
+  // Generate unique key for this slider
+  const row = slider.closest('.parameter-rollup');
+  const paramName = row ? row.dataset.parameter : 'unknown';
+  const sliderWrapper = slider.closest('.slider-wrapper');
+  const label = sliderWrapper ? sliderWrapper.querySelector('.slider-label')?.textContent?.trim() : 'Range';
+
+  // Fallback label detection for single-dual sliders
+  let finalLabel = label;
+  if (!finalLabel || finalLabel === '') {
+    // Check if it's a single-dual slider (no explicit label)
+    const dualSliderContainer = slider.closest('.dual-slider');
+    if (dualSliderContainer && !sliderWrapper.querySelector('.slider-label')) {
+      finalLabel = 'Range';
+    }
+  }
+
+      
+      const key = `${paramName}-${finalLabel}-${this.states.parameter.currentVoice}`;
+
+      
+      // Store the slider configuration, not the instance
+      const config = {
+        element: slider,
+        values: slider.noUiSlider.get(),
+        options: slider.noUiSlider.options
+      };
+      
+      sliderMap.set(key, config);
+      
+      if (DEBUG.TIMELINE) {
+        console.log(`💾 Preserved slider: ${key}`);
+      }
+    }
+  });
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`✅ Preserved ${sliderMap.size} slider instances`);
+  }
+  
+  return sliderMap;
+}
+
+restoreSliderInstances(sliderMap) {
+  if (!sliderMap || sliderMap.size === 0) return;
+  
+  let restoredCount = 0;
+  
+  sliderMap.forEach((config, key) => {
+    try {
+      if (config.element && config.element.noUiSlider) {
+        // Slider still exists and has instance - just update values
+        config.element.noUiSlider.set(config.values);
+        restoredCount++;
+        
+        if (DEBUG.TIMELINE) {
+          console.log(`♻️ Restored slider values: ${key}`);
+        }
+      }
+    } catch (error) {
+      if (DEBUG.TIMELINE) {
+        console.warn(`⚠️ Could not restore slider ${key}:`, error.message);
+      }
+    }
+  });
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`✅ Restored ${restoredCount} slider instances`);
+  }
+}
+
+switchMode(newMode) {
+  if (newMode === this.currentMode || this.isTransitioning) {
+    return false;
+  }
+  
+  const startTime = performance.now();
+  this.isTransitioning = true;
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`🔄 View switch: ${this.currentMode} → ${newMode}`);
+  }
+  
+  // Step 1: Capture current state (with slider preservation)
+  this.captureCurrentState();
+  
+  // Step 2: Switch views (preserve audio)
+  const oldMode = this.currentMode;
+  this.currentMode = newMode;
+  
+  this.renderViewMode(newMode);
+  
+  // Step 3: Restore new view state
+  this.restoreState(newMode);
+  
+  // Step 4: Update button
+  this.updateToggleButton(newMode);
+  
+  // Step 5: Performance measurement and cleanup
+  // Immediate performance measurement
+const performanceReport = this.measureSwitchPerformance(startTime, oldMode, newMode);
+
+setTimeout(() => {
+  this.isTransitioning = false;
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`✅ View switch complete: ${oldMode} → ${newMode} (${performanceReport.duration}ms)`);
+  }
+}, 50); // Reduced from 200ms
+
+  
+  return true;
+}
+
+  measureSwitchPerformance(startTime, fromMode, toMode) {
+  const endTime = performance.now();
+  const duration = endTime - startTime;
+  
+  const performanceReport = {
+    duration: Math.round(duration),
+    fromMode,
+    toMode,
+    sliderCount: document.querySelectorAll('.noUi-target').length,
+    rollupCount: document.querySelectorAll('.parameter-rollup').length,
+    audioActive: masterClock ? masterClock.isActive() : false
+  };
+  
+  if (duration > 100) {
+    console.warn(`⚠️ SLOW view switch: ${duration.toFixed(1)}ms`, performanceReport);
+  } else {
+    console.log(`✅ Fast view switch: ${duration.toFixed(1)}ms`, performanceReport);
+  }
+  
+  return performanceReport;
+}
+
+  renderViewMode(mode) {
+    const parameterSection = document.getElementById('parameter-section');
+    let masterTimelineContainer = document.getElementById('master-timeline-container');
+    const mainContent = document.getElementById('main-content');
+    
+    if (mode === 'parameter') {
+      // Show Parameter View
+      if (parameterSection) {
+        parameterSection.style.display = 'flex';
+      }
+      
+      // Hide Master Timeline
+      if (masterTimelineContainer) {
+        masterTimelineContainer.style.display = 'none';
+      }
+      
+      // Ensure individual visual timeline is shown (faster)
+      if (!visualTimeline || !visualTimeline.isVisible) {
+        showVisualTimeline();
+      }
+
+      
+    } else {
+      // Show Timeline View
+      if (parameterSection) {
+        parameterSection.style.display = 'none';
+      }
+      
+      // Create or show Master Timeline
+      if (!masterTimelineContainer) {
+        masterTimelineContainer = this.createMasterTimelineContainer();
+        mainContent.appendChild(masterTimelineContainer);
+      }
+      
+      masterTimelineContainer.style.display = 'flex';
+      
+      // Render all voice timelines (immediate)
+      this.renderAllVoiceTimelines();
+
+    }
+  }
+  
+  createMasterTimelineContainer() {
+    const container = document.createElement('div');
+    container.id = 'master-timeline-container';
+    container.style.cssText = `
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      padding: 20px;
+      box-sizing: border-box;
+    `;
+    
+    container.innerHTML = `
+      <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #666;
+        text-align: center;
+        gap: 20px;
+      ">
+        <div style="font-size: 48px;">📊</div>
+        <h2 style="margin: 0; color: #333;">Master Timeline View</h2>
+        <p style="margin: 0; font-size: 16px;">Multi-voice timeline orchestration</p>
+        <div style="font-size: 14px; color: #999;">
+          Sessions 27-30 will implement this view
+        </div>
+      </div>
+    `;
+    
+    return container;
+  }
+  
+  renderAllVoiceTimelines() {
+    // Placeholder for Session 27
+    console.log('📊 renderAllVoiceTimelines() - placeholder for Session 27');
+  }
+  
+  updateToggleButton(mode) {
+    const toggleBtn = document.getElementById('view-toggle-btn');
+    if (!toggleBtn) return;
+    
+    const icon = toggleBtn.querySelector('.view-icon');
+    const text = toggleBtn.querySelector('.view-text');
+    
+    if (mode === 'parameter') {
+      if (icon) icon.textContent = '🎛️';
+      if (text) text.textContent = 'Timeline View';
+      toggleBtn.classList.add('active');
+    } else {
+      if (icon) icon.textContent = '📊';
+      if (text) text.textContent = 'Parameter View';
+      toggleBtn.classList.remove('active');
+    }
+    
+    if (DEBUG.TIMELINE) {
+      console.log(`🔘 Toggle button updated for ${mode} mode`);
+    }
+  }
+}
+
+// ===== AUDIO CONTINUITY PROTECTION =====
+function protectAudioDuringViewSwitch() {
+  // Store critical audio state references
+  const audioState = {
+    masterClockRunning: masterClock ? masterClock.isActive() : false,
+    masterClockElapsed: masterClock ? masterClock.getElapsedTime() : 0,
+    audioManagerPlaying: audioManager ? audioManager.isPlaying : false,
+    activeVoiceCount: voiceClockManager ? voiceClockManager.getActiveVoiceCount() : 0
+  };
+  
+  if (DEBUG.TIMELINE) {
+    console.log('🔒 Audio state protected during view switch:', audioState);
+  }
+  
+  return audioState;
+}
+
+function validateAudioAfterViewSwitch(originalState) {
+  const currentState = {
+    masterClockRunning: masterClock ? masterClock.isActive() : false,
+    masterClockElapsed: masterClock ? masterClock.getElapsedTime() : 0,
+    audioManagerPlaying: audioManager ? audioManager.isPlaying : false,
+    activeVoiceCount: voiceClockManager ? voiceClockManager.getActiveVoiceCount() : 0
+  };
+  
+  let issuesFound = 0;
+  
+  // Validate audio continuity
+  if (originalState.masterClockRunning !== currentState.masterClockRunning) {
+    console.error(`❌ Master clock state changed: ${originalState.masterClockRunning} → ${currentState.masterClockRunning}`);
+    issuesFound++;
+  }
+  
+  if (originalState.audioManagerPlaying !== currentState.audioManagerPlaying) {
+    console.error(`❌ Audio manager playing state changed: ${originalState.audioManagerPlaying} → ${currentState.audioManagerPlaying}`);
+    issuesFound++;
+  }
+  
+  if (issuesFound === 0) {
+    if (DEBUG.TIMELINE) {
+      console.log('✅ Audio continuity validated - no issues found');
+    }
+  } else {
+    console.error(`❌ Found ${issuesFound} audio continuity issues`);
+  }
+  
+  return issuesFound === 0;
+}
+
+
+// Global view state manager instance
+let viewStateManager = null;
+
+
+
 // Global undo manager instance
 let undoManager = null;
 // ===== END UNDO/REDO MANAGER CLASS =====
@@ -16091,6 +16585,220 @@ showParameterEventCreated(beat, parameterName) {
 // Global visual timeline instance
 let visualTimeline = null;
 
+
+// ===== VIEW TOGGLE SYSTEM =====
+let currentViewMode = 'parameter'; // 'parameter' or 'timeline'
+
+// View state preservation
+let viewState = {
+  parameter: {
+    currentVoice: 0,
+    rollupStates: {},
+    scrollPosition: 0,
+    playheadPosition: 0
+  },
+  timeline: {
+    selectedVoices: [],
+    zoomLevel: 1.0,
+    scrollPosition: 0,
+    playheadPosition: 0
+  }
+};
+
+function getCurrentViewMode() {
+  return currentViewMode;
+}
+
+function setViewMode(newMode) {
+  if (newMode === currentViewMode) {
+    console.log(`🔄 Already in ${newMode} mode`);
+    return;
+  }
+  
+  console.log(`🔄 View mode change requested: ${currentViewMode} → ${newMode}`);
+  
+  // Save current view state
+  saveCurrentViewState();
+  
+  // Switch views  
+  const oldMode = currentViewMode;
+  currentViewMode = newMode;
+  
+  // Apply new view
+  renderViewMode(newMode);
+  
+  // Restore new view state
+  restoreViewState(newMode);
+  
+  // Update toggle button
+  updateViewToggleButton();
+  
+  console.log(`✅ View switched: ${oldMode} → ${newMode}`);
+}
+
+function saveCurrentViewState() {
+  const currentState = viewState[currentViewMode];
+  
+  if (currentViewMode === 'parameter') {
+    currentState.currentVoice = currentVoice;
+    currentState.playheadPosition = masterClock ? masterClock.getElapsedTime() : 0;
+    
+    // Save parameter rollup states
+    const rollups = document.querySelectorAll('.parameter-rollup');
+    currentState.rollupStates = {};
+    rollups.forEach(rollup => {
+      const paramName = rollup.dataset.parameter;
+      if (paramName) {
+        currentState.rollupStates[paramName] = rollup.classList.contains('expanded');
+      }
+    });
+    
+    // Save scroll position
+    const parameterSection = document.getElementById('parameter-section');
+    if (parameterSection) {
+      currentState.scrollPosition = parameterSection.scrollTop;
+    }
+    
+    console.log(`💾 Saved parameter view state: voice ${currentState.currentVoice + 1}`);
+  }
+}
+
+function restoreViewState(newMode) {
+  const newState = viewState[newMode];
+  
+  if (newMode === 'parameter') {
+    // Restore current voice if different
+    if (newState.currentVoice !== currentVoice) {
+      selectVoice(newState.currentVoice);
+    }
+    
+    console.log(`♻️ Restored parameter view state: voice ${newState.currentVoice + 1}`);
+  }
+}
+
+function renderViewMode(mode) {
+  if (mode === 'parameter') {
+    renderParameterView();
+  } else if (mode === 'timeline') {
+    renderTimelineView();
+  } else {
+    console.error(`❌ Unknown view mode: ${mode}`);
+  }
+}
+
+function renderParameterView() {
+  console.log('🎛️ Rendering Parameter View');
+  
+  // Show parameter section  
+  const parameterSection = document.getElementById('parameter-section');
+  if (parameterSection) {
+    parameterSection.style.display = 'flex';
+    console.log('✅ Parameter section visible');
+  }
+  
+  // Hide master timeline container if it exists
+  const masterTimelineContainer = document.getElementById('master-timeline-container');
+  if (masterTimelineContainer) {
+    masterTimelineContainer.style.display = 'none';
+    console.log('🙈 Master timeline hidden');
+  }
+  
+  // Ensure individual timeline is visible
+  setTimeout(() => {
+    if (!visualTimeline || !visualTimeline.isVisible) {
+      showVisualTimeline();
+    }
+  }, 50);
+}
+
+function renderTimelineView() {
+  console.log('📊 Rendering Timeline View');
+  
+  // Hide parameter section
+  const parameterSection = document.getElementById('parameter-section');
+  if (parameterSection) {
+    parameterSection.style.display = 'none';
+    console.log('🙈 Parameter section hidden');
+  }
+  
+  // Show master timeline placeholder
+  const mainContent = document.getElementById('main-content');
+  let masterTimelineContainer = document.getElementById('master-timeline-container');
+  
+  if (!masterTimelineContainer) {
+    masterTimelineContainer = createMasterTimelineContainer();
+    mainContent.appendChild(masterTimelineContainer);
+    console.log('🆕 Created master timeline container');
+  }
+  
+  masterTimelineContainer.style.display = 'flex';
+  
+  setTimeout(() => {
+    renderAllVoiceTimelines();
+  }, 50);
+}
+
+function updateViewToggleButton() {
+  const toggleBtn = document.getElementById('view-toggle-btn');
+  if (!toggleBtn) return;
+  
+  const icon = toggleBtn.querySelector('.view-icon');
+  const text = toggleBtn.querySelector('.view-text');
+  
+  if (currentViewMode === 'parameter') {
+    if (icon) icon.textContent = '🎛️';
+    if (text) text.textContent = 'Parameter View';
+    toggleBtn.classList.add('active');
+  } else {
+    if (icon) icon.textContent = '📊';
+    if (text) text.textContent = 'Timeline View';
+    toggleBtn.classList.remove('active');
+  }
+}
+
+function createMasterTimelineContainer() {
+  const container = document.createElement('div');
+  container.id = 'master-timeline-container';
+  container.style.cssText = `
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    padding: 20px;
+    box-sizing: border-box;
+  `;
+  
+  container.innerHTML = `
+    <div style="
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #666;
+      text-align: center;
+      gap: 20px;
+    ">
+      <div style="font-size: 48px;">📊</div>
+      <h2 style="margin: 0; color: #333;">Master Timeline View</h2>
+      <p>Multi-voice timeline orchestration (Session 27)</p>
+    </div>
+  `;
+  
+  return container;
+}
+
+function renderAllVoiceTimelines() {
+  console.log('📊 renderAllVoiceTimelines() - placeholder');
+}
+
+// ===== END VIEW TOGGLE SYSTEM =====
+
+// ===== GLOBAL VISUAL TIMELINE FUNCTIONS =====
+
+
+
 // ===== GLOBAL VISUAL TIMELINE FUNCTIONS =====
 // Updated showVisualTimeline function - FIXED to use VisualTimeline
 function showVisualTimeline() {
@@ -16270,6 +16978,7 @@ function readFileAsText(file) {
         reader.readAsText(file);
     });
 }
+
 async function createNewComposition() {
     
     // NEW: Disable undo capturing during reset
@@ -16495,7 +17204,6 @@ function logPerformanceSummary() {
 // Manual performance summary trigger
 window.showPerformanceStats = logPerformanceSummary;
 
-
 // ADD this pool testing function before DOMContentLoaded
 
 // Initialize systems on page load
@@ -16505,6 +17213,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // NEW: Initialize undo manager BEFORE voices
   undoManager = new UndoManager();
   
+  // NEW: Initialize view state manager
+  viewStateManager = new ViewStateManager();
+
+  if (DEBUG.TIMELINE) {
+    console.log('🔄 ViewStateManager initialized');
+  }
+
   // NEW: Disable capturing during initialization
   undoManager.isCapturing = false;
   
@@ -16518,6 +17233,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   presetManager = new PresetManager();
 
+  // NEW: Initialize view state manager AFTER preset manager
+  viewStateManager = new ViewStateManager();
+
+  if (DEBUG.TIMELINE) {
+    console.log('🔄 ViewStateManager initialized');
+    console.log('   Default mode: parameter');
+    console.log('   State preservation: enabled');
+    console.log('   Audio protection: active');
+  }
 
 
   setTimeout(() => {
@@ -16540,6 +17264,56 @@ document.addEventListener('DOMContentLoaded', () => {
           console.log('❌ NEW button not found');
       }
   }, 300);
+
+// NEW: Connect view toggle button with state preservation  
+setTimeout(() => {
+  const viewToggleBtn = document.getElementById('view-toggle-btn');
+  if (viewToggleBtn) {
+    // Remove any existing click handler
+    viewToggleBtn.onclick = null;
+    
+    viewToggleBtn.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Protect audio state before switch
+      const audioState = protectAudioDuringViewSwitch();
+      
+      const newMode = viewStateManager.currentMode === 'parameter' ? 'timeline' : 'parameter';
+      
+      if (DEBUG.TIMELINE) {
+        console.log(`🔘 View toggle clicked: switching to ${newMode} mode`);
+        console.log(`   Audio protected: ${audioState.masterClockRunning ? 'playing' : 'stopped'}`);
+      }
+      
+      const success = viewStateManager.switchMode(newMode);
+      
+      if (success) {
+        // Validate audio continuity after switch
+        setTimeout(() => {
+          validateAudioAfterViewSwitch(audioState);
+        }, 250);
+      } else {
+        console.warn(`⚠️ View switch failed or already in progress`);
+      }
+    };
+    
+    console.log('✅ View toggle button connected with state preservation');
+  } else {
+    console.warn('⚠️ View toggle button not found - check HTML structure');
+    
+    // Debug: Log all file control buttons
+    const fileControls = document.getElementById('file-controls');
+    if (fileControls) {
+      const buttons = fileControls.querySelectorAll('button');
+      console.log(`   Found ${buttons.length} file control buttons:`);
+      buttons.forEach((btn, index) => {
+        console.log(`     ${index + 1}: ${btn.textContent} (id: ${btn.id || 'none'})`);
+      });
+    }
+  }
+}, 400); // Slightly later than other button connections
+
 
   setTimeout(() => {
     resetAdvancedParameterDefaults();
@@ -16608,6 +17382,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }, 1000); // Wait 1 second after page load
+
+//     // NEW: Initialize view state manager as final step
+// NEW: Initialize view state manager as final step
+setTimeout(() => {
+  if (viewStateManager) {
+    // Capture initial parameter view state
+    viewStateManager.captureCurrentState();
+    
+    console.log('🎯 Initial view state captured');
+  }
+}, 1500); // After undo system is ready
+
 });
 
 

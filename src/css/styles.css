@@ -3047,3 +3047,96 @@ FOOTER
     background: rgba(255,255,255,1.0);
   }
 }
+
+/* ===============================================================
+VIEW TOGGLE BUTTON - RESPONSIVE SAFE
+=============================================================== */
+
+#view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 120px;
+  margin-left: 8px;
+  border-left: 2px solid #dee2e6;
+  padding-left: 8px;
+  background: #f8f9fa;
+  color: #495057;
+  transition: all 0.2s ease;
+}
+
+#view-toggle-btn:hover {
+  background: #e9ecef;
+  border-left-color: #4a90e2;
+}
+
+#view-toggle-btn.active {
+  background: #4a90e2;
+  color: white;
+  border-left-color: #357abd;
+}
+
+.view-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.view-text {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Stage 1: Wide screens (1000px+) - Show full button */
+@media (min-width: 1000px) {
+  #view-toggle-btn {
+    min-width: 140px;
+  }
+  
+  .view-text {
+    display: inline;
+  }
+}
+
+/* Stage 2: Medium-wide (800px - 999px) - Show full button */
+@media (min-width: 800px) and (max-width: 999px) {
+  #view-toggle-btn {
+    min-width: 120px;
+  }
+  
+  .view-text {
+    display: inline;
+  }
+}
+
+/* Stage 3: Medium-narrow (600px - 799px) - Icon + short text */
+@media (min-width: 600px) and (max-width: 799px) {
+  #view-toggle-btn {
+    min-width: 80px;
+    padding-left: 6px;
+    margin-left: 6px;
+  }
+  
+  .view-text {
+    font-size: 11px;
+  }
+}
+
+/* Stage 4: Mobile (≤599px) - Icon only */
+@media (max-width: 599px) {
+  #view-toggle-btn {
+    min-width: 40px;
+    padding-left: 4px;
+    margin-left: 4px;
+    border-left-width: 1px;
+  }
+  
+  .view-text {
+    display: none;
+  }
+  
+  .view-icon {
+    font-size: 16px;
+  }
+}
+
