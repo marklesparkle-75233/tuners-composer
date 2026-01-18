@@ -2096,15 +2096,36 @@ FOOTER
   box-sizing: border-box;
 }
 
-/* Force default cursor throughout timeline */
-.visual-timeline-container,
-.visual-timeline-container *,
-.visual-timeline-track,
-.visual-timeline-track *,
-.timeline-region,
-.timeline-region.playing,
+/* Updated cursor handling for interactive timeline */
+.visual-timeline-container {
+  cursor: default;
+}
+
+.visual-timeline-track {
+  cursor: default; /* Default cursor for track */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+.timeline-region.playing {
+  cursor: context-menu !important; /* Override - show context menu cursor */
+}
+
 .timeline-region.muted {
-  cursor: default !important;
+  cursor: pointer !important; /* Show clickable cursor */
+}
+
+.parameter-event-diamond {
+  cursor: grab !important; /* Show draggable cursor */
+}
+
+.parameter-event-diamond:hover {
+  cursor: grab !important;
+}
+
+.parameter-event-diamond:active {
+  cursor: grabbing !important;
 }
 
 /* Override any pointer cursors */
@@ -2112,9 +2133,6 @@ FOOTER
 .timeline-region.muted:hover {
   cursor: default !important;
 }
-
-
-
 
 .visual-timeline-header {
   display: flex;
@@ -2199,11 +2217,13 @@ FOOTER
   background: linear-gradient(45deg, #28a745, #34ce57);
   color: white;
   border: none !important;
-  border-radius: 6px !important; /* Ensure rounded corners */
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; /* Slightly stronger shadow */
+  border-radius: 6px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
   margin: 0 !important;
   padding: 0 !important;
-  cursor: inherit !important;
+  cursor: context-menu !important; /* Changed from inherit to context-menu */
+  transition: all 0.15s ease; /* Added smooth transitions */
+  user-select: none; /* Prevent text selection */
 }
 
 .timeline-region.muted {
@@ -2219,6 +2239,23 @@ FOOTER
   background: linear-gradient(45deg, #34ce57, #28a745) !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+}
+
+.timeline-region.playing:active {
+  transform: translateY(0px) scale(0.98);
+  background: linear-gradient(45deg, #28a745, #1e7e34) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+}
+
+/* Double-click preparation animation */
+.timeline-region.double-click-ready {
+  animation: doubleClickPulse 0.3s ease;
+}
+
+@keyframes doubleClickPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 
@@ -3139,4 +3176,27 @@ VIEW TOGGLE BUTTON - RESPONSIVE SAFE
     font-size: 16px;
   }
 }
+
+/* Specific cursor zones */
+.seek-zone {
+  cursor: pointer !important;
+}
+
+.seek-zone:hover {
+  cursor: pointer !important;
+  background: rgba(74,144,226,0.1) !important;
+}
+
+.timeline-region.playing:hover {
+  cursor: context-menu !important;
+}
+
+.region-drag-handle {
+  cursor: ew-resize !important;
+}
+
+.region-drag-handle:hover {
+  cursor: ew-resize !important;
+}
+
 

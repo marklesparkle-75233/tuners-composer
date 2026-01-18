@@ -11159,10 +11159,105 @@ class UndoManager {
   }
 }
 
+// ===== SMALL CONTEXT MENU COMPONENT =====
+class SmallContextMenu {
+  static show(options, clientX, clientY) {
+    // Remove existing menu
+    const existing = document.querySelector('.small-context-menu');
+    if (existing) existing.remove();
+    
+    const menu = document.createElement('div');
+    menu.className = 'small-context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${clientX + 10}px;
+      top: ${clientY - 10}px;
+      background: white;
+      border: 2px solid #4a90e2;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      min-width: 140px;
+      overflow: hidden;
+      user-select: none;
+    `;
+    
+    // Add header if provided
+    if (options.header) {
+      const header = document.createElement('div');
+      header.style.cssText = `
+        background: #4a90e2;
+        color: white;
+        padding: 8px 12px;
+        font-weight: 600;
+        font-size: 12px;
+        border-bottom: 1px solid #357abd;
+      `;
+      header.textContent = options.header;
+      menu.appendChild(header);
+    }
+    
+    // Add menu items
+    options.items.forEach((option, index) => {
+      const item = document.createElement('div');
+      item.className = 'menu-item';
+      item.style.cssText = `
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.2s ease;
+        font-size: 13px;
+        border-bottom: ${index < options.items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+      `;
+      
+      item.innerHTML = `
+        <span style="font-size: 14px; min-width: 16px;">${option.icon}</span>
+        <span style="flex: 1;">${option.text}</span>
+      `;
+      
+      // Hover effects
+      item.onmouseenter = function() {
+        this.style.background = '#f8f9fa';
+      };
+      item.onmouseleave = function() {
+        this.style.background = '';
+      };
+      
+      // Click handler
+      item.onclick = () => {
+        try {
+          option.action();
+        } catch (error) {
+          console.error(`❌ Context menu action failed:`, error);
+        }
+        menu.remove();
+      };
+      
+      menu.appendChild(item);
+    });
+    
+    document.body.appendChild(menu);
+    
+    // Auto-close on outside click
+    setTimeout(() => {
+      const closeHandler = (e) => {
+        if (!menu.contains(e.target)) {
+          menu.remove();
+          document.removeEventListener('click', closeHandler);
+        }
+      };
+      document.addEventListener('click', closeHandler);
+    }, 100);
+  }
+}
+
+
 // ===== VIEW STATE MANAGER CLASS =====
 class ViewStateManager {
   constructor() {
-    this.currentMode = 'parameter';
+    this.currentMode = 'timeline';
     this.states = {
       parameter: {
         currentVoice: 0,
@@ -11185,11 +11280,6 @@ class ViewStateManager {
     };
     
     this.isTransitioning = false;
-
-    // NEW: Initialize button to correct state immediately
-    setTimeout(() => {
-      this.updateToggleButton('parameter');
-    }, 100);
   }
   
   captureCurrentState() {
@@ -11554,15 +11644,19 @@ setTimeout(() => {
     const icon = toggleBtn.querySelector('.view-icon');
     const text = toggleBtn.querySelector('.view-text');
     
-    if (mode === 'parameter') {
+    // NEW LOGIC: Timeline is primary, Parameter View is alternative
+    if (mode === 'timeline') {
+      // Currently in Timeline View (primary) → button shows "Parameter View" (alternative)
       if (icon) icon.textContent = '🎛️';
-      if (text) text.textContent = 'Timeline View';
-      toggleBtn.classList.add('active');
+      if (text) text.textContent = 'Reference View';
+      toggleBtn.classList.remove('active'); // Timeline is default, not highlighted
     } else {
+      // Currently in Parameter View (alternative) → button shows "Timeline View" (primary)
       if (icon) icon.textContent = '📊';
-      if (text) text.textContent = 'Parameter View';
-      toggleBtn.classList.remove('active');
+      if (text) text.textContent = 'Timeline View';
+      toggleBtn.classList.add('active'); // Parameter mode gets highlight (since it's alternative)
     }
+
     
     if (DEBUG.TIMELINE) {
       console.log(`🔘 Toggle button updated for ${mode} mode`);
@@ -11619,11 +11713,8 @@ function validateAudioAfterViewSwitch(originalState) {
   return issuesFound === 0;
 }
 
-
 // Global view state manager instance
 let viewStateManager = null;
-
-
 
 // Global undo manager instance
 let undoManager = null;
@@ -11788,65 +11879,87 @@ render(container) {
   }
 }
 
-    
-
-  makeTrackInteractive() {
+makeTrackInteractive() {
   const track = this.container.querySelector('.visual-timeline-track');
   if (!track) return;
-  
+
   // Enable interaction
-  track.style.cursor = 'pointer';
+  track.style.cursor = 'default'; // Changed from 'pointer'
   track.style.userSelect = 'none';
-  
-  // NEW: Enhanced click handler with modifier key support
+
+  // NEW: Fixed double-click timer system
+  let doubleClickTimer = null;
+
   track.addEventListener('click', (e) => {
-    // Check for modifier keys and target type
-    if (e.shiftKey && e.target.classList.contains('timeline-region')) {
-      // Shift+Click region → Quick parameter event
-      console.log(`🖱️ SHIFT+CLICK: Quick parameter event`);
-      this.handleQuickParameterEvent(e);
-      return;
+    // Clear any existing double-click timer
+    if (doubleClickTimer) {
+      clearTimeout(doubleClickTimer);
+      doubleClickTimer = null;
+      return; // This was the second click of a double-click
     }
-    
-    if (e.altKey && e.target.classList.contains('timeline-region')) {
-      // Alt+Click region → Quick delete
-      console.log(`🖱️ ALT+CLICK: Quick delete region`);
-      this.handleQuickRegionDelete(e);
-      return;
+
+    // Set timer for single-click detection
+    doubleClickTimer = setTimeout(() => {
+      doubleClickTimer = null;
+
+      // This is a true single click - handle modifier keys only
+      if (e.shiftKey && e.target.classList.contains('timeline-region')) {
+        console.log(`🖱️ SHIFT+CLICK: Quick parameter event`);
+        this.handleQuickParameterEvent(e);
+      } else if (e.altKey && e.target.classList.contains('timeline-region')) {
+        console.log(`🖱️ ALT+CLICK: Quick delete region`);
+        this.handleQuickRegionDelete(e);
+      }
+      // No logging for regular single clicks
+    }, 300); // 300ms delay to detect double-click
+  });
+
+  // NEW: Fixed double-click handler
+  track.addEventListener('dblclick', (e) => {
+    // Prevent single click events from firing
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Clear single-click timer
+    if (doubleClickTimer) {
+      clearTimeout(doubleClickTimer);
+      doubleClickTimer = null;
     }
-    
+
+    const beat = this.screenXToBeat(e.clientX);
+    const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+    const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(snappedBeat);
+
     if (DEBUG.EVENTS) {
-      console.log(`🖱️ Single click: No action (use drag handles or double-click to create)`);
+      console.log(`🖱️ DOUBLE-CLICK detected on: "${e.target.className}" at beat ${snappedBeat.toFixed(0)}`);
+    }
+
+    if (e.target.classList.contains('timeline-region') && e.target.classList.contains('playing')) {
+      // Double-click GREEN REGION → Context menu
+      console.log(`🟢 DOUBLE-CLICK PLAYING REGION: Show context menu at beat ${snappedBeat.toFixed(0)}`);
+      this.handleGreenRegionDoubleClick(e, snappedBeat);
+      
+    } else if (e.target.classList.contains('parameter-event-diamond')) {
+      // Double-click GOLD DIAMOND → Context menu  
+      console.log(`💎 DOUBLE-CLICK DIAMOND: Show context menu`);
+      this.handleDiamondDoubleClick(e);
+      
+    } else if (isInPlayingRegion) {
+      // Double-click inside playing region (empty space) → Parameter Event
+      console.log(`💎 DOUBLE-CLICK IN PLAYING AREA: Create parameter event at beat ${snappedBeat.toFixed(0)}`);
+      this.createParameterEventAtBeat(snappedBeat, e.clientX, e.clientY);
+      
+    } else {
+      // Double-click in MUTED area → Start region creation
+      console.log(`🖱️ DOUBLE-CLICK MUTED AREA: Start direct region creation at beat ${snappedBeat.toFixed(0)}`);
+      this.startDirectRegionCreation(e);
     }
   });
-  
-// NEW: Area-aware double-click handler
-track.addEventListener('dblclick', (e) => {
-  const beat = this.screenXToBeat(e.clientX);
-  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
-  const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(snappedBeat);
-  
-  if (e.target.classList.contains('timeline-region') && e.target.classList.contains('playing')) {
-    // Double-click PLAYING region → Parameter Event Creation
-    console.log(`💎 DOUBLE-CLICK PLAYING REGION: Create parameter event at beat ${snappedBeat.toFixed(0)}`);
-    this.createParameterEventAtBeat(snappedBeat, e.clientX, e.clientY);
-  } else if (isInPlayingRegion) {
-    // Double-click inside playing region (but not on region element) → Parameter Event
-    console.log(`💎 DOUBLE-CLICK IN PLAYING AREA: Create parameter event at beat ${snappedBeat.toFixed(0)}`);
-    this.createParameterEventAtBeat(snappedBeat, e.clientX, e.clientY);
-  } else {
-    // Double-click in MUTED area → Start region creation directly (no popup)
-    console.log(`🖱️ DOUBLE-CLICK MUTED AREA: Start direct region creation at beat ${snappedBeat.toFixed(0)}`);
-    this.startDirectRegionCreation(e);
-  }
-});
 
-
-  
   // Prevent context menu and selection
   track.addEventListener('contextmenu', (e) => e.preventDefault());
   track.addEventListener('selectstart', (e) => e.preventDefault());
-  
+
   if (DEBUG.EVENTS) {
     console.log(`🖱️ Timeline track interactive with enhanced controls:`);
     console.log(`   • Drag handles = Resize region edges`);
@@ -11873,7 +11986,6 @@ handleTimelineClick(e) {
   return; // No click-to-mute functionality
 }
 
-
 // NEW: Convert screen X coordinate to beat position
 screenXToBeat(screenX) {
   const track = this.container.querySelector('.visual-timeline-track');
@@ -11892,232 +12004,232 @@ snapBeatToGrid(beat) {
 }
 
   // NEW: Check if beat is in a playing region (using events system)
-  checkIfBeatIsInPlayingRegion(beat) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return false;
-    
-    // Process events up to this beat to determine play state
-    const muteEvents = lifeSpan.events
-      .filter(event => event.type === 'mute')
-      .sort((a, b) => a.beatPosition - b.beatPosition);
-    
-    let isPlaying = false;
-    
-    muteEvents.forEach(event => {
-      if (beat >= event.beatPosition) {
-        isPlaying = (event.action === 'unmute');
-      }
-    });
-    
-    return isPlaying;
-  }
+checkIfBeatIsInPlayingRegion(beat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return false;
+  
+  // Process events up to this beat to determine play state
+  const muteEvents = lifeSpan.events
+    .filter(event => event.type === 'mute')
+    .sort((a, b) => a.beatPosition - b.beatPosition);
+  
+  let isPlaying = false;
+  
+  muteEvents.forEach(event => {
+    if (beat >= event.beatPosition) {
+      isPlaying = (event.action === 'unmute');
+    }
+  });
+  
+  return isPlaying;
+}
 
-  // NEW: Insert mute event at beat position
-  insertMuteEvent(beat) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return;
-    
-    // Generate unique ID
-    const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
-    lifeSpan.nextEventId++;
-    
-    // Create new mute event
-    const newEvent = {
-      type: 'mute',
-      beatPosition: beat,
-      action: 'mute',
-      id: eventId
-    };
-    
-    // Insert in chronological order
-    const insertIndex = lifeSpan.events.findIndex(event => 
-      event.type === 'mute' && event.beatPosition > beat
-    );
-    
-    if (insertIndex === -1) {
-      lifeSpan.events.push(newEvent);
-    } else {
-      lifeSpan.events.splice(insertIndex, 0, newEvent);
-    }
-    
-    if (DEBUG.EVENTS) {
-      console.log(`➕ Inserted MUTE event at beat ${beat} (${eventId})`);
-      console.log(`   Updated events:`, lifeSpan.events);
-    }
+// NEW: Insert mute event at beat position
+insertMuteEvent(beat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  // Generate unique ID
+  const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
+  lifeSpan.nextEventId++;
+  
+  // Create new mute event
+  const newEvent = {
+    type: 'mute',
+    beatPosition: beat,
+    action: 'mute',
+    id: eventId
+  };
+  
+  // Insert in chronological order
+  const insertIndex = lifeSpan.events.findIndex(event => 
+    event.type === 'mute' && event.beatPosition > beat
+  );
+  
+  if (insertIndex === -1) {
+    lifeSpan.events.push(newEvent);
+  } else {
+    lifeSpan.events.splice(insertIndex, 0, newEvent);
   }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`➕ Inserted MUTE event at beat ${beat} (${eventId})`);
+    console.log(`   Updated events:`, lifeSpan.events);
+  }
+}
 
-  // NEW: Insert unmute event at beat position
-  insertUnmuteEvent(beat) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return;
-    
-    // Generate unique ID
-    const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
-    lifeSpan.nextEventId++;
-    
-    // Create new unmute event
-    const newEvent = {
-      type: 'mute',
-      beatPosition: beat,
-      action: 'unmute',
-      id: eventId
-    };
-    
-    // Insert in chronological order
-    const insertIndex = lifeSpan.events.findIndex(event => 
-      event.type === 'mute' && event.beatPosition > beat
-    );
-    
-    if (insertIndex === -1) {
-      lifeSpan.events.push(newEvent);
-    } else {
-      lifeSpan.events.splice(insertIndex, 0, newEvent);
-    }
-    
-    if (DEBUG.EVENTS) {
-      console.log(`➕ Inserted UNMUTE event at beat ${beat} (${eventId})`);
-      console.log(`   Updated events:`, lifeSpan.events);
-    }
+// NEW: Insert unmute event at beat position
+insertUnmuteEvent(beat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  // Generate unique ID
+  const eventId = `evt-${String(lifeSpan.nextEventId).padStart(3, '0')}`;
+  lifeSpan.nextEventId++;
+  
+  // Create new unmute event
+  const newEvent = {
+    type: 'mute',
+    beatPosition: beat,
+    action: 'unmute',
+    id: eventId
+  };
+  
+  // Insert in chronological order
+  const insertIndex = lifeSpan.events.findIndex(event => 
+    event.type === 'mute' && event.beatPosition > beat
+  );
+  
+  if (insertIndex === -1) {
+    lifeSpan.events.push(newEvent);
+  } else {
+    lifeSpan.events.splice(insertIndex, 0, newEvent);
   }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`➕ Inserted UNMUTE event at beat ${beat} (${eventId})`);
+    console.log(`   Updated events:`, lifeSpan.events);
+  }
+}
 
 // NEW: Add drag functionality to region handles
-  addHandleDragFunctionality(handle, regionIndex, handleType) {
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartBeat = 0;
-    let originalEvents = null;
+addHandleDragFunctionality(handle, regionIndex, handleType) {
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartBeat = 0;
+  let originalEvents = null;
+  
+  // Mouse down - start drag
+  handle.onmousedown = (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent timeline click event
     
-    // Mouse down - start drag
-    handle.onmousedown = (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // Prevent timeline click event
-      
-      isDragging = true;
-      dragStartX = e.clientX;
-      dragStartBeat = this.screenXToBeat(e.clientX);
-      
-      // Capture state for undo
-      if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-        undoManager.captureState(`Timeline: Drag ${handleType} handle`, true);
-      }
-      
-      // Store original events for validation
-      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-      originalEvents = JSON.parse(JSON.stringify(lifeSpan.events));
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartBeat = this.screenXToBeat(e.clientX);
+    
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Drag ${handleType} handle`, true);
+    }
+    
+    // Store original events for validation
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    originalEvents = JSON.parse(JSON.stringify(lifeSpan.events));
 
-      // NEW: Store region's original boundaries before any visual changes
-      const region = handle.closest('.timeline-region');
-      if (region) {
-        const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-        const targetRegion = playingRegions[regionIndex];
+    // NEW: Store region's original boundaries before any visual changes
+    const region = handle.closest('.timeline-region');
+    if (region) {
+      const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+      const targetRegion = playingRegions[regionIndex];
+      
+      if (targetRegion) {
+        // Store actual beat boundaries (not CSS percentages)
+        region.dataset.originalStartBeat = targetRegion.start;
+        region.dataset.originalEndBeat = targetRegion.end;
         
-        if (targetRegion) {
-          // Store actual beat boundaries (not CSS percentages)
-          region.dataset.originalStartBeat = targetRegion.start;
-          region.dataset.originalEndBeat = targetRegion.end;
-          
-          if (DEBUG.EVENTS) {
-            console.log(`💾 Stored original boundaries: ${targetRegion.start}-${targetRegion.end} beats`);
-          }
+        if (DEBUG.EVENTS) {
+          console.log(`💾 Stored original boundaries: ${targetRegion.start}-${targetRegion.end} beats`);
         }
       }
-      
-      // Visual feedback - highlight handle during drag
-      handle.style.background = 'rgba(40,167,69,1.0)';
-      handle.style.borderColor = '#1e7e34';
-      handle.style.width = '12px';
-      handle.style.boxShadow = '0 0 8px rgba(40,167,69,0.6)';
-      
-      // Add global mouse move and up listeners
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      if (DEBUG.EVENTS) {
-        console.log(`🖱️ Started dragging ${handleType} handle at beat ${dragStartBeat.toFixed(1)}`);
-      }
-    };
+    }
     
+    // Visual feedback - highlight handle during drag
+    handle.style.background = 'rgba(40,167,69,1.0)';
+    handle.style.borderColor = '#1e7e34';
+    handle.style.width = '12px';
+    handle.style.boxShadow = '0 0 8px rgba(40,167,69,0.6)';
+    
+    // Add global mouse move and up listeners
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🖱️ Started dragging ${handleType} handle at beat ${dragStartBeat.toFixed(1)}`);
+    }
+  };
+  
 const handleMouseMove = (e) => {
-  if (!isDragging) return;
-  
-  const currentBeat = this.screenXToBeat(e.clientX);
-  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
-  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
-  
-  // Update handle position visually (preview)
-  this.updateHandlePosition(handle, handleType, clampedBeat);
-  
-  // NEW: Calculate what the new region boundaries would be
-  const region = handle.closest('.timeline-region');
-  const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
-  const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
-  
-  let previewStartBeat = originalStartBeat;
-  let previewEndBeat = originalEndBeat;
-  
-  if (handleType === 'left') {
-    previewStartBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
-  } else {
-    previewEndBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
-  }
-  
-  // NEW: Update diamonds during handle drag too
-  this.updateDiamondsForRegionDragRealTime(regionIndex, previewStartBeat, previewEndBeat);
-  
-  // Show tooltip
-  const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
-  const timeFormatted = formatMsToMMSS(timeMs);
-  
-  handle.title = `${handleType === 'left' ? 'Start' : 'End'}: Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
-  this.showDragTooltip(e.clientX, e.clientY, clampedBeat, timeFormatted, handleType);
+if (!isDragging) return;
+
+const currentBeat = this.screenXToBeat(e.clientX);
+const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+
+// Update handle position visually (preview)
+this.updateHandlePosition(handle, handleType, clampedBeat);
+
+// NEW: Calculate what the new region boundaries would be
+const region = handle.closest('.timeline-region');
+const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
+const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
+
+let previewStartBeat = originalStartBeat;
+let previewEndBeat = originalEndBeat;
+
+if (handleType === 'left') {
+  previewStartBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
+} else {
+  previewEndBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
+}
+
+// NEW: Update diamonds during handle drag too
+this.updateDiamondsForRegionDragRealTime(regionIndex, previewStartBeat, previewEndBeat);
+
+// Show tooltip
+const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
+const timeFormatted = formatMsToMMSS(timeMs);
+
+handle.title = `${handleType === 'left' ? 'Start' : 'End'}: Beat ${clampedBeat.toFixed(0)} (${timeFormatted})`;
+this.showDragTooltip(e.clientX, e.clientY, clampedBeat, timeFormatted, handleType);
 };
 
 
-    const handleMouseUp = (e) => {
-      if (!isDragging) return;
-      
-      isDragging = false;
-      
-      const finalBeat = this.screenXToBeat(e.clientX);
-      const snappedFinalBeat = this.snapToBeat ? this.snapBeatToGrid(finalBeat) : finalBeat;
-      const clampedFinalBeat = Math.max(0, Math.min(this.maxBeats, snappedFinalBeat));
-      
-      // Apply the drag operation to events array
-      this.applyHandleDrag(regionIndex, handleType, clampedFinalBeat);
-      
-            // Remove global listeners first
-      document.removeEventListener('mousemove', handleWholeRegionMouseMove);
-      document.removeEventListener('mouseup', handleWholeRegionMouseUp);
-
-      
-      // Reset handle visual state
-      handle.style.background = 'rgba(40,167,69,0.7)';
-      handle.style.borderColor = '#fff';
-      handle.style.width = '8px';
-      handle.style.boxShadow = 'none';
-      handle.title = `Drag to adjust ${handleType === 'left' ? 'start' : 'end'} time`;
-      
-            // NEW: Remove floating tooltip
-      const dragTooltip = document.querySelector('.drag-tooltip');
-      if (dragTooltip) {
-        dragTooltip.remove();
-      }
-
-      // NEW: Update all labels before refresh
-      this.updateAllRegionLabels();
-
-      // Refresh timeline to show final result
-      setTimeout(() => {
-        this.refresh();
-      }, 50);
-      
-      if (DEBUG.EVENTS) {
-        console.log(`✅ Finished dragging ${handleType} handle to beat ${clampedFinalBeat.toFixed(0)}`);
-      }
-    };
-  }
+const handleMouseUp = (e) => {
+  if (!isDragging) return;
   
-    // NEW: Update handle position during drag (visual preview)
+  isDragging = false;
+  
+  const finalBeat = this.screenXToBeat(e.clientX);
+  const snappedFinalBeat = this.snapToBeat ? this.snapBeatToGrid(finalBeat) : finalBeat;
+  const clampedFinalBeat = Math.max(0, Math.min(this.maxBeats, snappedFinalBeat));
+  
+  // Apply the drag operation to events array
+  this.applyHandleDrag(regionIndex, handleType, clampedFinalBeat);
+  
+        // Remove global listeners first
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+
+  
+  // Reset handle visual state
+  handle.style.background = 'rgba(40,167,69,0.7)';
+  handle.style.borderColor = '#fff';
+  handle.style.width = '8px';
+  handle.style.boxShadow = 'none';
+  handle.title = `Drag to adjust ${handleType === 'left' ? 'start' : 'end'} time`;
+  
+        // NEW: Remove floating tooltip
+  const dragTooltip = document.querySelector('.drag-tooltip');
+  if (dragTooltip) {
+    dragTooltip.remove();
+  }
+
+  // NEW: Update all labels before refresh
+  this.updateAllRegionLabels();
+
+  // Refresh timeline to show final result
+  setTimeout(() => {
+    this.refresh();
+  }, 50);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✅ Finished dragging ${handleType} handle to beat ${clampedFinalBeat.toFixed(0)}`);
+  }
+};
+}
+
+// NEW: Update handle position during drag (visual preview)
 updateHandlePosition(handle, handleType, beat) {
   const percentage = (beat / this.maxBeats) * 100;
   const region = handle.closest('.timeline-region');
@@ -12197,66 +12309,64 @@ updateRegionLabel(region, startBeat, endBeat) {
   }
 }
 
-
-
-  // NEW: Apply handle drag to events array
-  applyHandleDrag(regionIndex, handleType, newBeat) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return;
-    
-    // Get current playing regions
-    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-    
-    if (regionIndex >= playingRegions.length) {
-      console.warn(`Invalid region index ${regionIndex}`);
-      return;
-    }
-    
-    const region = playingRegions[regionIndex];
-    let newStartBeat = region.start;
-    let newEndBeat = region.end;
-    
-    // Update the appropriate boundary
-    if (handleType === 'left') {
-      newStartBeat = Math.max(0, Math.min(newBeat, region.end - 1)); // Can't go past end
-    } else {
-      newEndBeat = Math.max(region.start + 1, Math.min(newBeat, this.maxBeats)); // Can't go before start
-    }
-    
-    // Validate the new region
-    if (newStartBeat >= newEndBeat) {
-      console.warn(`Invalid drag: start ${newStartBeat} >= end ${newEndBeat}`);
-      return;
-    }
-    
-    // Update events array by replacing this region's events
-    this.replaceRegionInEvents(regionIndex, newStartBeat, newEndBeat);
-    
-    if (DEBUG.EVENTS) {
-      console.log(`🔄 Updated region ${regionIndex}: ${region.start}-${region.end} → ${newStartBeat}-${newEndBeat}`);
-    }
-
-    // NEW: Recalculate zoom constraints after region resize
-    const oldMaxZoom = this.maxZoom;
-    this.calculateZoomConstraints();
-    
-    // If region got smaller and current zoom is now too high, clamp it
-    if (this.zoomLevel > this.maxZoom) {
-      console.log(`🔍 Region resize requires zoom reduction: ${this.zoomLevel.toFixed(1)}x → ${this.maxZoom.toFixed(1)}x`);
-      this.zoomLevel = this.maxZoom;
-      
-      // Adjust pan to stay within new bounds
-      const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
-      this.panOffset = Math.min(this.panOffset, maxPan);
-      
-      // Apply the new zoom immediately
-      this.applyZoomAndPan();
-      this.updateZoomControls();
-    }
-
+// NEW: Apply handle drag to events array
+applyHandleDrag(regionIndex, handleType, newBeat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  // Get current playing regions
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  
+  if (regionIndex >= playingRegions.length) {
+    console.warn(`Invalid region index ${regionIndex}`);
+    return;
+  }
+  
+  const region = playingRegions[regionIndex];
+  let newStartBeat = region.start;
+  let newEndBeat = region.end;
+  
+  // Update the appropriate boundary
+  if (handleType === 'left') {
+    newStartBeat = Math.max(0, Math.min(newBeat, region.end - 1)); // Can't go past end
+  } else {
+    newEndBeat = Math.max(region.start + 1, Math.min(newBeat, this.maxBeats)); // Can't go before start
+  }
+  
+  // Validate the new region
+  if (newStartBeat >= newEndBeat) {
+    console.warn(`Invalid drag: start ${newStartBeat} >= end ${newEndBeat}`);
+    return;
+  }
+  
+  // Update events array by replacing this region's events
+  this.replaceRegionInEvents(regionIndex, newStartBeat, newEndBeat);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Updated region ${regionIndex}: ${region.start}-${region.end} → ${newStartBeat}-${newEndBeat}`);
   }
 
-  // CLEAN: Replace a region's events and update parameter events
+  // NEW: Recalculate zoom constraints after region resize
+  const oldMaxZoom = this.maxZoom;
+  this.calculateZoomConstraints();
+  
+  // If region got smaller and current zoom is now too high, clamp it
+  if (this.zoomLevel > this.maxZoom) {
+    console.log(`🔍 Region resize requires zoom reduction: ${this.zoomLevel.toFixed(1)}x → ${this.maxZoom.toFixed(1)}x`);
+    this.zoomLevel = this.maxZoom;
+    
+    // Adjust pan to stay within new bounds
+    const maxPan = Math.max(0, 1 - (1 / this.zoomLevel));
+    this.panOffset = Math.min(this.panOffset, maxPan);
+    
+    // Apply the new zoom immediately
+    this.applyZoomAndPan();
+    this.updateZoomControls();
+  }
+
+}
+
+// CLEAN: Replace a region's events and update parameter events
 replaceRegionInEvents(regionIndex, newStart, newEnd) {
   const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   if (!lifeSpan || !lifeSpan.events) return;
@@ -12328,38 +12438,38 @@ replaceRegionInEvents(regionIndex, newStart, newEnd) {
 }
 
 // NEW: Show floating tooltip during drag
-  showDragTooltip(clientX, clientY, beat, timeFormatted, handleType) {
-    // Remove existing drag tooltip
-    const existingTooltip = document.querySelector('.drag-tooltip');
-    if (existingTooltip) {
-      existingTooltip.remove();
-    }
-    
-    // Create new floating tooltip
-    const tooltip = document.createElement('div');
-    tooltip.className = 'drag-tooltip';
-    tooltip.style.cssText = `
-      position: fixed;
-      left: ${clientX + 15}px;
-      top: ${clientY - 30}px;
-      background: #333;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: 'Courier New', monospace;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      z-index: 10000;
-      pointer-events: none;
-      white-space: nowrap;
-    `;
-    
-    const handleLabel = handleType === 'left' ? 'Start' : 'End';
-    tooltip.textContent = `${handleLabel}: Beat ${beat.toFixed(0)} (${timeFormatted})`;
-    
-    document.body.appendChild(tooltip);
+showDragTooltip(clientX, clientY, beat, timeFormatted, handleType) {
+  // Remove existing drag tooltip
+  const existingTooltip = document.querySelector('.drag-tooltip');
+  if (existingTooltip) {
+    existingTooltip.remove();
   }
+  
+  // Create new floating tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'drag-tooltip';
+  tooltip.style.cssText = `
+    position: fixed;
+    left: ${clientX + 15}px;
+    top: ${clientY - 30}px;
+    background: #333;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 10000;
+    pointer-events: none;
+    white-space: nowrap;
+  `;
+  
+  const handleLabel = handleType === 'left' ? 'Start' : 'End';
+  tooltip.textContent = `${handleLabel}: Beat ${beat.toFixed(0)} (${timeFormatted})`;
+  
+  document.body.appendChild(tooltip);
+}
 
   // NEW: Start whole-region drag operation
 startWholeRegionDrag(e) {
@@ -12447,10 +12557,10 @@ const handleWholeRegionMouseMove = (e) => {
 };
 
   
-  const handleWholeRegionMouseUp = (e) => {
-    // Remove global listeners first
-    document.removeEventListener('mousemove', handleWholeRegionMouseMove);
-    document.removeEventListener('mouseup', handleWholeRegionMouseUp);
+const handleMouseUp = (e) => {
+  // Remove global listeners first
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
     
     if (isDragging) {
       // Apply the drag operation
@@ -12516,7 +12626,6 @@ const handleWholeRegionMouseMove = (e) => {
   document.addEventListener('mousemove', handleWholeRegionMouseMove);
   document.addEventListener('mouseup', handleWholeRegionMouseUp);
 }
-
 
 updateWholeRegionPosition(region, newStartBeat, newEndBeat) {
   const leftPercent = (newStartBeat / this.maxBeats) * 100;
@@ -12597,293 +12706,290 @@ updateDiamondsForRegionDragRealTime(regionIndex, newStartBeat, newEndBeat) {
   });
 }
 
-
-
-
-    // NEW: Update legacy millisecond storage
-  updateLegacyStorage() {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    const tempo = getCurrentTempoForVoice(this.voiceIndex);
-    const beatUnit = lifeSpan.beatUnit || 7;
-    
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpan[`lifeSpan${i}`];
-      if (span) {
-        if (!lifeSpan[`lifeSpan${i}Legacy`]) {
-          lifeSpan[`lifeSpan${i}Legacy`] = {};
-        }
-        
-        lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
-        lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
+  // NEW: Update legacy millisecond storage
+updateLegacyStorage() {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const tempo = getCurrentTempoForVoice(this.voiceIndex);
+  const beatUnit = lifeSpan.beatUnit || 7;
+  
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpan[`lifeSpan${i}`];
+    if (span) {
+      if (!lifeSpan[`lifeSpan${i}Legacy`]) {
+        lifeSpan[`lifeSpan${i}Legacy`] = {};
       }
+      
+      lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
+      lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
     }
-    
-    console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
   }
   
-  // NEW: Handle track leave
-  handleTrackLeave(e) {
-    const track = this.container.querySelector('.visual-timeline-track');
-    track.style.cursor = 'pointer';
-    track.title = '';
+  console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
+}
+
+// NEW: Handle track leave
+handleTrackLeave(e) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  track.style.cursor = 'pointer';
+  track.title = '';
+}
+
+// NEW: Convert screen X coordinate to beat position
+screenXToBeat(screenX) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return 0;
+  
+  const rect = track.getBoundingClientRect();
+  const relativeX = screenX - rect.left;
+  const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
+  
+  const beat = percentage * this.maxBeats;
+  
+  if (DEBUG.TIMELINE && Math.random() < 0.1) {
+    console.log(`📐 Screen ${screenX} → Beat ${beat.toFixed(2)} (${(percentage * 100).toFixed(1)}%)`);
   }
   
-  // NEW: Convert screen X coordinate to beat position
-  screenXToBeat(screenX) {
-    const track = this.container.querySelector('.visual-timeline-track');
-    if (!track) return 0;
-    
-    const rect = track.getBoundingClientRect();
-    const relativeX = screenX - rect.left;
-    const percentage = Math.max(0, Math.min(1, relativeX / rect.width));
-    
-    const beat = percentage * this.maxBeats;
-    
-    if (DEBUG.TIMELINE && Math.random() < 0.1) {
-      console.log(`📐 Screen ${screenX} → Beat ${beat.toFixed(2)} (${(percentage * 100).toFixed(1)}%)`);
-    }
-    
-    return beat;
-  }
-  
-  // NEW: Snap beat to grid
-  snapBeatToGrid(beat) {
-    return Math.round(beat);
-  }
+  return beat;
+}
+
+// NEW: Snap beat to grid
+snapBeatToGrid(beat) {
+  return Math.round(beat);
+}
   
   // NEW: Show visual feedback for clicks
-  showClickFeedback(beat) {
-    const track = this.container.querySelector('.visual-timeline-track');
-    if (!track) return;
-    
-    // Create temporary click indicator
-    const indicator = document.createElement('div');
-    indicator.style.cssText = `
-      position: absolute;
-      left: ${(beat / this.maxBeats) * 100}%;
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      background: #ffc107;
-      transform: translateX(-50%);
-      z-index: 200;
-      pointer-events: none;
-      animation: pulse 0.5s ease;
-    `;
-    
-    track.appendChild(indicator);
-    
-    // Remove after animation
-    setTimeout(() => {
-      if (indicator.parentElement) {
-        indicator.remove();
-      }
-    }, 500);
-    
-    console.log(`💫 Click feedback shown at beat ${beat.toFixed(0)}`);
-  }
+showClickFeedback(beat) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
   
-  createHeader() {
-    const header = document.createElement('div');
-    header.className = 'visual-timeline-header';
-    
-    const title = document.createElement('div');
-    title.className = 'timeline-title';
-    title.innerHTML = `
-      <span>🎵</span>
-      <span>Interactive Timeline - Voice ${this.voiceIndex + 1}</span>
-      <span style="font-size: 12px; color: #28a745; margin-left: 8px;">● CLICK TO EDIT</span>
-    `;
-    
-    const info = document.createElement('div');
-    info.className = 'timeline-info';
-    
-    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-    const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
-    
-    info.innerHTML = `
-      <span>Length: ${maxTimeFormatted}</span>
-      <span>Tempo: ${this.tempo} BPM</span>
-      <span>Beat: ${rhythmOptions[this.beatUnit]}</span>
-    `;
-    
-    header.appendChild(title);
-    header.appendChild(info);
-    
-    return header;
-  }
-  
-  createTrack() {
-  const track = document.createElement('div');
-  track.className = 'visual-timeline-track';
-  track.style.cssText = `
-    position: relative;
-    height: 80px;
-    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
-    margin: 10px 0;
-    overflow: hidden;
-  `;
-  
-  // TOP SEEK ZONE (15px)
-  const topSeekZone = document.createElement('div');
-  topSeekZone.className = 'seek-zone top-seek';
-  topSeekZone.style.cssText = `
+  // Create temporary click indicator
+  const indicator = document.createElement('div');
+  indicator.style.cssText = `
     position: absolute;
+    left: ${(beat / this.maxBeats) * 100}%;
     top: 0;
-    left: 0;
-    right: 0;
-    height: 15px;
-    cursor: pointer;
-    background: linear-gradient(to bottom, rgba(74,144,226,0.1), transparent);
-    border-bottom: 1px solid #dee2e6;
-    z-index: 300;
-    transition: background 0.2s ease;
-  `;
-  topSeekZone.title = 'Click to position playhead';
-  
-  // MIDDLE INTERACTION ZONE (50px) - for regions and diamonds
-  const interactionZone = document.createElement('div');
-  interactionZone.className = 'interaction-zone';
-  interactionZone.style.cssText = `
-    position: absolute;
-    top: 15px;
-    left: 0;
-    right: 0;
-    height: 50px;
-    z-index: 200;
-  `;
-  
-  // BOTTOM SEEK ZONE (15px)
-  const bottomSeekZone = document.createElement('div');
-  bottomSeekZone.className = 'seek-zone bottom-seek';
-  bottomSeekZone.style.cssText = `
-    position: absolute;
     bottom: 0;
-    left: 0;
-    right: 0;
-    height: 15px;
-    cursor: pointer;
-    background: linear-gradient(to top, rgba(74,144,226,0.1), transparent);
-    border-top: 1px solid #dee2e6;
-    z-index: 300;
-    transition: background 0.2s ease;
-  `;
-  bottomSeekZone.title = 'Click to position playhead';
-  
-  // Add hover effects for seek zones
-  [topSeekZone, bottomSeekZone].forEach(zone => {
-    zone.onmouseenter = function() {
-      this.style.background = 'rgba(74,144,226,0.2)';
-      this.style.borderColor = '#4a90e2';
-    };
-    zone.onmouseleave = function() {
-      this.style.background = '';
-      this.style.borderColor = '#dee2e6';
-    };
-    
-    // Connect click handlers (we'll implement these next)
-    zone.onclick = (e) => this.handleSeekZoneClick(e);
-    zone.onmousemove = (e) => this.showSeekPreview(e);
-  });
-  
-  // Grid background (moved to interaction zone)
-  const grid = document.createElement('div');
-  grid.className = 'timeline-grid';
-  grid.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 19px,
-      rgba(0,0,0,0.1) 20px
-    );
-    pointer-events: none;
-  `;
-  interactionZone.appendChild(grid);
-  
-  // Regions container (moved to interaction zone)
-  const regionsContainer = document.createElement('div');
-  regionsContainer.className = 'timeline-regions';
-  regionsContainer.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 10;
-  `;
-  
-  // Render life span regions in interaction zone
-  this.renderLifeSpanRegions(regionsContainer);
-  interactionZone.appendChild(regionsContainer);
-  
-  // Playhead (spans full track height)
-  const playhead = document.createElement('div');
-  playhead.className = 'timeline-playhead-container';
-  playhead.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0%;
     width: 3px;
-    height: 100%;
-    background: #dc3545;
-    transition: left 0.05s linear;
+    background: #ffc107;
+    transform: translateX(-50%);
+    z-index: 200;
     pointer-events: none;
-    z-index: 100;
+    animation: pulse 0.5s ease;
   `;
   
-  const playheadArrow = document.createElement('div');
-  playheadArrow.style.cssText = `
-    position: absolute;
-    top: -8px;
-    left: -7px;
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 12px solid #dc3545;
-    z-index: 101;
+  track.appendChild(indicator);
+  
+  // Remove after animation
+  setTimeout(() => {
+    if (indicator.parentElement) {
+      indicator.remove();
+    }
+  }, 500);
+  
+  console.log(`💫 Click feedback shown at beat ${beat.toFixed(0)}`);
+}
+
+createHeader() {
+  const header = document.createElement('div');
+  header.className = 'visual-timeline-header';
+  
+  const title = document.createElement('div');
+  title.className = 'timeline-title';
+  title.innerHTML = `
+    <span>🎵</span>
+    <span>Interactive Timeline - Voice ${this.voiceIndex + 1}</span>
+    <span style="font-size: 12px; color: #28a745; margin-left: 8px;">● CLICK TO EDIT</span>
   `;
   
-  playhead.appendChild(playheadArrow);
+  const info = document.createElement('div');
+  info.className = 'timeline-info';
   
-  const playheadTooltip = document.createElement('div');
-  playheadTooltip.textContent = '0:00';
-  playheadTooltip.style.cssText = `
-    position: absolute;
-    top: 16px;
-    left: 8px;
-    background: #333;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
-    white-space: nowrap;
-    pointer-events: none;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
+  const maxTimeFormatted = formatMsToMMSS(maxTimeMs);
+  
+  info.innerHTML = `
+    <span>Length: ${maxTimeFormatted}</span>
+    <span>Tempo: ${this.tempo} BPM</span>
+    <span>Beat: ${rhythmOptions[this.beatUnit]}</span>
   `;
-  playhead.appendChild(playheadTooltip);
   
-  // Assemble track structure
-  track.appendChild(topSeekZone);
-  track.appendChild(interactionZone);
-  track.appendChild(bottomSeekZone);
-  track.appendChild(playhead);
+  header.appendChild(title);
+  header.appendChild(info);
   
-  // Store references
-  this.playhead = playhead;
-  this.playheadTooltip = playheadTooltip;
+  return header;
+}
+
+createTrack() {
+const track = document.createElement('div');
+track.className = 'visual-timeline-track';
+track.style.cssText = `
+  position: relative;
+  height: 80px;
+  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  margin: 10px 0;
+  overflow: hidden;
+`;
+
+// TOP SEEK ZONE (15px)
+const topSeekZone = document.createElement('div');
+topSeekZone.className = 'seek-zone top-seek';
+topSeekZone.style.cssText = `
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 15px;
+  cursor: pointer;
+  background: linear-gradient(to bottom, rgba(74,144,226,0.1), transparent);
+  border-bottom: 1px solid #dee2e6;
+  z-index: 300;
+  transition: background 0.2s ease;
+`;
+topSeekZone.title = 'Click to position playhead';
+
+// MIDDLE INTERACTION ZONE (50px) - for regions and diamonds
+const interactionZone = document.createElement('div');
+interactionZone.className = 'interaction-zone';
+interactionZone.style.cssText = `
+  position: absolute;
+  top: 15px;
+  left: 0;
+  right: 0;
+  height: 50px;
+  z-index: 200;
+`;
+
+// BOTTOM SEEK ZONE (15px)
+const bottomSeekZone = document.createElement('div');
+bottomSeekZone.className = 'seek-zone bottom-seek';
+bottomSeekZone.style.cssText = `
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 15px;
+  cursor: pointer;
+  background: linear-gradient(to top, rgba(74,144,226,0.1), transparent);
+  border-top: 1px solid #dee2e6;
+  z-index: 300;
+  transition: background 0.2s ease;
+`;
+bottomSeekZone.title = 'Click to position playhead';
+
+// Add hover effects for seek zones
+[topSeekZone, bottomSeekZone].forEach(zone => {
+  zone.onmouseenter = function() {
+    this.style.background = 'rgba(74,144,226,0.2)';
+    this.style.borderColor = '#4a90e2';
+  };
+  zone.onmouseleave = function() {
+    this.style.background = '';
+    this.style.borderColor = '#dee2e6';
+  };
   
-  return track;
+  // Connect click handlers (we'll implement these next)
+  zone.onclick = (e) => this.handleSeekZoneClick(e);
+  zone.onmousemove = (e) => this.showSeekPreview(e);
+});
+
+// Grid background (moved to interaction zone)
+const grid = document.createElement('div');
+grid.className = 'timeline-grid';
+grid.style.cssText = `
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 19px,
+    rgba(0,0,0,0.1) 20px
+  );
+  pointer-events: none;
+`;
+interactionZone.appendChild(grid);
+
+// Regions container (moved to interaction zone)
+const regionsContainer = document.createElement('div');
+regionsContainer.className = 'timeline-regions';
+regionsContainer.style.cssText = `
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 10;
+`;
+
+// Render life span regions in interaction zone
+this.renderLifeSpanRegions(regionsContainer);
+interactionZone.appendChild(regionsContainer);
+
+// Playhead (spans full track height)
+const playhead = document.createElement('div');
+playhead.className = 'timeline-playhead-container';
+playhead.style.cssText = `
+  position: absolute;
+  top: 0;
+  left: 0%;
+  width: 3px;
+  height: 100%;
+  background: #dc3545;
+  transition: left 0.05s linear;
+  pointer-events: none;
+  z-index: 100;
+`;
+
+const playheadArrow = document.createElement('div');
+playheadArrow.style.cssText = `
+  position: absolute;
+  top: -8px;
+  left: -7px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 12px solid #dc3545;
+  z-index: 101;
+`;
+
+playhead.appendChild(playheadArrow);
+
+const playheadTooltip = document.createElement('div');
+playheadTooltip.textContent = '0:00';
+playheadTooltip.style.cssText = `
+  position: absolute;
+  top: 16px;
+  left: 8px;
+  background: #333;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+`;
+playhead.appendChild(playheadTooltip);
+
+// Assemble track structure
+track.appendChild(topSeekZone);
+track.appendChild(interactionZone);
+track.appendChild(bottomSeekZone);
+track.appendChild(playhead);
+
+// Store references
+this.playhead = playhead;
+this.playheadTooltip = playheadTooltip;
+
+return track;
 }
 
 handleSeekZoneClick(e) {
@@ -13025,7 +13131,6 @@ refreshParameterRollupsIfNeeded() {
   }
 }
 
-
 updatePlayheadPosition(beat) {
   if (!this.playhead) return;
   
@@ -13110,6 +13215,9 @@ renderLifeSpanRegions(container) {
     regionElement.appendChild(regionLabel);
     
     container.appendChild(regionElement);
+
+    // NEW: Connect region body drag functionality
+    this.addRegionBodyDragFunctionality(regionElement, index);
     
     // Render parameter event diamonds for this region
     this.renderParameterEventsForRegion(container, region, index, region.start, region.end);
@@ -13209,8 +13317,6 @@ createRegionHandle(regionIndex, handleType) {
   return handle;
 }
 
-
-
 // FIXED: Create full muted region with proper tooltip support
 createFullMutedRegion() {
   const mutedRegion = document.createElement('div');
@@ -13282,11 +13388,12 @@ renderParameterEventsForRegion(container, region, regionIndex, regionStartBeat, 
   const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   if (!lifeSpan || !lifeSpan.events) return;
   
-  // Find parameter events for this specific region
-  const parameterEvents = lifeSpan.events.filter(event => 
-    event.type === 'parameter' && 
-    event.regionIndex === regionIndex
-  );
+  // Find parameter events for this specific region (including compound events)
+const parameterEvents = lifeSpan.events.filter(event => 
+  (event.type === 'parameter' || event.type === 'compound-parameter') && 
+  event.regionIndex === regionIndex
+);
+
   
   if (parameterEvents.length === 0) return;
   
@@ -13294,19 +13401,113 @@ renderParameterEventsForRegion(container, region, regionIndex, regionStartBeat, 
     console.log(`   💎 Rendering ${parameterEvents.length} parameter events for region ${regionIndex}`);
   }
   
-  parameterEvents.forEach((event, eventIndex) => {
-    // Calculate current absolute position from relative position
-    const eventBeat = region.start + (event.relativePosition * (region.end - region.start));
-    const eventLeftPercent = (eventBeat / this.maxBeats) * 100;
+parameterEvents.forEach((event, eventIndex) => {
+  // Calculate current absolute position from relative position
+  const eventBeat = region.start + (event.relativePosition * (region.end - region.start));
+  const eventLeftPercent = (eventBeat / this.maxBeats) * 100;
+  
+  // Create diamond marker
+  const diamond = document.createElement('div');
+  
+// Handle both single and compound events
+let parameterName = 'Unknown';
+let categoryClass = '';
+
+if (event.type === 'compound-parameter' && event.changes) {
+  // Compound event - use first parameter for category
+  const paramNames = Object.keys(event.changes);
+  if (paramNames.length > 0) {
+    parameterName = paramNames[0]; // Should be 'VOLUME' in your case
+    categoryClass = this.getParameterCategory(parameterName);
     
-    // Create diamond marker
-    const diamond = document.createElement('div');
-    diamond.className = `parameter-event-diamond ${this.getParameterCategory(event.parameter)}`;
-    diamond.dataset.eventId = event.id;
-    diamond.dataset.parameter = event.parameter;
-    diamond.dataset.regionIndex = regionIndex;
-    diamond.dataset.relativePosition = event.relativePosition;
-    
+    if (DEBUG.EVENTS) {
+      console.log(`💎 Rendering compound diamond: ${paramNames.join(', ')} (using ${parameterName} for category)`);
+    }
+  }
+} else if (event.parameter) {
+  // Single parameter event
+  parameterName = event.parameter;
+  categoryClass = this.getParameterCategory(event.parameter);
+} else {
+  console.warn(`⚠️ Event has no parameter data:`, event);
+}
+
+diamond.className = `parameter-event-diamond ${categoryClass}`;
+diamond.dataset.eventId = event.id;
+diamond.dataset.regionIndex = regionIndex;
+diamond.dataset.relativePosition = event.relativePosition;
+diamond.dataset.eventType = event.type;
+
+// Enhanced dataset for compound events
+if (event.type === 'compound-parameter' && event.changes) {
+  const paramNames = Object.keys(event.changes);
+  diamond.dataset.parameter = paramNames.join(', '); // All parameter names
+  diamond.dataset.primaryParameter = paramNames[0] || 'Unknown';
+
+if (DEBUG.EVENTS) {
+  console.log(`💎 Setting diamond.dataset.parameter = "${paramNames.join(', ')}"`);
+  console.log(`💎 Setting diamond.dataset.primaryParameter = "${paramNames[0]}"`);
+}
+
+  diamond.dataset.parameterCount = paramNames.length;
+  diamond.dataset.isCompound = 'true';
+  
+  // Store first parameter for category styling
+  diamond.dataset.primaryParameter = paramNames[0];
+  
+  if (DEBUG.EVENTS) {
+    console.log(`💎 Diamond dataset: ${paramNames.join(', ')} (${paramNames.length} params)`);
+  }
+} else {
+  diamond.dataset.parameter = event.parameter || 'Unknown';
+  diamond.dataset.parameterCount = 1;
+  diamond.dataset.isCompound = 'false';
+  diamond.dataset.primaryParameter = event.parameter || 'Unknown';
+}
+
+// Enhanced tooltip based on event type
+if (event.type === 'compound-parameter' && event.changes) {
+  const paramNames = Object.keys(event.changes);
+  const paramList = paramNames.map(name => `${this.getParameterIcon(name)} ${name}`).join('\n');
+  const safeParamList = paramNames.map(name => {
+  const safeName = name || 'Unknown';
+  return safeName;
+}).join(', ');
+
+diamond.title = `Event Beat ${eventBeat.toFixed(0)}\n${safeParamList}`;
+// Comment out: \n(${(event.relativePosition * 100).toFixed(1)}% in region)
+
+console.log(`🎯 Safe tooltip created: paramNames=${paramNames.join(',')}, safeParamList="${safeParamList}"`);
+} else if (event.parameter) {
+  // Single parameter event (legacy)  
+  diamond.title = `💎 ${event.parameter} Event - Beat ${eventBeat.toFixed(0)}\n(${(event.relativePosition * 100).toFixed(1)}% in region)\nDouble-click to edit`;
+} else {
+  // Fallback for malformed events
+  console.warn(`⚠️ Malformed event found:`, event);
+  diamond.title = `💎 Parameter Event - Beat ${eventBeat.toFixed(0)}\n(${(event.relativePosition * 100).toFixed(1)}% in region)\nDouble-click to edit`;
+}
+
+// DEBUG: Detailed tooltip debugging
+console.log(`🔍 TOOLTIP DEBUG for event ${event.id}:`);
+console.log(`   event.type: "${event.type}"`);
+console.log(`   event.changes:`, event.changes);
+if (event.changes) {
+  console.log(`   Object.keys(event.changes):`, Object.keys(event.changes));
+  Object.keys(event.changes).forEach(key => {
+    console.log(`   changes["${key}"]:`, event.changes[key]);
+  });
+}
+console.log(`   getParameterIcon('VOLUME'):`, this.getParameterIcon('VOLUME'));
+console.log(`   Final diamond.title: "${diamond.title}"`);
+console.log(`   paramNames array:`, event.changes ? Object.keys(event.changes) : 'N/A');
+if (event.changes) {
+  const paramNames = Object.keys(event.changes);
+  const paramList = paramNames.map(name => `${this.getParameterIcon(name)} ${name}`);
+  console.log(`   paramList array:`, paramList);
+  console.log(`   paramList joined:`, paramList.join('\n'));
+}
+
+
     diamond.style.cssText = `
       position: absolute;
       left: ${eventLeftPercent.toFixed(2)}%;
@@ -13347,14 +13548,29 @@ renderParameterEventsForRegion(container, region, regionIndex, regionStartBeat, 
     // Add drag functionality
     this.addDiamondDragFunctionality(diamond, event, regionStartBeat, regionEndBeat);
     
-    // NEW: Add diamonds to timeline track (not region container)
     // This prevents transform conflicts during region drag
-    const track = this.container.querySelector('.visual-timeline-track');
-    if (track) {
-      track.appendChild(diamond);
-    } else {
-      container.appendChild(diamond); // Fallback
-    }
+const track = this.container.querySelector('.visual-timeline-track');
+if (track) {
+  track.appendChild(diamond);
+} else {
+  container.appendChild(diamond); // Fallback
+}
+
+// IMMEDIATE FIX: Force correct title after DOM insertion
+if (event.type === 'compound-parameter' && event.changes) {
+  const paramNames = Object.keys(event.changes);
+  const correctTitle = `💎 ${paramNames.join(', ')} Event - Beat ${eventBeat.toFixed(0)}\n(${(event.relativePosition * 100).toFixed(1)}% in region)\nDouble-click to edit`;
+  
+  diamond.title = correctTitle;
+  diamond.setAttribute('title', correctTitle);
+  
+  console.log(`🔧 CORRECTED title for ${event.id}: "${correctTitle}"`);
+} else if (event.parameter) {
+  const correctTitle = `💎 ${event.parameter} Event - Beat ${eventBeat.toFixed(0)}\n(${(event.relativePosition * 100).toFixed(1)}% in region)\nDouble-click to edit`;
+  diamond.title = correctTitle;
+  diamond.setAttribute('title', correctTitle);
+}
+
     
     if (DEBUG.EVENTS) {
       console.log(`     💎 Event: ${event.parameter} at ${(event.relativePosition * 100).toFixed(1)}% = beat ${eventBeat.toFixed(1)}`);
@@ -13767,7 +13983,6 @@ createMutedRegion(startBeat, endBeat, position) {
       return controls;
     }
   
-
   // NEW: Show preview of region being created
  showNewRegionPreview(startBeat, endBeat) {
   // Remove existing preview
@@ -13828,7 +14043,6 @@ createMutedRegion(startBeat, endBeat, position) {
   track.appendChild(preview);
 }
 
-
   // NEW: Clear new region preview
   clearNewRegionPreview() {
     const preview = this.container.querySelector('.new-region-preview');
@@ -13838,13 +14052,29 @@ createMutedRegion(startBeat, endBeat, position) {
   }
 
   // NEW: Create new region in events array
-  createNewRegionInEvents(startBeat, endBeat) {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan || !lifeSpan.events) return;
-    
-    // Generate unique IDs
-    const startEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
-    const endEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+createNewRegionInEvents(startBeat, endBeat) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) return;
+  
+  // CLEAN: Remove any orphaned parameter events in the area we're about to create
+  const beforeCount = lifeSpan.events.length;
+  lifeSpan.events = lifeSpan.events.filter(event => {
+    if (event.type === 'compound-parameter' || event.type === 'parameter') {
+      const eventBeat = event.beatPosition || 0;
+      // Keep events outside the new region area
+      return eventBeat < startBeat || eventBeat > endBeat;
+    }
+    return true; // Keep mute events
+  });
+  
+  if (lifeSpan.events.length < beforeCount) {
+    console.log(`🧹 Cleaned ${beforeCount - lifeSpan.events.length} orphaned parameter events`);
+  }
+  
+  // Generate unique IDs
+  const startEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+  const endEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+
     
     // Create events for new region
     const newStartEvent = {
@@ -13976,18 +14206,43 @@ createMutedRegion(startBeat, endBeat, position) {
     }
   }
 
-  // NEW: Handle quick parameter event (Shift+Click)
-  handleQuickParameterEvent(e) {
-    const region = e.target;
-    const regionIndex = parseInt(region.dataset.regionIndex);
-    const beat = this.screenXToBeat(e.clientX);
-    const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
-    
-    console.log(`💎 Quick parameter event at beat ${snappedBeat} in region ${regionIndex}`);
-    
-    // For now, show placeholder - will implement parameter dialog later
-    this.showParameterEventPlaceholder(snappedBeat);
+editCompoundEvent(event, beat) {
+  // Store the event being edited for later updates
+  window.currentEditingEvent = event;
+  
+  // Show Event Editor
+  this.showStreamlinedParameterPicker(beat, event.regionIndex);
+  
+  // After Event Editor opens, pre-select and populate parameters
+  setTimeout(() => {
+    if (event.changes) {
+      Object.keys(event.changes).forEach(paramName => {
+        // Click parameter button to select it
+        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+        if (paramBtn && !paramBtn.classList.contains('selected')) {
+          paramBtn.click();
+          
+          // Mark as having existing values
+          paramBtn.classList.add('has-existing-values');
+          paramBtn.style.background = '#17a2b8'; // Blue for editing existing
+        }
+      });
+      
+      // Update Apply button text for editing
+      const applyBtn = document.querySelector('.apply-event-btn');
+      if (applyBtn) {
+        applyBtn.textContent = 'Update Event';
+        applyBtn.style.background = '#17a2b8'; // Blue for update
+      }
+    }
+  }, 300);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✏️ Opened Event Editor for editing: ${Object.keys(event.changes).join(', ')}`);
   }
+}
+
+
   // NEW: Handle quick region deletion (Alt+Click)
   handleQuickRegionDelete(e) {
     const region = e.target;
@@ -14034,7 +14289,6 @@ createMutedRegion(startBeat, endBeat, position) {
       setTimeout(() => feedback.remove(), 300);
     }, 1500);
   }
-
 
   // NEW: Handle parameter event creation (from menu or Shift+Click)
   handleParameterEventCreation(regionIndex, beatPosition) {
@@ -14098,47 +14352,7 @@ createMutedRegion(startBeat, endBeat, position) {
     }, 50);
   }
 
-  // NEW: Show parameter event placeholder (Phase A.1)
-  showParameterEventPlaceholder(beatPosition) {
-    // Create temporary notification
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #fff3cd;
-      border: 2px solid #ffc107;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
-      text-align: center;
-      max-width: 350px;
-    `;
-    
-    notification.innerHTML = `
-      <div style="font-size: 18px; margin-bottom: 10px;">💎</div>
-      <div style="font-weight: bold; margin-bottom: 8px;">Parameter Event</div>
-      <div style="color: #856404; margin-bottom: 15px;">
-        Beat ${beatPosition}<br>
-        <em>Parameter events will be implemented in Phase A.2</em>
-      </div>
-      <button onclick="this.parentElement.remove()" style="
-        background: #ffc107; color: #856404; border: none; padding: 8px 16px;
-        border-radius: 4px; font-weight: bold; cursor: pointer;
-      ">OK</button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 4 seconds
-    setTimeout(() => {
-      if (notification.parentElement) {
-        notification.remove();
-      }
-    }, 4000);
-  }
+  
 
   updateVoiceData() {
     const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
@@ -14155,7 +14369,6 @@ createMutedRegion(startBeat, endBeat, position) {
       console.log(`📊 Updated timeline data: ${this.maxBeats} beats @ ${this.tempo} BPM`);
     }
   }
-  
   
   updatePlayhead() {
     if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
@@ -14708,16 +14921,23 @@ startPanning(e) {
 
 updateBeatIndicator(e) {
   if (!this.showBeatIndicator) {
-    this.hideUnifiedTooltip();
+    this.hideBeatIndicator();
     return;
   }
+  
+  // NEW: Skip beat indicator for diamonds - they have their own tooltips
+  if (e.target && e.target.classList.contains('parameter-event-diamond')) {
+    this.hideBeatIndicator();
+    return;
+  }
+
   
   const beat = this.screenXToBeat(e.clientX);
   const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
   const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
   const roundedBeat = Math.round(clampedBeat);
   
-  // NEW: Only update tooltip when beat number actually changes
+  // Only update tooltip when beat number actually changes
   if (this.lastDisplayedBeat !== roundedBeat) {
     this.lastDisplayedBeat = roundedBeat;
     this.currentBeat = clampedBeat;
@@ -15041,19 +15261,18 @@ hideBeatIndicator() {
   this.currentBeat = null;
   this.lastDisplayedBeat = null;
 }
-
-
 updateCursorWithBeat(beat) {
   const track = this.container.querySelector('.visual-timeline-track');
   const isInPlaying = this.checkIfBeatIsInPlayingRegion(beat);
   
+  // DON'T override cursor - let CSS handle it
+  // Just update the title tooltip
   if (isInPlaying) {
-    track.style.cursor = 'crosshair';
-    track.title = `Beat ${beat.toFixed(0)} - Double-click for parameter event | Drag to mute`;
+    track.title = `Beat ${beat.toFixed(0)} - Playing region | Double-click for parameter event`;
   } else {
-    track.style.cursor = 'crosshair';
-    track.title = `Beat ${beat.toFixed(0)} - Double-click for parameter event | Drag to unmute`;
+    track.title = `Beat ${beat.toFixed(0)} - Muted region | Double-click to create region`;
   }
+  // NO CURSOR CHANGES - let CSS rules handle cursors properly
 }
 
 // ===== CORRECTED ZOOM CONTROLS =====
@@ -15560,9 +15779,2317 @@ refresh() {
  // ===== PARAMETER EVENT CREATION SYSTEM =====
 
 createParameterEventAtBeat(beat, clientX, clientY) {
-  // Show parameter selection dialog
-  this.showParameterSelectionDialog(beat, clientX, clientY);
+  // Use streamlined parameter selection for Session 25
+  this.showStreamlinedParameterPicker(beat, 0); // regionIndex 0 for now
 }
+
+
+// ===== CONTEXT MENU ACTION METHODS =====
+
+startParameterEventCreation(beat, regionIndex) {
+  if (DEBUG.EVENTS) {
+    console.log(`💎 Parameter event creation at beat ${beat.toFixed(0)} in region ${regionIndex}`);
+  }
+  
+  // Use your existing system
+  this.createParameterEventAtBeat(beat, window.innerWidth / 2, window.innerHeight / 2);
+}
+
+copyRegion(regionIndex, targetRegion) {
+  const regionData = {
+    start: targetRegion.start,
+    end: targetRegion.end,
+    width: targetRegion.end - targetRegion.start,
+    voiceIndex: this.voiceIndex,
+    timestamp: Date.now()
+  };
+  
+  window.copiedRegion = regionData;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Copied region: ${targetRegion.start}-${targetRegion.end} beats`);
+  }
+  
+  // Show success feedback
+  const feedback = document.createElement('div');
+  feedback.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #17a2b8;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 9999;
+  `;
+  feedback.textContent = `📋 Region Copied (${regionData.width} beats)`;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => feedback.remove(), 2000);
+}
+
+confirmDeleteRegion(regionIndex, targetRegion) {
+  if (confirm(`Delete region ${targetRegion.start}-${targetRegion.end}?`)) {
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+    }
+    
+    this.handleRegionDeletion(regionIndex);
+  }
+}
+
+handleDiamondDoubleClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const diamond = e.target;
+  const eventId = diamond.dataset.eventId;
+  const parameterName = diamond.dataset.parameter;
+  const regionIndex = parseInt(diamond.dataset.regionIndex);
+  
+  if (!eventId || !parameterName) {
+    console.warn(`⚠️ Diamond missing data: eventId=${eventId}, param=${parameterName}`);
+    return;
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`💎 Diamond double-click: ${parameterName} event (${eventId}) in region ${regionIndex}`);
+  }
+  
+  // Get event data for enhanced menu
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const event = lifeSpan.events.find(e => e.id === eventId);
+  let headerText = `${parameterName} Event`;
+  let affectedParams = [parameterName];
+
+  // Check if it's a compound event
+  if (event && event.type === 'compound-parameter' && event.changes) {
+    affectedParams = Object.keys(event.changes);
+    headerText = `Multi-Parameter Event (${affectedParams.length})`;
+  }
+
+  // Build menu items array
+  const menuItems = [
+    {
+      icon: '✏️',
+      text: `Edit Event Values ${affectedParams.length > 1 ? `(${affectedParams.length} params)` : ''}`,
+      action: () => this.editParameterEvent(eventId, parameterName)
+    },
+    {
+      icon: '➕',
+      text: 'Add More Parameters',
+      action: () => this.addParametersToEvent(eventId, event)
+    }
+  ];
+
+  // Add Paste Event option if there's a copied event
+  if (window.copiedParameterEvent) {
+    const copiedEvent = window.copiedParameterEvent;
+    const timeSinceCopy = Date.now() - copiedEvent.timestamp;
+    
+    // Show paste option if copied recently (within 5 minutes)
+    if (timeSinceCopy < 300000) {
+      menuItems.push({
+        icon: '📋',
+        text: `Paste ${copiedEvent.parameter} Event`,
+        action: () => this.pasteParameterEvent(eventId, event)
+      });
+    }
+  }
+
+  // Add standard options
+  menuItems.push(
+    {
+      icon: '📋',
+      text: 'Copy Event',
+      action: () => this.copyParameterEvent(eventId, parameterName)
+    },
+    {
+      icon: '🗑️',
+      text: 'Delete Event',
+      action: () => this.confirmDeleteEvent(eventId, parameterName)
+    }
+  );
+
+  // Show context menu with dynamic items
+  SmallContextMenu.show({
+    header: headerText,
+    items: menuItems
+  }, e.clientX, e.clientY);
+}
+
+
+showStreamlinedParameterPicker(beat, regionIndex) {
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  // Create the compound parameter event editor
+  const editor = document.createElement('div');
+  editor.className = 'compound-parameter-editor';
+  editor.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 3px solid #4a90e2;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 10001;
+    width: 700px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  editor.innerHTML = `
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #4a90e2, #357abd); color: white; padding: 15px 20px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <span style="font-size: 18px;">💎</span>
+        <span style="margin-left: 8px;">Voice ${this.voiceIndex + 1} - Beat ${beat.toFixed(0)}</span>
+      </div>
+      <div style="font-size: 12px; opacity: 0.9;">${timeFormatted}</div>
+    </div>
+    
+    <!-- Parameter Selection Grid -->
+    <div style="background: #f8f9fa; border-bottom: 2px solid #dee2e6; padding: 15px;">
+      <div style="text-align: center; margin-bottom: 12px; font-weight: 600; color: #333;">PRIMARY EDITING INTERFACE</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 2px; background: #dee2e6; border: 2px solid #dee2e6; padding: 2px;">
+        
+        <!-- Column 1: Mixing & Levels -->
+        <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">MIXING</div>
+          <div class="param-btn" data-param="VOLUME">🔊 Volume</div>
+          <div class="param-btn" data-param="STEREO BALANCE">⚖️ Stereo Balance</div>
+        </div>
+        
+        <!-- Column 2: Instrument & Sound -->
+        <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">INSTRUMENT</div>
+          <div class="param-btn" data-param="INSTRUMENT">🎼 Instrument</div>
+          <div class="param-btn" data-param="MELODIC RANGE">🎹 Melodic Range</div>
+          <div class="param-btn" data-param="POLYPHONY">🎛️ Polyphony</div>
+          <div class="param-btn" data-param="ATTACK VELOCITY">⚡ Attack Velocity</div>
+          <div class="param-btn" data-param="DETUNING">🎚️ Detuning</div>
+          <div class="param-btn" data-param="PORTAMENTO GLIDE TIME">🌊 Portamento</div>
+        </div>
+        
+        <!-- Column 3: Rhythm & Timing -->
+        <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">RHYTHM</div>
+          <div class="param-btn" data-param="TEMPO (BPM)">🎵 Tempo</div>
+          <div class="param-btn" data-param="RHYTHMS">🎶 Rhythms</div>
+          <div class="param-btn" data-param="RESTS">⏸️ Rests</div>
+        </div>
+        
+        <!-- Column 4: Effects (No right border) -->
+        <div class="param-column" style="background: white; padding: 12px;">
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">EFFECTS</div>
+          <div class="param-btn" data-param="TREMOLO">〰️ Tremolo</div>
+          <div class="param-btn" data-param="CHORUS">🎭 Chorus</div>
+          <div class="param-btn" data-param="PHASER">🌀 Phaser</div>
+          <div class="param-btn" data-param="REVERB">🏛️ Reverb</div>
+          <div class="param-btn" data-param="DELAY">⏰ Delay</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Parameter Controls Display Area -->
+    <div class="parameter-controls-area" style="flex: 1; padding: 20px; min-height: 200px; max-height: 400px; overflow-y: auto; background: #fefefe;">
+      <div class="no-selection-message" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666; font-style: italic;">
+        Click parameter names above to configure their event values
+      </div>
+    </div>
+    
+    <!-- Footer with buttons -->
+    <div style="background: #f8f9fa; border-top: 1px solid #dee2e6; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 12px; color: #666;">
+        <span class="selected-params-count">0</span> parameters selected for automation
+      </div>
+      <button class="view-baseline-btn" onclick="if(viewStateManager) viewStateManager.switchMode('parameter')" style="
+        background: transparent; border: 1px solid #6c757d; color: #6c757d; padding: 4px 8px; 
+        border-radius: 3px; font-size: 11px; cursor: pointer; transition: all 0.2s ease;
+      ">📋 View Baseline Values</button>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button class="apply-event-btn" disabled style="background: #28a745; color: white; border: none; padding: 8px 20px; border-radius: 4px; font-weight: 600; cursor: pointer;">Apply Automation</button>
+      <button onclick="this.closest('.compound-parameter-editor').remove()" style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Cancel</button>
+    </div>
+  </div>
+  `;
+  
+  // Style parameter buttons
+  const style = document.createElement('style');
+  style.textContent = `
+    .param-btn {
+      padding: 8px 10px;
+      margin: 2px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 12px;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .param-btn:hover {
+      background: #e9ecef;
+      border-color: #4a90e2;
+      transform: translateY(-1px);
+    }
+    .param-btn.selected {
+      background: #4a90e2;
+      color: white;
+      border-color: #357abd;
+      font-weight: 600;
+    }
+    .param-btn.has-changes {
+      background: #28a745;
+      color: white;
+      border-color: #1e7e34;
+      font-weight: 600;
+    }
+    .param-btn.has-changes:hover {
+      background: #218838;
+    }
+
+    /* Event slider styling */
+    .event-behavior-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #e9ecef;
+      border-radius: 3px;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+      accent-color: #4a90e2;
+    }
+
+    .event-behavior-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 16px;
+      width: 16px;
+      border-radius: 2px;
+      border: 1px solid #ccc;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
+    .event-behavior-slider::-moz-range-thumb {
+      height: 16px;
+      width: 16px;
+      border-radius: 2px;
+      border: 1px solid #ccc;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
+    /* Parameter control panels */
+    .parameter-control-panel {
+      animation: slideInDown 0.3s ease;
+    }
+
+    @keyframes slideInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Initialize the compound event editor
+  this.initializeCompoundEventEditor(editor, beat, regionIndex);
+  
+  document.body.appendChild(editor);
+}
+
+
+// ===== PARAMETER CONTROL PANEL CREATION =====
+
+createParameterControlPanel(paramName, beat) {
+  const panel = document.createElement('div');
+  panel.className = 'parameter-control-panel';
+  panel.dataset.parameter = paramName;
+  panel.style.cssText = `
+    background: #f8f9fa;
+    border: 2px solid #4a90e2;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  `;
+  
+  // Panel header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    color: white;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  
+  header.innerHTML = `
+    <span>${this.getParameterIcon(paramName)} ${paramName}</span>
+    <button class="remove-param-btn" style="background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 3px; padding: 2px 6px; font-size: 11px; cursor: pointer;">✕</button>
+  `;
+  
+  // Panel content with parameter controls
+  const content = document.createElement('div');
+  content.style.cssText = `
+    padding: 15px;
+    background: white;
+  `;
+  
+  // Generate appropriate controls based on parameter type
+  content.appendChild(this.createParameterControls(paramName, beat));
+  
+  panel.appendChild(header);
+  panel.appendChild(content);
+  
+  // Connect remove button
+  const removeBtn = header.querySelector('.remove-param-btn');
+  removeBtn.onclick = (e) => {
+    e.stopPropagation();
+    
+    // Remove this parameter from selection
+    const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+    if (paramBtn) {
+      paramBtn.click(); // Trigger deselection
+    }
+  };
+  
+  return panel;
+}
+
+createParameterControls(paramName, beat) {
+  const currentParam = voiceData[this.voiceIndex].parameters[paramName];
+  const controlsContainer = document.createElement('div');
+  
+  if (paramName === 'MELODIC RANGE') {
+  // Special case: Melodic Range needs piano keyboard
+  controlsContainer.appendChild(this.createMelodicRangeControls(paramName, currentParam));
+  
+} else if (typeof currentParam.min === 'number' && typeof currentParam.max === 'number') {
+  // Range parameter (Volume, Tempo, etc.)
+  controlsContainer.appendChild(this.createRangeControls(paramName, currentParam));
+
+    
+  } else if (currentParam.selectedValues && Array.isArray(currentParam.selectedValues)) {
+    // Multi-select parameter (Rhythms, Rests)
+    controlsContainer.appendChild(this.createMultiSelectControls(paramName, currentParam));
+    
+  } else if (typeof currentParam === 'number') {
+    // Dropdown parameter (Instrument)
+    controlsContainer.appendChild(this.createDropdownControls(paramName, currentParam));
+    
+  } else if (currentParam.speed || currentParam.depth) {
+    // Multi-dual parameter (Effects)
+    controlsContainer.appendChild(this.createEffectControls(paramName, currentParam));
+    
+  } else {
+    // Fallback for complex parameters
+    controlsContainer.innerHTML = `
+      <div style="text-align: center; color: #666; padding: 20px;">
+        <div>🚧</div>
+        <div style="margin-top: 8px;">Parameter controls for <strong>${paramName}</strong><br>will be implemented in Session 26</div>
+      </div>
+    `;
+  }
+  
+  return controlsContainer;
+}
+
+createDropdownControls(paramName, currentValue) {
+  const container = document.createElement('div');
+  container.style.cssText = `
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  `;
+  
+  // Parameter name header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+  header.innerHTML = `${this.getParameterIcon(paramName)} ${paramName}`;
+  
+  if (paramName === 'INSTRUMENT') {
+    const selectContainer = document.createElement('div');
+    selectContainer.innerHTML = `
+  <div style="margin-bottom: 12px;">
+    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600;">Select Instrument:</label>
+    <select class="event-instrument-select" style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px; font-size: 13px; background: white;">
+      ${gmSounds.map((sound, index) => 
+        `<option value="${index}" ${index === currentValue ? 'selected' : ''}>${sound}</option>`
+      ).join('')}
+    </select>
+  </div>
+`;
+
+    
+    // Connect change detection
+    const select = selectContainer.querySelector('.event-instrument-select');
+    select.onchange = function() {
+      const paramBtn = document.querySelector(`[data-param="INSTRUMENT"]`);
+      if (paramBtn && parseInt(this.value) !== currentValue) {
+        paramBtn.classList.add('has-changes');
+      } else if (paramBtn) {
+        paramBtn.classList.remove('has-changes');
+      }
+    };
+    
+    container.appendChild(header);
+    container.appendChild(selectContainer);
+  }
+  
+  return container;
+}
+
+
+getParameterIcon(paramName) {
+  const iconMap = {
+    'VOLUME': '🔊',
+    'STEREO BALANCE': '⚖️',
+    'TEMPO (BPM)': '🎵',
+    'RHYTHMS': '🎶',
+    'RESTS': '⏸️',
+    'INSTRUMENT': '🎼',
+    'MELODIC RANGE': '🎹',
+    'POLYPHONY': '🎛️',
+    'ATTACK VELOCITY': '⚡',
+    'DETUNING': '🎚️',
+    'PORTAMENTO GLIDE TIME': '🌊',
+    'TREMOLO': '〰️',
+    'CHORUS': '🎭',
+    'PHASER': '🌀',
+    'REVERB': '🏛️',
+    'DELAY': '⏰'
+  };
+  
+  return iconMap[paramName] || '⚙️';
+}
+
+selectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea, beat) {
+  btn.classList.add('selected');
+  
+  // Hide "no selection" message
+  const noSelectionMessage = controlsArea.querySelector('.no-selection-message');
+  if (noSelectionMessage) {
+    noSelectionMessage.style.display = 'none';
+  }
+  
+  // Create parameter control panel
+  const controlPanel = this.createParameterControlPanel(paramName, beat);
+  controlsArea.appendChild(controlPanel);
+  
+  // Store references
+  selectedParameters.set(paramName, {
+    element: btn,
+    values: this.getDefaultParameterValues(paramName),
+    controlPanel: controlPanel
+  });
+  
+  activeControlPanels.set(paramName, controlPanel);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✅ Selected parameter: ${paramName}`);
+  }
+}
+
+deselectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea) {
+  btn.classList.remove('selected', 'has-changes');
+  
+  // Remove control panel
+  const controlPanel = activeControlPanels.get(paramName);
+  if (controlPanel && controlPanel.parentElement) {
+    controlPanel.remove();
+  }
+  
+  // Remove from tracking
+  selectedParameters.delete(paramName);
+  activeControlPanels.delete(paramName);
+  
+  // Show "no selection" message if no parameters selected
+  if (selectedParameters.size === 0) {
+    const noSelectionMessage = controlsArea.querySelector('.no-selection-message');
+    if (noSelectionMessage) {
+      noSelectionMessage.style.display = 'flex';
+    }
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`❌ Deselected parameter: ${paramName}`);
+  }
+}
+
+updateCompoundEventUI(selectedParameters, countSpan, applyBtn, noSelectionMessage, controlsArea) {
+  const count = selectedParameters.size;
+  
+  countSpan.textContent = count;
+  applyBtn.disabled = count === 0;
+  applyBtn.style.opacity = count === 0 ? '0.5' : '1';
+  applyBtn.style.cursor = count === 0 ? 'not-allowed' : 'pointer';
+  
+  if (count === 0 && noSelectionMessage) {
+    noSelectionMessage.style.display = 'flex';
+  } else if (noSelectionMessage) {
+    noSelectionMessage.style.display = 'none';
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Updated UI: ${count} parameters selected`);
+  }
+}
+
+createRangeControls(paramName, currentParam) {
+  const container = document.createElement('div');
+  container.style.cssText = `
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  `;
+  
+  // Parameter name header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+  header.innerHTML = `${this.getParameterIcon(paramName)} ${paramName}`;
+  
+  // Range slider container
+  const rangeContainer = document.createElement('div');
+  rangeContainer.style.cssText = `
+    margin-bottom: 15px;
+  `;
+  
+  // Create range label and slider div
+  rangeContainer.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <label style="font-size: 12px; color: #666; font-weight: 600;">Range</label>
+      <span class="range-values" style="font-size: 11px; color: #666; font-family: monospace;">${currentParam.min} - ${currentParam.max}</span>
+    </div>
+    <div class="event-range-slider" style="width: 100%; margin-bottom: 5px;"></div>
+  `;
+  
+  // Behavior slider container  
+  const behaviorContainer = document.createElement('div');
+  behaviorContainer.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <label style="font-size: 12px; color: #666; font-weight: 600;">Behavior</label>
+      <span class="behavior-value" style="font-size: 11px; color: #666; font-family: monospace;">${currentParam.behavior || 50}%</span>
+    </div>
+    <input type="range" class="event-behavior-slider" min="0" max="100" value="${currentParam.behavior || 50}" 
+           style="width: 100%; height: 6px; border-radius: 3px; background: #e9ecef; outline: none; cursor: pointer; -webkit-appearance: none; appearance: none;">
+  `;
+  
+  container.appendChild(header);
+  container.appendChild(rangeContainer);
+  container.appendChild(behaviorContainer);
+  
+  // Initialize range slider (noUiSlider)
+  setTimeout(() => {
+    const sliderDiv = rangeContainer.querySelector('.event-range-slider');
+    
+    if (sliderDiv && !sliderDiv.noUiSlider) {
+      // Determine min/max bounds for this parameter
+      const paramDef = parameterDefinitions.find(p => p.name === paramName);
+      const minBound = paramDef ? paramDef.min : 0;
+      const maxBound = paramDef ? paramDef.max : 100;
+      
+      noUiSlider.create(sliderDiv, {
+        start: [currentParam.min, currentParam.max],
+        connect: true,
+        range: { min: minBound, max: maxBound },
+        step: 1,
+        tooltips: [true, true],
+        format: {
+          to: value => Math.round(value).toString(),
+          from: value => Number(value)
+        }
+      });
+      
+      // Connect range slider updates
+      sliderDiv.noUiSlider.on('update', function(values) {
+        const min = Math.round(Number(values[0]));
+        const max = Math.round(Number(values[1]));
+        
+        rangeContainer.querySelector('.range-values').textContent = `${min} - ${max}`;
+        
+        // Mark parameter button as having changes
+        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+        if (paramBtn && (min !== currentParam.min || max !== currentParam.max)) {
+          paramBtn.classList.add('has-changes');
+        } else if (paramBtn) {
+          paramBtn.classList.remove('has-changes');
+        }
+        
+        if (DEBUG.EVENTS && Math.random() < 0.1) {
+          console.log(`🎚️ ${paramName} range: ${min}-${max}`);
+        }
+      });
+    }
+  }, 50);
+  
+  // Connect behavior slider
+  const behaviorSlider = behaviorContainer.querySelector('.event-behavior-slider');
+  behaviorSlider.oninput = function() {
+    const value = parseInt(this.value);
+    behaviorContainer.querySelector('.behavior-value').textContent = value + '%';
+    
+    // Mark as changed if different from current
+    const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+    if (paramBtn && value !== (currentParam.behavior || 50)) {
+      paramBtn.classList.add('has-changes');
+    }
+  };
+  
+  return container;
+}
+
+createMelodicRangeControls(paramName, currentParam) {
+  const container = document.createElement('div');
+  container.style.cssText = `
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  `;
+  
+  // Parameter name header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+  header.innerHTML = `🎹 ${paramName}`;
+  
+  // Current range display
+  const currentRange = document.createElement('div');
+  currentRange.style.cssText = `
+    background: #e3f2fd;
+    border: 1px solid #2196f3;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #0d47a1;
+    text-align: center;
+  `;
+  
+  const minNoteName = midiNoteNames[currentParam.min] || `MIDI${currentParam.min}`;
+  const maxNoteName = midiNoteNames[currentParam.max] || `MIDI${currentParam.max}`;
+  currentRange.innerHTML = `
+    <div style="font-weight: 600; margin-bottom: 4px;">💡 Current range:</div>
+    <div>${minNoteName} (${currentParam.min}) to ${maxNoteName} (${currentParam.max})</div>
+  `;
+  
+  // Piano keyboard container
+  const pianoContainer = document.createElement('div');
+  pianoContainer.className = 'event-piano-container';
+  pianoContainer.style.cssText = `
+    margin-bottom: 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+  `;
+  
+  // Behavior slider
+  const behaviorContainer = document.createElement('div');
+  behaviorContainer.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <label style="font-size: 12px; color: #666; font-weight: 600;">Behavior</label>
+      <span class="behavior-value" style="font-size: 11px; color: #666; font-family: monospace;">${currentParam.behavior || 50}%</span>
+    </div>
+    <input type="range" class="event-behavior-slider" min="0" max="100" value="${currentParam.behavior || 50}" 
+           style="width: 100%; height: 6px; border-radius: 3px; background: #e9ecef; outline: none; cursor: pointer; -webkit-appearance: none; appearance: none;">
+  `;
+  
+  container.appendChild(header);
+  container.appendChild(currentRange);
+  container.appendChild(pianoContainer);
+  container.appendChild(behaviorContainer);
+  
+  // Initialize piano keyboard after DOM insertion
+  setTimeout(() => {
+    try {
+      const eventPiano = new InteractivePiano(pianoContainer, this.voiceIndex);
+      
+      // Store reference for value collection
+      container.eventPiano = eventPiano;
+      
+      // Mark parameter as changed when piano selection changes
+      const originalUpdateVoiceData = eventPiano.updateVoiceData;
+      eventPiano.updateVoiceData = function() {
+        // Call original method
+        originalUpdateVoiceData.call(this);
+        
+        // Mark parameter button as having changes
+        const paramBtn = document.querySelector(`[data-param="MELODIC RANGE"]`);
+        if (paramBtn) {
+          paramBtn.classList.add('has-changes');
+        }
+        
+        // Update current range display
+        if (this.selectedNotes.size > 0) {
+          const selectedArray = Array.from(this.selectedNotes).sort((a, b) => a - b);
+          const minNote = selectedArray[0];
+          const maxNote = selectedArray[selectedArray.length - 1];
+          const minNoteName = midiNoteNames[minNote] || `MIDI${minNote}`;
+          const maxNoteName = midiNoteNames[maxNote] || `MIDI${maxNote}`;
+          
+          currentRange.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">💡 New range:</div>
+            <div>${minNoteName} (${minNote}) to ${maxNoteName} (${maxNote}) - ${this.selectedNotes.size} notes</div>
+          `;
+        }
+      };
+      
+      if (DEBUG.EVENTS) {
+        console.log(`🎹 Piano keyboard initialized for Melodic Range event`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error creating event piano:`, error);
+      
+      // Fallback: Show error message
+      pianoContainer.innerHTML = `
+        <div style="padding: 20px; text-align: center; color: #dc3545;">
+          <div>❌ Piano keyboard failed to load</div>
+          <div style="font-size: 12px; margin-top: 4px;">Using range inputs instead</div>
+        </div>
+      `;
+    }
+  }, 100);
+  
+  // Connect behavior slider
+  const behaviorSlider = behaviorContainer.querySelector('.event-behavior-slider');
+  behaviorSlider.oninput = function() {
+    const value = parseInt(this.value);
+    behaviorContainer.querySelector('.behavior-value').textContent = value + '%';
+    
+    // Mark as changed if different from current
+    const paramBtn = document.querySelector(`[data-param="MELODIC RANGE"]`);
+    if (paramBtn && value !== (currentParam.behavior || 50)) {
+      paramBtn.classList.add('has-changes');
+    }
+  };
+  
+  return container;
+}
+
+createDropdownControls(paramName, currentValue) {
+  const container = document.createElement('div');
+  container.style.cssText = `
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  `;
+  
+  // Parameter name header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `;
+  header.innerHTML = `${this.getParameterIcon(paramName)} ${paramName}`;
+  
+  if (paramName === 'INSTRUMENT') {
+    const selectContainer = document.createElement('div'); // MISSING: Create selectContainer
+    selectContainer.innerHTML = `
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600;">Select Instrument:</label>
+        <select class="event-instrument-select" style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px; font-size: 13px; background: white;">
+          ${gmSounds.map((sound, index) => 
+            `<option value="${index}" ${index === currentValue ? 'selected' : ''}>${sound}</option>`
+          ).join('')}
+        </select>
+      </div>
+    `;
+    
+    // Connect change detection
+    const select = selectContainer.querySelector('.event-instrument-select');
+    select.onchange = function() {
+      const paramBtn = document.querySelector(`[data-param="INSTRUMENT"]`);
+      if (paramBtn && parseInt(this.value) !== currentValue) {
+        paramBtn.classList.add('has-changes');
+      } else if (paramBtn) {
+        paramBtn.classList.remove('has-changes');
+      }
+    };
+    
+    // MISSING: Append everything to container
+    container.appendChild(header);
+    container.appendChild(selectContainer);
+  }
+  
+  return container;
+}
+
+
+createMultiSelectControls(paramName, currentParam) {
+  const container = document.createElement('div');
+  
+  const options = paramName === 'RHYTHMS' ? rhythmOptions : restOptions;
+  const selectedValues = currentParam.selectedValues || [];
+  
+  container.innerHTML = `
+    <div style="margin-bottom: 10px;">
+      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600;">Select ${paramName}:</label>
+      <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: #fefefe;">
+        ${options.map((option, index) => `
+          <label style="display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; cursor: pointer;">
+            <input type="checkbox" class="event-rhythm-checkbox" value="${index}" 
+                   ${selectedValues.includes(index) ? 'checked' : ''} 
+                   style="margin: 0;">
+            <span>${option}</span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+    
+    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 10px; font-size: 12px; color: #0d47a1;">
+      <div style="font-weight: 600; margin-bottom: 4px;">💡 Currently selected:</div>
+      <div>${selectedValues.map(i => options[i]).join(', ') || 'None'}</div>
+    </div>
+  `;
+  
+  return container;
+}
+
+createEffectControls(paramName, currentParam) {
+  const container = document.createElement('div');
+  container.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  `;
+  
+  const speedValue = currentParam.speed ? (currentParam.speed.min + currentParam.speed.max) / 2 : 0;
+  const depthValue = currentParam.depth ? (currentParam.depth.min + currentParam.depth.max) / 2 : 0;
+  const feedbackValue = currentParam.feedback ? (currentParam.feedback.min + currentParam.feedback.max) / 2 : 0;
+  
+  let speedLabel = 'Speed';
+  let depthLabel = 'Depth';
+  
+  if (paramName === 'REVERB' || paramName === 'DELAY') {
+    speedLabel = 'Time';
+    depthLabel = 'Mix';
+  }
+  
+  container.innerHTML = `
+    <div style="display: flex; gap: 12px;">
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 600;">${speedLabel}:</label>
+        <input type="range" class="event-speed-range" min="0" max="100" value="${speedValue}"
+               style="width: 100%; margin-bottom: 4px;">
+        <div class="speed-value-display" style="text-align: center; font-size: 11px; color: #666;">${speedValue.toFixed(0)}%</div>
+      </div>
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 600;">${depthLabel}:</label>
+        <input type="range" class="event-depth-range" min="0" max="100" value="${depthValue}"
+               style="width: 100%; margin-bottom: 4px;">
+        <div class="depth-value-display" style="text-align: center; font-size: 11px; color: #666;">${depthValue.toFixed(0)}%</div>
+      </div>
+    </div>
+    
+    ${paramName === 'DELAY' ? `
+      <div>
+        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 600;">Feedback:</label>
+        <input type="range" class="event-feedback-range" min="0" max="100" value="${feedbackValue}"
+               style="width: 100%; margin-bottom: 4px;">
+        <div class="feedback-value-display" style="text-align: center; font-size: 11px; color: #666;">${feedbackValue.toFixed(0)}%</div>
+      </div>
+    ` : ''}
+    
+    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 10px; font-size: 12px; color: #0d47a1;">
+      <div style="font-weight: 600; margin-bottom: 4px;">💡 Current ${paramName.toLowerCase()}:</div>
+      <div>${speedLabel}: ${speedValue.toFixed(0)}% | ${depthLabel}: ${depthValue.toFixed(0)}%${paramName === 'DELAY' ? ` | Feedback: ${feedbackValue.toFixed(0)}%` : ''}</div>
+    </div>
+  `;
+  
+  // Connect range sliders to update displays
+  const speedRange = container.querySelector('.event-speed-range');
+  const depthRange = container.querySelector('.event-depth-range');
+  const feedbackRange = container.querySelector('.event-feedback-range');
+  
+  if (speedRange) {
+    speedRange.oninput = function() {
+      container.querySelector('.speed-value-display').textContent = this.value + '%';
+    };
+  }
+  
+  if (depthRange) {
+    depthRange.oninput = function() {
+      container.querySelector('.depth-value-display').textContent = this.value + '%';
+    };
+  }
+  
+  if (feedbackRange) {
+    feedbackRange.oninput = function() {
+      container.querySelector('.feedback-value-display').textContent = this.value + '%';
+    };
+  }
+  
+  return container;
+}
+
+getDefaultParameterValues(paramName) {
+  const currentParam = voiceData[this.voiceIndex].parameters[paramName];
+  
+  if (typeof currentParam.min === 'number' && typeof currentParam.max === 'number') {
+    return {
+      type: 'range',
+      min: currentParam.min,
+      max: currentParam.max
+    };
+  } else if (currentParam.selectedValues) {
+    return {
+      type: 'multi-select',
+      selectedValues: [...currentParam.selectedValues]
+    };
+  } else if (typeof currentParam === 'number') {
+    return {
+      type: 'dropdown',
+      value: currentParam
+    };
+  } else if (currentParam.speed || currentParam.depth) {
+    return {
+      type: 'effect',
+      speed: currentParam.speed ? (currentParam.speed.min + currentParam.speed.max) / 2 : 0,
+      depth: currentParam.depth ? (currentParam.depth.min + currentParam.depth.max) / 2 : 0,
+      feedback: currentParam.feedback ? (currentParam.feedback.min + currentParam.feedback.max) / 2 : 0
+    };
+  }
+  
+  return { type: 'unknown' };
+}
+
+// ===== COMPOUND EVENT WORKFLOW =====
+
+applyCompoundParameterEvent(beat, regionIndex, selectedParameters) {
+  const parameterChanges = {};
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔍 Collecting values from ${selectedParameters.size} selected parameters:`);
+    selectedParameters.forEach((paramData, paramName) => {
+      console.log(`   • ${paramName}:`, paramData);
+      console.log(`     Control panel exists:`, !!paramData.controlPanel);
+      console.log(`     Control panel HTML:`, paramData.controlPanel?.outerHTML?.substring(0, 100) + '...');
+    });
+  }
+  
+  // Collect all parameter changes with error handling
+  selectedParameters.forEach((paramData, paramName) => {
+    try {
+      if (!paramData.controlPanel) {
+        console.error(`❌ No control panel for ${paramName}`);
+        return;
+      }
+      
+      const collectedValue = this.collectParameterValues(paramName, paramData.controlPanel);
+      
+      if (collectedValue && collectedValue.value) {
+        parameterChanges[paramName] = collectedValue;
+        
+        if (DEBUG.EVENTS) {
+          console.log(`   ✅ ${paramName}:`, collectedValue);
+        }
+      } else {
+        console.warn(`   ⚠️ ${paramName}: No valid value collected`);
+      }
+    } catch (error) {
+      console.error(`   ❌ ${paramName}: Error collecting values:`, error);
+    }
+  });
+  
+  if (Object.keys(parameterChanges).length === 0) {
+    console.error(`❌ No valid parameter changes collected`);
+    return null;
+  }
+  
+  // Create compound event
+  const eventId = this.createCompoundParameterEvent(beat, regionIndex, parameterChanges);
+  
+  if (DEBUG.EVENTS) {
+    const paramNames = Object.keys(parameterChanges);
+    console.log(`✅ Applied compound event: ${paramNames.join(', ')} at beat ${beat.toFixed(0)}`);
+    console.log(`   Event ID: ${eventId}`);
+    console.log(`   Changes:`, parameterChanges);
+  }
+  
+  // Show success notification
+  if (eventId) {
+    this.showCompoundEventSuccessNotification(beat, parameterChanges);
+    
+    // Refresh timeline to show new diamond
+    setTimeout(() => this.refresh(), 100);
+  }
+  
+  return eventId;
+}
+
+collectParameterValues(paramName, controlPanel) {
+  if (!controlPanel) {
+    console.error(`❌ collectParameterValues: No control panel for ${paramName}`);
+    return null;
+  }
+  
+  // DEBUG: Check parameter structure
+  console.log(`🔍 Checking parameter data for ${paramName}:`);
+  console.log(`   voiceData[${this.voiceIndex}].parameters:`, voiceData[this.voiceIndex].parameters);
+  
+  const currentParam = voiceData[this.voiceIndex].parameters[paramName];
+  if (currentParam === undefined && paramName !== 'INSTRUMENT') {
+    console.error(`❌ collectParameterValues: No parameter data for ${paramName}`);
+    return null;
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔍 Collecting values for ${paramName}:`);
+    console.log(`   Current param:`, currentParam);
+    console.log(`   Control panel:`, controlPanel.className);
+  }
+  
+  if (paramName === 'MELODIC RANGE') {
+    // Special handling for melodic range with piano
+    const eventPiano = controlPanel.eventPiano;
+    const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
+    const behaviorValue = behaviorSlider ? parseInt(behaviorSlider.value) : (currentParam.behavior || 50);
+    
+    if (eventPiano && eventPiano.selectedNotes.size > 0) {
+      const selectedArray = Array.from(eventPiano.selectedNotes).sort((a, b) => a - b);
+      return {
+        changeType: 'melodic-range',
+        value: {
+          selectedNotes: selectedArray,
+          min: selectedArray[0],
+          max: selectedArray[selectedArray.length - 1],
+          behavior: behaviorValue
+        }
+      };
+    } else {
+      // Fallback to current range
+      return {
+        changeType: 'melodic-range',
+        value: {
+          min: currentParam.min,
+          max: currentParam.max,
+          selectedNotes: currentParam.selectedNotes || [],
+          behavior: behaviorValue
+        }
+      };
+    }
+    
+  } else if (paramName === 'INSTRUMENT') {
+    // Dropdown parameter - INSTRUMENT is stored as number, not object
+    const select = controlPanel.querySelector('.event-instrument-select');
+    
+    console.log(`🎼 Collecting INSTRUMENT values:`);
+    console.log(`   Current param value:`, currentParam);
+    console.log(`   Select element:`, select);
+    console.log(`   Select value:`, select?.value);
+    
+    if (!select) {
+      console.warn(`⚠️ No instrument select found for ${paramName}`);
+      return null;
+    }
+    
+    const instrumentValue = parseInt(select.value);
+    console.log(`   Final instrument value:`, instrumentValue);
+    
+    return {
+      changeType: 'dropdown',
+      value: instrumentValue
+    };
+    
+  } else if (typeof currentParam.min === 'number' && typeof currentParam.max === 'number') {
+    // Range parameter
+    if (DEBUG.EVENTS) {
+      console.log(`   Collecting range parameter: ${paramName}`);
+    }
+    
+    // Check for noUiSlider first (primary method)
+    const rangeSliderDiv = controlPanel.querySelector('.event-range-slider');
+    let minValue = currentParam.min;
+    let maxValue = currentParam.max;
+    
+    if (rangeSliderDiv && rangeSliderDiv.noUiSlider) {
+      // Get values from noUiSlider
+      try {
+        const sliderValues = rangeSliderDiv.noUiSlider.get();
+        minValue = parseFloat(sliderValues[0]);
+        maxValue = parseFloat(sliderValues[1]);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`     noUiSlider values: ${minValue} - ${maxValue}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error reading noUiSlider for ${paramName}:`, error);
+      }
+    }
+    
+    // Get behavior value
+    const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
+    const behaviorValue = behaviorSlider ? parseInt(behaviorSlider.value) : (currentParam.behavior || 50);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`     Behavior: ${behaviorValue}%`);
+    }
+    
+    return {
+      changeType: 'range',
+      value: {
+        min: minValue,
+        max: maxValue,
+        behavior: behaviorValue
+      }
+    };
+    
+  } else if (currentParam.selectedValues && Array.isArray(currentParam.selectedValues)) {
+    // Multi-select parameter (Rhythms, Rests)
+    const checkboxes = controlPanel.querySelectorAll('.event-rhythm-checkbox:checked');
+    const selectedValues = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    return {
+      changeType: 'multi-select',
+      value: {
+        selectedValues: selectedValues
+      }
+    };
+    
+  } else if (currentParam.speed || currentParam.depth) {
+    // Effect parameter
+    const speedRange = controlPanel.querySelector('.event-speed-range');
+    const depthRange = controlPanel.querySelector('.event-depth-range');
+    const feedbackRange = controlPanel.querySelector('.event-feedback-range');
+    
+    const result = {
+      changeType: 'effect',
+      value: {
+        speed: { min: speedRange ? parseInt(speedRange.value) : 0, max: speedRange ? parseInt(speedRange.value) : 0 },
+        depth: { min: depthRange ? parseInt(depthRange.value) : 0, max: depthRange ? parseInt(depthRange.value) : 0 }
+      }
+    };
+    
+    if (feedbackRange) {
+      result.value.feedback = { min: parseInt(feedbackRange.value), max: parseInt(feedbackRange.value) };
+    }
+    
+    return result;
+  }
+  
+  console.warn(`⚠️ Unknown parameter type for ${paramName}:`, currentParam);
+  return null;
+}
+
+
+
+showCompoundEventSuccessNotification(beat, parameterChanges) {
+  const paramNames = Object.keys(parameterChanges);
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    animation: slideInRight 0.3s ease;
+    max-width: 300px;
+  `;
+  
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+      <span style="font-size: 16px;">💎</span>
+      <div>
+        <div>Multi-Parameter Event Created</div>
+        <div style="font-size: 11px; opacity: 0.9;">Beat ${beat.toFixed(0)} (${timeFormatted})</div>
+      </div>
+    </div>
+    <div style="font-size: 12px; opacity: 0.9; line-height: 1.3;">
+      Parameters: ${paramNames.join(', ')}
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
+
+createCompoundParameterEvent(beat, regionIndex, parameterChanges) {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan || !lifeSpan.events) {
+    console.error(`❌ No life span or events array for Voice ${this.voiceIndex + 1}`);
+    return null;
+  }
+  
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[regionIndex];
+  
+  if (!targetRegion) {
+    console.error(`❌ Target region ${regionIndex} not found`);
+    return null;
+  }
+  
+  const relativePosition = (beat - targetRegion.start) / (targetRegion.end - targetRegion.start);
+  const eventId = `compound-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+  
+  // Validate parameter changes
+  const validChanges = {};
+  Object.keys(parameterChanges).forEach(paramName => {
+    if (parameterChanges[paramName] && parameterChanges[paramName].value) {
+      validChanges[paramName] = parameterChanges[paramName];
+    }
+  });
+  
+  if (Object.keys(validChanges).length === 0) {
+    console.warn(`⚠️ No valid parameter changes to apply`);
+    return null;
+  }
+  
+  const compoundEvent = {
+    type: 'compound-parameter',
+    regionIndex: regionIndex,
+    relativePosition: relativePosition,
+    beatPosition: beat, // For easy reference
+    changes: validChanges,
+    id: eventId,
+    timestamp: Date.now()
+  };
+  
+  lifeSpan.events.push(compoundEvent);
+  
+  if (DEBUG.EVENTS) {
+    const paramNames = Object.keys(validChanges);
+    console.log(`💎 Created compound event: ${paramNames.join(', ')} at beat ${beat.toFixed(0)}`);
+    console.log(`   Event ID: ${eventId}`);
+    console.log(`   Relative position: ${(relativePosition * 100).toFixed(1)}% in region`);
+    console.log(`   Changes:`, validChanges);
+  }
+  
+    // DEBUG: Verify event was added
+    console.log(`📊 Total events after creation: ${lifeSpan.events.length}`);
+    console.log(`📊 Events array:`, lifeSpan.events.map(e => ({type: e.type, id: e.id, region: e.regionIndex})));
+
+  return eventId;
+}
+
+
+initializeCompoundEventEditor(editor, beat, regionIndex) {
+  const controlsArea = editor.querySelector('.parameter-controls-area');
+  const noSelectionMessage = editor.querySelector('.no-selection-message');
+  const selectedCountSpan = editor.querySelector('.selected-params-count');
+  const applyBtn = editor.querySelector('.apply-event-btn');
+  
+  let selectedParameters = new Map(); // paramName -> {element, values}
+  let activeControlPanels = new Map(); // paramName -> controlElement
+  
+  // Connect parameter button clicks
+  const paramButtons = editor.querySelectorAll('.param-btn');
+  paramButtons.forEach(btn => {
+    btn.onclick = () => {
+      const paramName = btn.dataset.param;
+      
+      if (btn.classList.contains('selected')) {
+        // Deselect parameter
+        this.deselectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea);
+      } else {
+        // Select parameter
+        this.selectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea, beat);
+      }
+      
+      // Update UI state
+      this.updateCompoundEventUI(selectedParameters, selectedCountSpan, applyBtn, noSelectionMessage, controlsArea);
+    };
+  });
+  
+  // Connect Apply button with enhanced functionality
+applyBtn.onclick = () => {
+  if (selectedParameters.size > 0) {
+    if (DEBUG.EVENTS) {
+      console.log(`🎯 Applying compound event with ${selectedParameters.size} parameters`);
+    }
+    
+    try {
+      const eventId = this.applyCompoundParameterEvent(beat, regionIndex, selectedParameters);
+      
+      if (eventId) {
+        if (DEBUG.EVENTS) {
+          console.log(`✅ Successfully created compound event: ${eventId}`);
+        }
+        
+        // Show success and close editor
+        editor.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        editor.style.opacity = '0';
+        editor.style.transform = 'translate(-50%, -50%) scale(0.95)';
+        
+        setTimeout(() => {
+          editor.remove();
+        }, 300);
+      } else {
+        console.error(`❌ Failed to create compound event`);
+        alert('❌ Failed to create parameter event. Please try again.');
+      }
+    } catch (error) {
+      console.error(`❌ Error applying compound event:`, error);
+      alert(`❌ Error creating event: ${error.message}`);
+    }
+  } else {
+    alert('⚠️ Please select at least one parameter to automate.');
+  }
+};
+
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Compound event editor initialized for beat ${beat.toFixed(0)}`);
+  }
+}
+
+selectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea, beat) {
+  btn.classList.add('selected');
+  
+  // Create parameter control panel
+  const controlPanel = this.createParameterControlPanel(paramName, beat);
+  controlsArea.appendChild(controlPanel);
+  
+  // Store references
+  selectedParameters.set(paramName, {
+    element: btn,
+    values: this.getDefaultParameterValues(paramName),
+    controlPanel: controlPanel
+  });
+  
+  activeControlPanels.set(paramName, controlPanel);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✅ Selected parameter: ${paramName}`);
+  }
+}
+
+deselectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea) {
+  btn.classList.remove('selected', 'has-changes');
+  
+  // Remove control panel
+  const controlPanel = activeControlPanels.get(paramName);
+  if (controlPanel && controlPanel.parentElement) {
+    controlPanel.remove();
+  }
+  
+  // Remove from tracking
+  selectedParameters.delete(paramName);
+  activeControlPanels.delete(paramName);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`❌ Deselected parameter: ${paramName}`);
+  }
+}
+
+updateCompoundEventUI(selectedParameters, countSpan, applyBtn, noSelectionMessage, controlsArea) {
+  const count = selectedParameters.size;
+  
+  countSpan.textContent = count;
+  applyBtn.disabled = count === 0;
+  applyBtn.style.opacity = count === 0 ? '0.5' : '1';
+  
+  if (count === 0) {
+    noSelectionMessage.style.display = 'flex';
+  } else {
+    noSelectionMessage.style.display = 'none';
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🔄 Updated UI: ${count} parameters selected`);
+  }
+}
+
+
+// ===== DIAMOND CONTEXT MENU ACTIONS =====
+editParameterEvent(eventId, parameterName) {
+  if (DEBUG.EVENTS) {
+    console.log(`✏️ Editing parameter event: ${parameterName} (${eventId})`);
+  }
+  
+  // Find the event
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const event = lifeSpan.events.find(e => e.id === eventId);
+  
+  if (!event) {
+    console.error(`❌ Event ${eventId} not found`);
+    return;
+  }
+  
+  console.log(`🔍 Found event for editing:`, event);
+  console.log(`   Event type: ${event.type}`);
+  
+  // ALWAYS open Event Editor for compound events (no session 26 placeholders)
+  if (event.type === 'compound-parameter') {
+    console.log(`📝 Opening Event Editor for compound event`);
+    
+    // Calculate absolute beat position
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const region = playingRegions[event.regionIndex];
+    
+    if (region) {
+      const absoluteBeat = region.start + (event.relativePosition * (region.end - region.start));
+      this.editCompoundEvent(event, absoluteBeat);
+    } else {
+      console.error(`❌ Could not find region ${event.regionIndex} for editing`);
+    }
+  } else {
+    // Single parameter event - also open Event Editor (no placeholder)
+    console.log(`📝 Opening Event Editor for single parameter event`);
+    
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const region = playingRegions[event.regionIndex || 0];
+    
+    if (region) {
+      const absoluteBeat = region.start + ((event.relativePosition || 0.5) * (region.end - region.start));
+      
+      // Open Event Editor and pre-select this parameter
+      this.showStreamlinedParameterPicker(absoluteBeat, event.regionIndex || 0);
+      
+      setTimeout(() => {
+        const paramBtn = document.querySelector(`[data-param="${event.parameter}"]`);
+        if (paramBtn) {
+          paramBtn.click();
+          console.log(`✅ Pre-selected ${event.parameter} for editing`);
+        }
+      }, 300);
+    }
+  }
+}
+
+
+editCompoundEvent(event, beat) {
+  // Show Event Editor with pre-loaded values
+  this.showStreamlinedParameterPicker(beat, event.regionIndex);
+  
+  // After Event Editor opens, pre-select and populate parameters
+  setTimeout(() => {
+    if (event.changes) {
+      Object.keys(event.changes).forEach(paramName => {
+        // Click parameter button to select it
+        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+        if (paramBtn && !paramBtn.classList.contains('selected')) {
+          paramBtn.click();
+        }
+        
+        // Load existing values into controls
+        setTimeout(() => {
+          this.loadExistingValuesIntoControls(paramName, event.changes[paramName]);
+        }, 100);
+      });
+    }
+  }, 200);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`✏️ Opened compound event editor for ${Object.keys(event.changes).join(', ')}`);
+  }
+}
+
+loadExistingValuesIntoControls(paramName, paramData) {
+  const controlPanel = document.querySelector(`[data-parameter="${paramName}"]`);
+  if (!controlPanel) return;
+  
+  if (paramData.changeType === 'range') {
+    // Load range values
+    const rangeSlider = controlPanel.querySelector('.event-range-slider');
+    if (rangeSlider && rangeSlider.noUiSlider && paramData.value) {
+      rangeSlider.noUiSlider.set([paramData.value.min, paramData.value.max]);
+    }
+    
+    // Load behavior value
+    const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
+    if (behaviorSlider && paramData.value.behavior !== undefined) {
+      behaviorSlider.value = paramData.value.behavior;
+      const behaviorDisplay = controlPanel.querySelector('.behavior-value');
+      if (behaviorDisplay) {
+        behaviorDisplay.textContent = paramData.value.behavior + '%';
+      }
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`📝 Loaded ${paramName} values: ${paramData.value.min}-${paramData.value.max}, behavior: ${paramData.value.behavior}%`);
+    }
+  }
+  // Add other parameter types as needed
+}
+
+
+startEventPositionEdit(eventId, parameterName) {
+  if (DEBUG.EVENTS) {
+    console.log(`📍 Event position editing: Drag the diamond to move within region`);
+  }
+  
+  // Show instruction for diamond dragging
+  const instruction = document.createElement('div');
+  instruction.style.cssText = `
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffc107;
+    color: #856404;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    text-align: center;
+    border: 2px solid #856404;
+  `;
+  
+  instruction.innerHTML = `
+    <div style="margin-bottom: 6px;">📍 Event Position Edit Active</div>
+    <div style="font-size: 12px; opacity: 0.9;">
+      Drag the gold diamond to move the ${parameterName} event within its region
+    </div>
+  `;
+  
+  document.body.appendChild(instruction);
+  
+  setTimeout(() => {
+    instruction.style.transition = 'opacity 0.3s ease';
+    instruction.style.opacity = '0';
+    setTimeout(() => instruction.remove(), 300);
+  }, 4000);
+}
+
+copyParameterEvent(eventId, parameterName) {
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Copying parameter event: ${parameterName} (${eventId})`);
+  }
+  
+  // Find and copy the event
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const event = lifeSpan.events.find(e => e.id === eventId);
+  
+  if (event) {
+    window.copiedParameterEvent = {
+      parameter: event.parameter,
+      value: JSON.parse(JSON.stringify(event.value)), // Deep copy
+      changeType: event.changeType,
+      sourceVoice: this.voiceIndex,
+      timestamp: Date.now()
+    };
+    
+    // Show success feedback
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      background: #6f42c1;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 9999;
+    `;
+    feedback.textContent = `📋 ${parameterName} Event Copied`;
+    
+    document.body.appendChild(feedback);
+    setTimeout(() => feedback.remove(), 2000);
+  }
+}
+
+addParametersToEvent(eventId, event) {
+  if (DEBUG.EVENTS) {
+    console.log(`➕ Adding parameters to existing event: ${eventId}`);
+  }
+  
+  if (!event) {
+    console.error(`❌ No event provided for adding parameters`);
+    return;
+  }
+  
+  // Calculate beat position and open Event Editor
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const region = playingRegions[event.regionIndex];
+  
+  if (!region) {
+    console.error(`❌ Could not find region ${event.regionIndex} for event ${eventId}`);
+    return;
+  }
+  
+  const absoluteBeat = region.start + (event.relativePosition * (region.end - region.start));
+  
+  // Open Event Editor in "add to existing" mode
+  this.showStreamlinedParameterPicker(absoluteBeat, event.regionIndex);
+  
+  // Pre-load existing parameters after Event Editor opens
+  setTimeout(() => {
+    // Mark as editing existing event
+    window.currentEditingEvent = event;
+    
+    if (event.changes) {
+      // Auto-select existing parameters (but don't prevent adding more)
+      Object.keys(event.changes).forEach(paramName => {
+        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+        if (paramBtn) {
+          paramBtn.click(); // Auto-select existing parameters
+          
+          // Visual indicator for existing vs new parameters
+          paramBtn.style.borderLeft = '4px solid #17a2b8';
+          paramBtn.style.background = '#e1f5fe'; // Light blue for existing
+          
+          // Add tooltip
+          paramBtn.title = `${paramName} (existing in event)`;
+        }
+      });
+    }
+    
+    // Update Apply button for "add mode"
+    const applyBtn = document.querySelector('.apply-event-btn');
+    if (applyBtn) {
+      applyBtn.textContent = 'Update Event (Add Parameters)';
+      applyBtn.style.background = '#17a2b8'; // Blue for update mode
+    }
+    
+    // Update header
+    const header = document.querySelector('.compound-parameter-editor div');
+    if (header) {
+      header.innerHTML = header.innerHTML.replace('Parameter Event', 'Add Parameters to Event');
+    }
+    
+    if (DEBUG.EVENTS) {
+      console.log(`✅ Event Editor opened in "add parameters" mode`);
+      console.log(`   Existing parameters: ${Object.keys(event.changes || {}).join(', ')}`);
+    }
+  }, 300);
+}
+
+
+pasteParameterEvent(targetEventId, targetEvent) {
+  if (!window.copiedParameterEvent) {
+    console.warn(`⚠️ No copied event available for pasting`);
+    return;
+  }
+  
+  const copiedData = window.copiedParameterEvent;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Pasting ${copiedData.parameter} into event ${targetEventId}`);
+  }
+  
+  // Find target event in events array
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const eventIndex = lifeSpan.events.findIndex(e => e.id === targetEventId);
+  
+  if (eventIndex === -1) {
+    console.error(`❌ Target event ${targetEventId} not found`);
+    return;
+  }
+  
+  // Capture state for undo
+  if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+    undoManager.captureState(`Paste ${copiedData.parameter} into event ${targetEventId}`, true);
+  }
+  
+  // Add copied parameter to target event's changes
+  if (targetEvent.type === 'compound-parameter') {
+    targetEvent.changes[copiedData.parameter] = {
+      changeType: copiedData.changeType || 'range',
+      value: JSON.parse(JSON.stringify(copiedData.value)) // Deep copy
+    };
+  } else {
+    // Convert single event to compound event
+    const originalParam = targetEvent.parameter;
+    const originalValue = targetEvent.value;
+    
+    targetEvent.type = 'compound-parameter';
+    targetEvent.changes = {
+      [originalParam]: {
+        changeType: targetEvent.changeType || 'range',
+        value: originalValue
+      },
+      [copiedData.parameter]: {
+        changeType: copiedData.changeType || 'range',
+        value: JSON.parse(JSON.stringify(copiedData.value))
+      }
+    };
+    
+    // Remove old single-event properties
+    delete targetEvent.parameter;
+    delete targetEvent.value;
+    delete targetEvent.changeType;
+  }
+  
+  // Show success feedback
+  const feedback = document.createElement('div');
+  feedback.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #17a2b8;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  feedback.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span>📋</span>
+      <div>
+        <div>Parameter Pasted</div>
+        <div style="font-size: 11px; opacity: 0.9;">${copiedData.parameter} added to event</div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => {
+    feedback.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => feedback.remove(), 300);
+  }, 2000);
+  
+  // Refresh timeline to update diamond tooltip
+  setTimeout(() => this.refresh(), 100);
+}
+
+confirmDeleteEvent(eventId, parameterName) {
+  const confirmMessage = `🗑️ Delete Parameter Event?
+
+Parameter: ${parameterName}
+Event ID: ${eventId}
+
+This will remove the parameter automation.
+Continue?`;
+
+  if (confirm(confirmMessage)) {
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Delete ${parameterName} event`, true);
+    }
+    
+    this.deleteParameterEvent(eventId);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🗑️ Confirmed deletion of parameter event: ${eventId}`);
+    }
+  }
+}
+
+handleQuickParameterEvent(e) {
+  const beat = this.screenXToBeat(e.clientX);
+  const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`⚡ SHIFT+CLICK: Opening full Event Editor at beat ${snappedBeat.toFixed(0)}`);
+  }
+  
+  // Find region index
+  const regionIndex = this.findRegionIndexForBeat(snappedBeat);
+  if (regionIndex === -1) {
+    console.warn(`⚠️ No region found for Shift+Click at beat ${snappedBeat}`);
+    return;
+  }
+  
+  // Open full Event Editor (same as double-click region → Add Event)
+  this.showStreamlinedParameterPicker(snappedBeat, regionIndex);
+}
+
+
+handleQuickRegionDelete(e) {
+  const region = e.target;
+  const regionIndex = parseInt(region.dataset.regionIndex);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🗑️ ALT+CLICK: Quick delete region ${regionIndex}`);
+  }
+  
+  // Get region info
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[regionIndex];
+  
+  if (targetRegion) {
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Quick delete region ${targetRegion.start}-${targetRegion.end}`, true);
+    }
+    
+    // Delete immediately (no confirmation for Alt+Click)
+    this.handleRegionDeletion(regionIndex);
+    
+    // Show brief feedback
+    this.showQuickDeleteFeedback(targetRegion);
+  }
+}
+
+showQuickParameterDialog(beat, clientX, clientY) {
+  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+  const timeFormatted = formatMsToMMSS(timeMs);
+  
+  const quickDialog = document.createElement('div');
+  quickDialog.style.cssText = `
+    position: fixed;
+    left: ${Math.min(clientX + 15, window.innerWidth - 200)}px;
+    top: ${Math.max(clientY - 50, 20)}px;
+    background: white;
+    border: 2px solid #ffc107;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10001;
+    min-width: 180px;
+    padding: 10px;
+  `;
+  
+  quickDialog.innerHTML = `
+    <div style="font-weight: bold; margin-bottom: 8px; color: #f39c12; display: flex; align-items: center; gap: 6px;">
+      <span>⚡</span>
+      <span>Quick Event - Beat ${beat.toFixed(0)}</span>
+    </div>
+    <div style="font-size: 12px; color: #666; margin-bottom: 12px;">${timeFormatted}</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+      <button class="quick-param-btn" data-param="VOLUME" style="background: #28a745; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔊 Volume</button>
+      <button class="quick-param-btn" data-param="TEMPO (BPM)" style="background: #dc3545; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🎵 Tempo</button>
+      <button class="quick-param-btn" data-param="MELODIC RANGE" style="background: #6f42c1; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🎹 Range</button>
+      <button class="quick-param-btn" data-param="REVERB" style="background: #17a2b8; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🌊 Reverb</button>
+    </div>
+    <button onclick="this.remove()" style="background: #6c757d; color: white; border: none; padding: 4px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; width: 100%;">Cancel</button>
+  `;
+  
+  // Connect parameter buttons
+  const paramButtons = quickDialog.querySelectorAll('.quick-param-btn');
+  paramButtons.forEach(btn => {
+    btn.onclick = () => {
+      const paramName = btn.dataset.param;
+      quickDialog.remove();
+      
+      // Create single-parameter event quickly
+      this.createQuickParameterEvent(beat, paramName);
+    };
+  });
+  
+  document.body.appendChild(quickDialog);
+  
+  setTimeout(() => {
+    if (quickDialog.parentElement) quickDialog.remove();
+  }, 8000);
+}
+
+createQuickParameterEvent(beat, paramName) {
+  // Create simple single-parameter event
+  const currentParam = voiceData[this.voiceIndex].parameters[paramName];
+  const parameterChanges = {};
+  
+  if (typeof currentParam.min === 'number') {
+    parameterChanges[paramName] = {
+      changeType: 'range',
+      value: {
+        min: currentParam.min,
+        max: currentParam.max,
+        behavior: currentParam.behavior || 50
+      }
+    };
+  } else {
+    // Use current values for other parameter types
+    parameterChanges[paramName] = {
+      changeType: 'current',
+      value: currentParam
+    };
+  }
+  
+  // Find region index
+  const regionIndex = this.findRegionIndexForBeat(beat);
+  if (regionIndex === -1) {
+    console.warn(`⚠️ No region found for quick event at beat ${beat}`);
+    return;
+  }
+  
+  // Create compound event
+  const eventId = this.createCompoundParameterEvent(beat, regionIndex, parameterChanges);
+  
+  if (eventId) {
+    this.showCompoundEventSuccessNotification(beat, parameterChanges);
+    setTimeout(() => this.refresh(), 100);
+  }
+}
+
+showQuickDeleteFeedback(targetRegion) {
+  const feedback = document.createElement('div');
+  feedback.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #dc3545;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  feedback.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span>⚡🗑️</span>
+      <div>
+        <div>Quick Delete</div>
+        <div style="font-size: 11px; opacity: 0.9;">Region ${targetRegion.start}-${targetRegion.end} removed</div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => {
+    feedback.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => feedback.remove(), 300);
+  }, 2000);
+}
+
+
+
+// ===== ENHANCED DOUBLE-CLICK HANDLERS (NEW) =====
+
+handleGreenRegionDoubleClick(e, beat) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const region = e.target;
+  const regionIndex = parseInt(region.dataset.regionIndex);
+  
+  if (DEBUG.EVENTS) {
+    console.log(`🟢 Green region double-click: region ${regionIndex} at beat ${beat.toFixed(0)}`);
+  }
+  
+  // Get region info for menu context
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const targetRegion = playingRegions[regionIndex];
+  
+  if (!targetRegion) {
+    console.warn(`⚠️ Could not find region ${regionIndex}`);
+    return;
+  }
+  
+  SmallContextMenu.show({
+    header: `Region ${targetRegion.start}-${targetRegion.end}`,
+    items: [
+      {
+        icon: '💎',
+        text: 'Add Parameter Event',
+        action: () => this.startParameterEventCreation(beat, regionIndex)
+      },
+      {
+        icon: '📋',
+        text: 'Copy Region',
+        action: () => this.copyRegion(regionIndex, targetRegion)
+      },
+      {
+        icon: '🗑️',
+        text: 'Delete Region',
+        action: () => this.confirmDeleteRegion(regionIndex, targetRegion)
+      }
+    ]
+  }, e.clientX, e.clientY);
+}
+
+handleDiamondDoubleClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const diamond = e.target;
+  const eventId = diamond.dataset.eventId;
+  const parameterName = diamond.dataset.parameter;
+  const regionIndex = parseInt(diamond.dataset.regionIndex);
+  
+  if (!eventId || !parameterName) {
+    console.warn(`⚠️ Diamond missing data: eventId=${eventId}, param=${parameterName}`);
+    return;
+  }
+  
+  if (DEBUG.EVENTS) {
+    console.log(`💎 Diamond double-click: ${parameterName} event (${eventId}) in region ${regionIndex}`);
+  }
+  
+  // Get event data for enhanced menu
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const event = lifeSpan.events.find(e => e.id === eventId);
+  let headerText = `${parameterName} Event`;
+  let affectedParams = [parameterName];
+
+  // Check if it's a compound event
+  if (event && event.type === 'compound-parameter' && event.changes) {
+    affectedParams = Object.keys(event.changes);
+    headerText = `Multi-Parameter Event (${affectedParams.length})`;
+  }
+
+  // STREAMLINED CONTEXT MENU
+SmallContextMenu.show({
+  header: headerText,
+  items: [
+    {
+      icon: '✏️',
+      text: `Edit Event ${affectedParams.length > 1 ? `(${affectedParams.length} params)` : ''}`,
+      action: () => this.editParameterEvent(eventId, parameterName)
+    },
+    {
+      icon: '📋',
+      text: 'Copy Event',
+      action: () => this.copyParameterEvent(eventId, parameterName)
+    },
+    {
+      icon: '🗑️',
+      text: 'Delete Event',
+      action: () => this.confirmDeleteEvent(eventId, parameterName)
+    }
+  ]
+}, e.clientX, e.clientY);
+
+}
+
+
+
+
+// ===== CONTEXT MENU ACTION METHODS =====
+
+startParameterEventCreation(beat, regionIndex) {
+  if (DEBUG.EVENTS) {
+    console.log(`💎 Starting parameter event creation at beat ${beat.toFixed(0)} in region ${regionIndex}`);
+  }
+  
+  // Use your existing system but call it differently
+  this.createParameterEventAtBeat(beat, window.innerWidth / 2, window.innerHeight / 2);
+}
+
+copyRegion(regionIndex, targetRegion) {
+  // Store region data for pasting
+  const regionData = {
+    start: targetRegion.start,
+    end: targetRegion.end,
+    width: targetRegion.end - targetRegion.start,
+    voiceIndex: this.voiceIndex,
+    timestamp: Date.now()
+  };
+  
+  // Store in a simple global for now
+  window.copiedRegion = regionData;
+  
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Copied region: ${targetRegion.start}-${targetRegion.end} beats (${regionData.width} beats wide)`);
+  }
+  
+  // Show feedback
+  this.showCopySuccessFeedback(regionData);
+}
+
+confirmDeleteRegion(regionIndex, targetRegion) {
+  const confirmMessage = `🗑️ Delete Playing Region?
+
+Region: Beat ${targetRegion.start} to ${targetRegion.end}
+This will mute this timeline section.
+
+Continue?`;
+
+  if (confirm(confirmMessage)) {
+    // Capture state for undo
+    if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+      undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+    }
+    
+    this.handleRegionDeletion(regionIndex);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🗑️ Confirmed deletion of region ${regionIndex}: ${targetRegion.start}-${targetRegion.end}`);
+    }
+    
+    // Show success feedback
+    this.showDeleteSuccessFeedback(targetRegion);
+  }
+}
+editParameterEvent(eventId, parameterName) {
+  if (DEBUG.EVENTS) {
+    console.log(`✏️ Opening Event Editor for: ${parameterName} (${eventId})`);
+  }
+  
+  // Find the event
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const event = lifeSpan.events.find(e => e.id === eventId);
+  
+  if (!event) {
+    console.error(`❌ Event ${eventId} not found`);
+    return;
+  }
+  
+  // Calculate absolute beat position
+  const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+  const region = playingRegions[event.regionIndex];
+  
+  if (!region) {
+    console.error(`❌ Region ${event.regionIndex} not found`);
+    return;
+  }
+  
+  const absoluteBeat = region.start + (event.relativePosition * (region.end - region.start));
+  
+  console.log(`📝 Opening Event Editor at beat ${absoluteBeat.toFixed(0)} for editing`);
+  
+  // Store event being edited
+  window.currentEditingEvent = event;
+  
+  // Open Event Editor
+  this.showStreamlinedParameterPicker(absoluteBeat, event.regionIndex);
+  
+  // Pre-load existing parameters after editor opens
+  setTimeout(() => {
+    if (event.type === 'compound-parameter' && event.changes) {
+      // Pre-select existing parameters
+      Object.keys(event.changes).forEach(paramName => {
+        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+        if (paramBtn && !paramBtn.classList.contains('selected')) {
+          paramBtn.click();
+          
+          // Mark as existing parameter
+          paramBtn.style.borderLeft = '4px solid #28a745';
+          paramBtn.title = `${paramName} (currently in event)`;
+        }
+      });
+      
+      // Update Apply button for editing mode
+      const applyBtn = document.querySelector('.apply-event-btn');
+      if (applyBtn) {
+        applyBtn.textContent = 'Update Event';
+        applyBtn.style.background = '#17a2b8';
+      }
+      
+      console.log(`✅ Pre-loaded ${Object.keys(event.changes).length} existing parameters`);
+    }
+  }, 300);
+}
+
+
+copyParameterEvent(eventId) {
+  if (DEBUG.EVENTS) {
+    console.log(`📋 Copying parameter event: ${eventId}`);
+  }
+  
+  // Placeholder for Session 26
+  this.showFeaturePlaceholder('Copy Parameter Event', 
+    'Event copying will be implemented in Session 26');
+}
+
+confirmDeleteEvent(eventId, parameterName) {
+  const confirmMessage = `🗑️ Delete Parameter Event?
+
+Parameter: ${parameterName}
+Event ID: ${eventId}
+
+Continue?`;
+
+  if (confirm(confirmMessage)) {
+    // Use your existing delete method
+    this.deleteParameterEvent(eventId);
+  }
+}
+
+showCopySuccessFeedback(regionData) {
+  const feedback = document.createElement('div');
+  feedback.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: #17a2b8;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    animation: slideInRight 0.3s ease;
+  `;
+  
+  feedback.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span>📋</span>
+      <div>
+        <div>Region Copied</div>
+        <div style="font-size: 11px; opacity: 0.9;">${regionData.width} beats wide</div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => {
+    feedback.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => feedback.remove(), 300);
+  }, 2000);
+}
+
+
 
 // FIXED: Direct region creation with proper click-drag-release behavior
 startDirectRegionCreation(e) {
@@ -15785,12 +18312,28 @@ addDiamondDragFunctionality(diamond, eventData, regionStartBeat, regionEndBeat) 
     diamond.dataset.relativePosition = newRelativePosition;
     
     // Update title to show new position
-    diamond.title = `💎 ${eventData.parameter} - Beat ${clampedBeat.toFixed(0)} (${(newRelativePosition * 100).toFixed(1)}% in region)`;
-    
-    if (DEBUG.EVENTS && Math.random() < 0.1) {
-      console.log(`💎 Diamond at ${(newRelativePosition * 100).toFixed(1)}% in region (beat ${clampedBeat.toFixed(1)})`);
+    // Get proper parameter name for compound events
+    let displayName = 'Unknown';
+    if (diamond.dataset.eventType === 'compound-parameter') {
+      displayName = diamond.dataset.parameter || 'Multi-Parameter Event';
+    } else {
+      displayName = eventData.parameter || diamond.dataset.parameter || 'Parameter Event';
     }
-  }
+
+    diamond.title = `💎 ${displayName} - Beat ${clampedBeat.toFixed(0)} (${(newRelativePosition * 100).toFixed(1)}% in region)`;
+        
+        if (DEBUG.EVENTS && Math.random() < 0.1) {
+          console.log(`💎 Diamond at ${(newRelativePosition * 100).toFixed(1)}% in region (beat ${clampedBeat.toFixed(1)})`);
+        }
+      }
+
+      // FORCE SET TITLE (temporary fix)
+if (event.type === 'compound-parameter' && event.changes) {
+  const paramNames = Object.keys(event.changes);
+  diamond.title = `💎 ${paramNames.join(', ')} Event - Beat ${eventBeat.toFixed(0)}`;
+  console.log(`🔧 FORCED title: "${diamond.title}"`);
+}
+
 };
 
     
@@ -15881,443 +18424,443 @@ updateParameterEventRelativePosition(eventId, newRelativePosition) {
   }
 }
 
-showParameterSelectionDialog(beat, clientX, clientY) {
-  // Remove any existing dialog
-  const existingDialog = document.querySelector('.parameter-selection-dialog');
-  if (existingDialog) {
-    existingDialog.remove();
-  }
+// showParameterSelectionDialog(beat, clientX, clientY) {
+//   // Remove any existing dialog
+//   const existingDialog = document.querySelector('.parameter-selection-dialog');
+//   if (existingDialog) {
+//     existingDialog.remove();
+//   }
   
-  // Create parameter selection dialog
-  const dialog = document.createElement('div');
-  dialog.className = 'parameter-selection-dialog';
-  dialog.style.cssText = `
-    position: fixed;
-    left: ${clientX + 15}px;
-    top: ${Math.max(20, clientY - 100)}px;
-    background: white;
-    border: 2px solid #4a90e2;
-    border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-    z-index: 10001;
-    min-width: 280px;
-    max-height: 500px;
-    height: auto;
-    min-height: 450px;
-    overflow-y: auto;
-  `;
+//   // Create parameter selection dialog
+//   const dialog = document.createElement('div');
+//   dialog.className = 'parameter-selection-dialog';
+//   dialog.style.cssText = `
+//     position: fixed;
+//     left: ${clientX + 15}px;
+//     top: ${Math.max(20, clientY - 100)}px;
+//     background: white;
+//     border: 2px solid #4a90e2;
+//     border-radius: 8px;
+//     box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+//     z-index: 10001;
+//     min-width: 280px;
+//     max-height: 500px;
+//     height: auto;
+//     min-height: 450px;
+//     overflow-y: auto;
+//   `;
   
-  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
-  const timeFormatted = formatMsToMMSS(timeMs);
+//   const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+//   const timeFormatted = formatMsToMMSS(timeMs);
   
-  dialog.innerHTML = `
-    <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 10px 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between;">
+//   dialog.innerHTML = `
+//     <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 10px 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between;">
       
-      <!-- Left side: Icon and title -->
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span>💎</span>
-        <span>Parameter Event - Beat ${beat.toFixed(0)}</span>
-      </div>
+//       <!-- Left side: Icon and title -->
+//       <div style="display: flex; align-items: center; gap: 8px;">
+//         <span>💎</span>
+//         <span>Parameter Event - Beat ${beat.toFixed(0)}</span>
+//       </div>
       
-      <!-- Right side: Delete button and time info -->
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
-          <span style="font-size: 10px; color: #666;">${timeFormatted}</span>
-        </div>
-        <button class="delete-region-btn" style="
-          background: #dc3545; color: white; border: none; padding: 4px 8px;
-          border-radius: 3px; font-size: 10px; font-weight: 600; cursor: pointer;
-          transition: all 0.2s ease;
-        " title="Delete this entire playing region">Delete Region</button>
-      </div>
-    </div>
+//       <!-- Right side: Delete button and time info -->
+//       <div style="display: flex; align-items: center; gap: 8px;">
+//         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
+//           <span style="font-size: 10px; color: #666;">${timeFormatted}</span>
+//         </div>
+//         <button class="delete-region-btn" style="
+//           background: #dc3545; color: white; border: none; padding: 4px 8px;
+//           border-radius: 3px; font-size: 10px; font-weight: 600; cursor: pointer;
+//           transition: all 0.2s ease;
+//         " title="Delete this entire playing region">Delete Region</button>
+//       </div>
+//     </div>
     
-    <div style="padding: 15px; max-height: 375px; overflow-y: auto;">
-      <div style="margin-bottom: 15px; color: #666; font-size: 12px; font-style: italic; text-align: center;">
-        Select a parameter to automate at this beat position:
-      </div>
+//     <div style="padding: 15px; max-height: 375px; overflow-y: auto;">
+//       <div style="margin-bottom: 15px; color: #666; font-size: 12px; font-style: italic; text-align: center;">
+//         Select a parameter to automate at this beat position:
+//       </div>
       
-      <!-- INSTRUMENT & SOUND PARAMETERS -->
-      <div class="param-category" style="margin-bottom: 15px;">
-        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-          🎼 Instrument & Sound
-        </div>
-        <div class="param-option" data-param="INSTRUMENT" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Instrument</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Switch to different GM sound</span>
-        </div>
-        <div class="param-option" data-param="MELODIC RANGE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Melodic Range</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note range or apply scale/chord filter</span>
-        </div>
-        <div class="param-option" data-param="POLYPHONY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Polyphony</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change number of simultaneous notes</span>
-        </div>
-        <div class="param-option" data-param="ATTACK VELOCITY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Attack Velocity</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note attack strength (0-127)</span>
-        </div>
-        <div class="param-option" data-param="DETUNING" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Detuning</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Adjust pitch offset in cents (±50)</span>
-        </div>
-        <div class="param-option" data-param="PORTAMENTO GLIDE TIME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Portamento Glide</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pitch bend time between notes</span>
-        </div>
-      </div>
+//       <!-- INSTRUMENT & SOUND PARAMETERS -->
+//       <div class="param-category" style="margin-bottom: 15px;">
+//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+//           🎼 Instrument & Sound
+//         </div>
+//         <div class="param-option" data-param="INSTRUMENT" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Instrument</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Switch to different GM sound</span>
+//         </div>
+//         <div class="param-option" data-param="MELODIC RANGE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Melodic Range</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note range or apply scale/chord filter</span>
+//         </div>
+//         <div class="param-option" data-param="POLYPHONY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Polyphony</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change number of simultaneous notes</span>
+//         </div>
+//         <div class="param-option" data-param="ATTACK VELOCITY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Attack Velocity</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note attack strength (0-127)</span>
+//         </div>
+//         <div class="param-option" data-param="DETUNING" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Detuning</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Adjust pitch offset in cents (±50)</span>
+//         </div>
+//         <div class="param-option" data-param="PORTAMENTO GLIDE TIME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Portamento Glide</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pitch bend time between notes</span>
+//         </div>
+//       </div>
       
-      <!-- RHYTHM & TIMING PARAMETERS -->
-      <div class="param-category" style="margin-bottom: 15px;">
-        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-          🎵 Rhythm & Timing  
-        </div>
-        <div class="param-option" data-param="TEMPO (BPM)" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Tempo</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change BPM range (40-240)</span>
-        </div>
-        <div class="param-option" data-param="RHYTHMS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Rhythms</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected note durations</span>
-        </div>
-        <div class="param-option" data-param="RESTS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Rests</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected rest durations</span>
-        </div>
-      </div>
+//       <!-- RHYTHM & TIMING PARAMETERS -->
+//       <div class="param-category" style="margin-bottom: 15px;">
+//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+//           🎵 Rhythm & Timing  
+//         </div>
+//         <div class="param-option" data-param="TEMPO (BPM)" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Tempo</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change BPM range (40-240)</span>
+//         </div>
+//         <div class="param-option" data-param="RHYTHMS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Rhythms</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected note durations</span>
+//         </div>
+//         <div class="param-option" data-param="RESTS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Rests</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected rest durations</span>
+//         </div>
+//       </div>
       
-      <!-- MIXING & LEVELS PARAMETERS -->
-      <div class="param-category" style="margin-bottom: 15px;">
-        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-          🔊 Mixing & Levels
-        </div>
-        <div class="param-option" data-param="VOLUME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Volume</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change volume range (0-100%)</span>
-        </div>
-        <div class="param-option" data-param="STEREO BALANCE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Stereo Balance</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pan position (-100 to +100)</span>
-        </div>
-      </div>
+//       <!-- MIXING & LEVELS PARAMETERS -->
+//       <div class="param-category" style="margin-bottom: 15px;">
+//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+//           🔊 Mixing & Levels
+//         </div>
+//         <div class="param-option" data-param="VOLUME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Volume</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change volume range (0-100%)</span>
+//         </div>
+//         <div class="param-option" data-param="STEREO BALANCE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Stereo Balance</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pan position (-100 to +100)</span>
+//         </div>
+//       </div>
       
-      <!-- MODULATION EFFECTS PARAMETERS -->
-      <div class="param-category" style="margin-bottom: 15px;">
-        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-          🌊 Modulation Effects
-        </div>
-        <div class="param-option" data-param="TREMOLO" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Tremolo</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change tremolo speed/depth</span>
-        </div>
-        <div class="param-option" data-param="CHORUS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Chorus</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change chorus speed/depth</span>
-        </div>
-        <div class="param-option" data-param="PHASER" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Phaser</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change phaser speed/depth</span>
-        </div>
-      </div>
+//       <!-- MODULATION EFFECTS PARAMETERS -->
+//       <div class="param-category" style="margin-bottom: 15px;">
+//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+//           🌊 Modulation Effects
+//         </div>
+//         <div class="param-option" data-param="TREMOLO" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Tremolo</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change tremolo speed/depth</span>
+//         </div>
+//         <div class="param-option" data-param="CHORUS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Chorus</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change chorus speed/depth</span>
+//         </div>
+//         <div class="param-option" data-param="PHASER" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Phaser</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change phaser speed/depth</span>
+//         </div>
+//       </div>
       
-      <!-- SPATIAL EFFECTS PARAMETERS -->
-      <div class="param-category" style="margin-bottom: 8px;">
-        <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-          🎛️ Spatial Effects
-        </div>
-        <div class="param-option" data-param="REVERB" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-          <span style="font-weight: 500;">Reverb</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change reverb time/mix</span>
-        </div>
-        <div class="param-option" data-param="DELAY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease; margin-bottom: 0;">
-          <span style="font-weight: 500;">Delay</span>
-          <span style="font-size: 11px; color: #666; margin-left: 8px;">Change delay time/mix/feedback</span>
-        </div>
-      </div>
-    </div>
+//       <!-- SPATIAL EFFECTS PARAMETERS -->
+//       <div class="param-category" style="margin-bottom: 8px;">
+//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
+//           🎛️ Spatial Effects
+//         </div>
+//         <div class="param-option" data-param="REVERB" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
+//           <span style="font-weight: 500;">Reverb</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change reverb time/mix</span>
+//         </div>
+//         <div class="param-option" data-param="DELAY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease; margin-bottom: 0;">
+//           <span style="font-weight: 500;">Delay</span>
+//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change delay time/mix/feedback</span>
+//         </div>
+//       </div>
+//     </div>
     
-    <div style="padding: 12px; border-top: 1px solid #eee; background: #f8f9fa; text-align: center; position: sticky; bottom: 0;">
-      <button onclick="this.closest('.parameter-selection-dialog').remove()" style="
-        background: #6c757d; color: white; border: none; padding: 8px 20px;
-        border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;
-      ">Cancel</button>
-    </div>
-  `;
+//     <div style="padding: 12px; border-top: 1px solid #eee; background: #f8f9fa; text-align: center; position: sticky; bottom: 0;">
+//       <button onclick="this.closest('.parameter-selection-dialog').remove()" style="
+//         background: #6c757d; color: white; border: none; padding: 8px 20px;
+//         border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;
+//       ">Cancel</button>
+//     </div>
+//   `;
   
-  // Add hover effects and click handlers for parameter options
-  const options = dialog.querySelectorAll('.param-option');
-  options.forEach(option => {
-    option.onmouseenter = function() {
-      this.style.background = '#e7f3ff';
-      this.style.borderLeft = '3px solid #4a90e2';
-      this.style.paddingLeft = '7px';
-    };
-    option.onmouseleave = function() {
-      this.style.background = '';
-      this.style.borderLeft = '';
-      this.style.paddingLeft = '10px';
-    };
+//   // Add hover effects and click handlers for parameter options
+//   const options = dialog.querySelectorAll('.param-option');
+//   options.forEach(option => {
+//     option.onmouseenter = function() {
+//       this.style.background = '#e7f3ff';
+//       this.style.borderLeft = '3px solid #4a90e2';
+//       this.style.paddingLeft = '7px';
+//     };
+//     option.onmouseleave = function() {
+//       this.style.background = '';
+//       this.style.borderLeft = '';
+//       this.style.paddingLeft = '10px';
+//     };
     
-    option.onclick = (e) => {
-      const parameterName = option.dataset.param;
-      console.log(`💎 Selected parameter: ${parameterName} at beat ${beat.toFixed(0)}`);
+//     option.onclick = (e) => {
+//       const parameterName = option.dataset.param;
+//       console.log(`💎 Selected parameter: ${parameterName} at beat ${beat.toFixed(0)}`);
       
-      // Close dialog and proceed to value selection
-      dialog.remove();
-      this.showParameterValueDialog(parameterName, beat, clientX, clientY);
-    };
-  });
+//       // Close dialog and proceed to value selection
+//       dialog.remove();
+//       this.showParameterValueDialog(parameterName, beat, clientX, clientY);
+//     };
+//   });
   
-  // Connect delete region button (in top-right of header)
-  const deleteBtn = dialog.querySelector('.delete-region-btn');
-  if (deleteBtn) {
-    deleteBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+//   // Connect delete region button (in top-right of header)
+//   const deleteBtn = dialog.querySelector('.delete-region-btn');
+//   if (deleteBtn) {
+//     deleteBtn.onclick = (e) => {
+//       e.preventDefault();
+//       e.stopPropagation();
       
-      // Find which region this beat belongs to
-      const targetRegionIndex = this.findRegionIndexForBeat(beat);
+//       // Find which region this beat belongs to
+//       const targetRegionIndex = this.findRegionIndexForBeat(beat);
       
-      if (targetRegionIndex !== -1) {
-        const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-        const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-        const targetRegion = playingRegions[targetRegionIndex];
+//       if (targetRegionIndex !== -1) {
+//         const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+//         const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+//         const targetRegion = playingRegions[targetRegionIndex];
         
-        const confirmDelete = confirm(
-          `🗑️ Delete Playing Region?\n\n` +
-          `Beat ${targetRegion.start} to ${targetRegion.end} will be muted.\n\n` +
-          `Continue?`
-        );
+//         const confirmDelete = confirm(
+//           `🗑️ Delete Playing Region?\n\n` +
+//           `Beat ${targetRegion.start} to ${targetRegion.end} will be muted.\n\n` +
+//           `Continue?`
+//         );
         
-        if (confirmDelete) {
-          // Capture for undo
-          if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-            undoManager.captureState(`Delete region ${targetRegion.start}-${targetRegion.end}`, true);
-          }
+//         if (confirmDelete) {
+//           // Capture for undo
+//           if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+//             undoManager.captureState(`Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+//           }
           
-          // Delete the region
-          this.handleRegionDeletion(targetRegionIndex);
+//           // Delete the region
+//           this.handleRegionDeletion(targetRegionIndex);
           
-          // Close dialog
-          dialog.remove();
+//           // Close dialog
+//           dialog.remove();
           
-          console.log(`🗑️ Region deleted: ${targetRegion.start}-${targetRegion.end}`);
-        }
-      } else {
-        alert('❌ Could not find region to delete.');
-      }
-    };
+//           console.log(`🗑️ Region deleted: ${targetRegion.start}-${targetRegion.end}`);
+//         }
+//       } else {
+//         alert('❌ Could not find region to delete.');
+//       }
+//     };
     
-    // Hover effect for delete button
-    deleteBtn.onmouseenter = function() {
-      this.style.background = '#c82333';
-      this.style.transform = 'scale(1.1)';
-    };
+//     // Hover effect for delete button
+//     deleteBtn.onmouseenter = function() {
+//       this.style.background = '#c82333';
+//       this.style.transform = 'scale(1.1)';
+//     };
     
-    deleteBtn.onmouseleave = function() {
-      this.style.background = '#dc3545';
-      this.style.transform = 'scale(1)';
-    };
-  }
+//     deleteBtn.onmouseleave = function() {
+//       this.style.background = '#dc3545';
+//       this.style.transform = 'scale(1)';
+//     };
+//   }
   
-  document.body.appendChild(dialog);
+//   document.body.appendChild(dialog);
   
-  // Auto-close when clicking elsewhere
-  const closeDialog = (e) => {
-    if (!dialog.contains(e.target)) {
-      dialog.remove();
-      document.removeEventListener('click', closeDialog);
-    }
-  };
+//   // Auto-close when clicking elsewhere
+//   const closeDialog = (e) => {
+//     if (!dialog.contains(e.target)) {
+//       dialog.remove();
+//       document.removeEventListener('click', closeDialog);
+//     }
+//   };
   
-  setTimeout(() => {
-    document.addEventListener('click', closeDialog);
-  }, 100);
-}
+//   setTimeout(() => {
+//     document.addEventListener('click', closeDialog);
+//   }, 100);
+// }
 
-showParameterValueDialog(parameterName, beat, clientX, clientY) {
-  // Get current parameter data
-  const paramData = voiceData[this.voiceIndex].parameters[parameterName];
-  if (!paramData) {
-    console.error(`Parameter ${parameterName} not found for Voice ${this.voiceIndex + 1}`);
-    return;
-  }
+// showParameterValueDialog(parameterName, beat, clientX, clientY) {
+//   // Get current parameter data
+//   const paramData = voiceData[this.voiceIndex].parameters[parameterName];
+//   if (!paramData) {
+//     console.error(`Parameter ${parameterName} not found for Voice ${this.voiceIndex + 1}`);
+//     return;
+//   }
   
-  // Remove any existing dialog
-  const existingDialog = document.querySelector('.parameter-value-dialog');
-  if (existingDialog) {
-    existingDialog.remove();
-  }
+//   // Remove any existing dialog
+//   const existingDialog = document.querySelector('.parameter-value-dialog');
+//   if (existingDialog) {
+//     existingDialog.remove();
+//   }
   
-  const dialog = document.createElement('div');
-  dialog.className = 'parameter-value-dialog';
-  dialog.style.cssText = `
-    position: fixed;
-    left: ${Math.min(clientX + 20, window.innerWidth - 350)}px;
-    top: ${Math.max(20, clientY - 50)}px;
-    background: white;
-    border: 2px solid #4a90e2;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-    z-index: 10002;
-    width: 320px;
-  `;
+//   const dialog = document.createElement('div');
+//   dialog.className = 'parameter-value-dialog';
+//   dialog.style.cssText = `
+//     position: fixed;
+//     left: ${Math.min(clientX + 20, window.innerWidth - 350)}px;
+//     top: ${Math.max(20, clientY - 50)}px;
+//     background: white;
+//     border: 2px solid #4a90e2;
+//     border-radius: 8px;
+//     box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+//     z-index: 10002;
+//     width: 320px;
+//   `;
   
-  const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
-  const timeFormatted = formatMsToMMSS(timeMs);
+//   const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
+//   const timeFormatted = formatMsToMMSS(timeMs);
   
 
-dialog.innerHTML = `
-  <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 12px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-    <span>💎</span>
-    <span>${parameterName} Event</span>
-    <span style="font-size: 12px; color: #666; margin-left: auto;">Beat ${beat.toFixed(0)}</span>
-  </div>
+// dialog.innerHTML = `
+//   <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 12px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+//     <span>💎</span>
+//     <span>${parameterName} Event</span>
+//     <span style="font-size: 12px; color: #666; margin-left: auto;">Beat ${beat.toFixed(0)}</span>
+//   </div>
           
-    <div style="padding: 20px;">
-      <div style="margin-bottom: 20px; text-align: center; color: #666; font-size: 13px;">
-        Set new values for <strong>${parameterName}</strong> starting at beat ${beat.toFixed(0)} (${timeFormatted})
-      </div>
+//     <div style="padding: 20px;">
+//       <div style="margin-bottom: 20px; text-align: center; color: #666; font-size: 13px;">
+//         Set new values for <strong>${parameterName}</strong> starting at beat ${beat.toFixed(0)} (${timeFormatted})
+//       </div>
       
-      <div id="parameter-value-inputs">
-        <!-- Dynamic content based on parameter type -->
-      </div>
+//       <div id="parameter-value-inputs">
+//         <!-- Dynamic content based on parameter type -->
+//       </div>
       
-      <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
-        <button class="create-event-btn" style="
-          background: #28a745; color: white; border: none; padding: 8px 20px;
-          border-radius: 4px; font-weight: 600; cursor: pointer;
-        ">Create Event</button>
-        <button onclick="this.closest('.parameter-value-dialog').remove()" style="
-          background: #6c757d; color: white; border: none; padding: 8px 16px;
-          border-radius: 4px; cursor: pointer;
-        ">Cancel</button>
-      </div>
-    </div>
-  `;
+//       <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+//         <button class="create-event-btn" style="
+//           background: #28a745; color: white; border: none; padding: 8px 20px;
+//           border-radius: 4px; font-weight: 600; cursor: pointer;
+//         ">Create Event</button>
+//         <button onclick="this.closest('.parameter-value-dialog').remove()" style="
+//           background: #6c757d; color: white; border: none; padding: 8px 16px;
+//           border-radius: 4px; cursor: pointer;
+//         ">Cancel</button>
+//       </div>
+//     </div>
+//   `;
   
-  // Generate appropriate input interface
-  const inputsContainer = dialog.querySelector('#parameter-value-inputs');
-  this.createParameterInputInterface(parameterName, paramData, inputsContainer);
+//   // Generate appropriate input interface
+//   const inputsContainer = dialog.querySelector('#parameter-value-inputs');
+//   this.createParameterInputInterface(parameterName, paramData, inputsContainer);
   
-  // Connect create button
-  const createBtn = dialog.querySelector('.create-event-btn');
-  createBtn.onclick = () => {
-    const eventData = this.collectParameterEventData(parameterName, inputsContainer);
-    if (eventData) {
-      this.insertParameterEvent(beat, parameterName, eventData);
-      dialog.remove();
+//   // Connect create button
+//   const createBtn = dialog.querySelector('.create-event-btn');
+//   createBtn.onclick = () => {
+//     const eventData = this.collectParameterEventData(parameterName, inputsContainer);
+//     if (eventData) {
+//       this.insertParameterEvent(beat, parameterName, eventData);
+//       dialog.remove();
       
-      // Show success feedback
-      this.showParameterEventCreated(beat, parameterName);
+//       // Show success feedback
+//       this.showParameterEventCreated(beat, parameterName);
       
-      // Refresh timeline
-      setTimeout(() => this.refresh(), 100);
-    }
-  };
+//       // Refresh timeline
+//       setTimeout(() => this.refresh(), 100);
+//     }
+//   };
   
-  document.body.appendChild(dialog);
+//   document.body.appendChild(dialog);
 
-  document.body.appendChild(dialog);
+//   document.body.appendChild(dialog);
 
-// Connect delete region button
-const deleteBtn = dialog.querySelector('.delete-region-btn');
-if (deleteBtn) {
-  deleteBtn.onclick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+// // Connect delete region button
+// const deleteBtn = dialog.querySelector('.delete-region-btn');
+// if (deleteBtn) {
+//   deleteBtn.onclick = (e) => {
+//     e.preventDefault();
+//     e.stopPropagation();
     
-    // Find which region this beat belongs to
-    const targetRegionIndex = this.findRegionIndexForBeat(beat);
+//     // Find which region this beat belongs to
+//     const targetRegionIndex = this.findRegionIndexForBeat(beat);
     
-    if (targetRegionIndex !== -1) {
-      // Confirm deletion
-      const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-      const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-      const targetRegion = playingRegions[targetRegionIndex];
+//     if (targetRegionIndex !== -1) {
+//       // Confirm deletion
+//       const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+//       const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+//       const targetRegion = playingRegions[targetRegionIndex];
       
-      const confirmDelete = confirm(
-        `🗑️ Delete Playing Region?\n\n` +
-        `This will delete the playing region from Beat ${targetRegion.start} to ${targetRegion.end}.\n\n` +
-        `The timeline will be muted in this area.\n\n` +
-        `Continue with deletion?`
-      );
+//       const confirmDelete = confirm(
+//         `🗑️ Delete Playing Region?\n\n` +
+//         `This will delete the playing region from Beat ${targetRegion.start} to ${targetRegion.end}.\n\n` +
+//         `The timeline will be muted in this area.\n\n` +
+//         `Continue with deletion?`
+//       );
       
-      if (confirmDelete) {
-        // Capture state for undo
-        if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-          undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
-        }
+//       if (confirmDelete) {
+//         // Capture state for undo
+//         if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+//           undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
+//         }
         
-        // Delete the region
-        this.handleRegionDeletion(targetRegionIndex);
+//         // Delete the region
+//         this.handleRegionDeletion(targetRegionIndex);
         
-        // Close dialog
-        dialog.remove();
+//         // Close dialog
+//         dialog.remove();
         
-        // Show success feedback
-        setTimeout(() => {
-          this.showUnifiedBeatTooltip(window.innerWidth / 2, 100, {
-            type: 'context-help',
-            beat: beat,
-            operation: 'Region Deleted',
-            additionalInfo: `Playing region ${targetRegion.start}-${targetRegion.end} removed`
-          });
+//         // Show success feedback
+//         setTimeout(() => {
+//           this.showUnifiedBeatTooltip(window.innerWidth / 2, 100, {
+//             type: 'context-help',
+//             beat: beat,
+//             operation: 'Region Deleted',
+//             additionalInfo: `Playing region ${targetRegion.start}-${targetRegion.end} removed`
+//           });
           
-          setTimeout(() => {
-            this.hideUnifiedTooltip();
-          }, 3000);
-        }, 200);
+//           setTimeout(() => {
+//             this.hideUnifiedTooltip();
+//           }, 3000);
+//         }, 200);
         
-        if (DEBUG.EVENTS) {
-          console.log(`🗑️ Deleted region via popup button: ${targetRegion.start}-${targetRegion.end}`);
-        }
-      }
-    } else {
-      alert('❌ Could not find region to delete.');
-    }
-  };
+//         if (DEBUG.EVENTS) {
+//           console.log(`🗑️ Deleted region via popup button: ${targetRegion.start}-${targetRegion.end}`);
+//         }
+//       }
+//     } else {
+//       alert('❌ Could not find region to delete.');
+//     }
+//   };
   
-  // Add hover effect to delete button
-  deleteBtn.onmouseenter = function() {
-    this.style.background = '#c82333';
-    this.style.transform = 'scale(1.05)';
-  };
+//   // Add hover effect to delete button
+//   deleteBtn.onmouseenter = function() {
+//     this.style.background = '#c82333';
+//     this.style.transform = 'scale(1.05)';
+//   };
   
-  deleteBtn.onmouseleave = function() {
-    this.style.background = '#dc3545';
-    this.style.transform = 'scale(1)';
-  };
-}
+//   deleteBtn.onmouseleave = function() {
+//     this.style.background = '#dc3545';
+//     this.style.transform = 'scale(1)';
+//   };
+// }
 
-}
+// }
 
-createParameterInputInterface(parameterName, paramData, container) {
-  container.innerHTML = '';
+// createParameterInputInterface(parameterName, paramData, container) {
+//   container.innerHTML = '';
   
-  if (typeof paramData.min === 'number' && typeof paramData.max === 'number') {
-    // Range parameter (Volume, Tempo, Melodic Range, etc.)
-    this.createRangeInputInterface(parameterName, paramData, container);
-  } else if (paramData.selectedValues && Array.isArray(paramData.selectedValues)) {
-    // Multi-select parameter (Rhythms, Rests)
-    this.createMultiSelectInterface(parameterName, paramData, container);
-  } else if (typeof paramData === 'number') {
-    // Simple dropdown (Instrument)
-    this.createDropdownInterface(parameterName, paramData, container);
-  } else if (paramData.speed || paramData.depth) {
-    // Multi-dual parameter (Effects)
-    this.createEffectInterface(parameterName, paramData, container);
-  } else {
-    // Placeholder for complex parameters
-    container.innerHTML = `
-      <div style="text-align: center; color: #666; padding: 20px;">
-        <div>📋</div>
-        <div style="margin-top: 8px;">Parameter event interface for <strong>${parameterName}</strong><br>will be implemented in Phase A.2</div>
-      </div>
-    `;
-  }
-}
+//   if (typeof paramData.min === 'number' && typeof paramData.max === 'number') {
+//     // Range parameter (Volume, Tempo, Melodic Range, etc.)
+//     this.createRangeInputInterface(parameterName, paramData, container);
+//   } else if (paramData.selectedValues && Array.isArray(paramData.selectedValues)) {
+//     // Multi-select parameter (Rhythms, Rests)
+//     this.createMultiSelectInterface(parameterName, paramData, container);
+//   } else if (typeof paramData === 'number') {
+//     // Simple dropdown (Instrument)
+//     this.createDropdownInterface(parameterName, paramData, container);
+//   } else if (paramData.speed || paramData.depth) {
+//     // Multi-dual parameter (Effects)
+//     this.createEffectInterface(parameterName, paramData, container);
+//   } else {
+//     // Placeholder for complex parameters
+//     container.innerHTML = `
+//       <div style="text-align: center; color: #666; padding: 20px;">
+//         <div>📋</div>
+//         <div style="margin-top: 8px;">Parameter event interface for <strong>${parameterName}</strong><br>will be implemented in Phase A.2</div>
+//       </div>
+//     `;
+//   }
+// }
 
 createRangeInputInterface(parameterName, paramData, container) {
   const currentMin = paramData.currentValue !== undefined ? paramData.currentValue : paramData.min;
@@ -16483,108 +19026,251 @@ showParameterEventCreated(beat, parameterName) {
   // DON'T refresh automatically - just show the notification
 }
 
+// NEW: Update cursor based on position - CORRECTED TOOLTIPS
+updateCursorForPosition(beat) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
+  
+  if (isInPlayingRegion) {
+    // Over green region - show gray vertical bar cursor (will mute)
+    track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Drag to mute | Click for event`;
+  } else {
+    // Over gray region - show green vertical bar cursor (will unmute)
+    track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Drag to unmute | Click for event`;
+  }
+}
 
-  // NEW: Update cursor based on position - CORRECTED TOOLTIPS
-  updateCursorForPosition(beat) {
-    const track = this.container.querySelector('.visual-timeline-track');
-    const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
-    
-    if (isInPlayingRegion) {
-      // Over green region - show gray vertical bar cursor (will mute)
-      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
-      track.title = `Beat ${beat.toFixed(0)} - Drag to mute | Click for event`;
-    } else {
-      // Over gray region - show green vertical bar cursor (will unmute)
-      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
-      track.title = `Beat ${beat.toFixed(0)} - Drag to unmute | Click for event`;
+
+// NEW: Update legacy millisecond storage
+updateLegacyStorage() {
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const tempo = getCurrentTempoForVoice(this.voiceIndex);
+  const beatUnit = lifeSpan.beatUnit || 7;
+  
+  for (let i = 1; i <= 3; i++) {
+    const span = lifeSpan[`lifeSpan${i}`];
+    if (span) {
+      if (!lifeSpan[`lifeSpan${i}Legacy`]) {
+        lifeSpan[`lifeSpan${i}Legacy`] = {};
+      }
+      
+      lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
+      lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
     }
   }
   
+  console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
+}
+
+// NEW: Show drag preview overlay
+showDragPreview(startBeat, endBeat) {
+  // Clear existing preview
+  this.clearDragPreview();
   
-  // NEW: Update legacy millisecond storage
-  updateLegacyStorage() {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    const tempo = getCurrentTempoForVoice(this.voiceIndex);
-    const beatUnit = lifeSpan.beatUnit || 7;
+  const track = this.container.querySelector('.visual-timeline-track');
+  if (!track) return;
+  
+  const minBeat = Math.min(startBeat, endBeat);
+  const maxBeat = Math.max(startBeat, endBeat);
+  
+  const leftPercent = (minBeat / this.maxBeats) * 100;
+  const widthPercent = ((maxBeat - minBeat) / this.maxBeats) * 100;
+  
+  const preview = document.createElement('div');
+  preview.className = 'timeline-drag-preview';
+  preview.style.cssText = `
+    position: absolute;
+    left: ${leftPercent.toFixed(2)}%;
+    width: ${widthPercent.toFixed(2)}%;
+    top: 5px;
+    bottom: 5px;
+    background: ${this.currentMode === 'mute' ? 'rgba(108,117,125,0.5)' : 'rgba(40,167,69,0.5)'};
+    border: 2px dashed ${this.currentMode === 'mute' ? '#6c757d' : '#28a745'};
+    border-radius: 4px;
+    z-index: 150;
+    pointer-events: none;
+  `;
+  
+  track.appendChild(preview);
+}
+
+// NEW: Clear drag preview
+clearDragPreview() {
+  const preview = this.container.querySelector('.timeline-drag-preview');
+  if (preview) {
+    preview.remove();
+  }
+}
+
+// NEW: Update cursor based on position  
+updateCursorForPosition(beat) {
+  const track = this.container.querySelector('.visual-timeline-track');
+  const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
+  
+  if (isInPlayingRegion) {
+    // Over green region - show gray vertical bar cursor (will mute)
+    track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Drag to MUTE this area`;
+  } else {
+    // Over gray region - show green vertical bar cursor (will unmute)
+    track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
+    track.title = `Beat ${beat.toFixed(0)} - Drag to UNMUTE this area`;
+  }
+}
+
+// ===== REGION BODY DRAG FUNCTIONALITY (RESTORED) =====
+addRegionBodyDragFunctionality(regionElement, regionIndex) {
+  let isDragging = false;
+  let dragStartX = 0;
+  let regionStartBeat = 0;
+  let regionWidth = 0;
+  let clickOffset = 0;
+  
+  regionElement.onmousedown = (e) => {
+    // Only handle clicks on region body, not handles
+    if (e.target.classList.contains('region-drag-handle')) {
+      return; // Let handle drag take over
+    }
     
-    for (let i = 1; i <= 3; i++) {
-      const span = lifeSpan[`lifeSpan${i}`];
-      if (span) {
-        if (!lifeSpan[`lifeSpan${i}Legacy`]) {
-          lifeSpan[`lifeSpan${i}Legacy`] = {};
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    const playingRegions = this.convertEventsToRegions(lifeSpan.events);
+    const targetRegion = playingRegions[regionIndex];
+    
+    if (!targetRegion) return;
+    
+    dragStartX = e.clientX;
+    regionStartBeat = targetRegion.start;
+    regionWidth = targetRegion.end - targetRegion.start;
+    
+    const clickBeat = this.screenXToBeat(e.clientX);
+    clickOffset = clickBeat - regionStartBeat;
+    
+    // Visual feedback
+    regionElement.style.cursor = 'grabbing';
+    regionElement.style.boxShadow = '0 0 12px rgba(40,167,69,0.8)';
+    regionElement.style.transform = 'translateY(-2px)';
+    regionElement.style.opacity = '0.8';
+    regionElement.style.border = '2px solid #28a745';
+    
+    if (DEBUG.EVENTS) {
+      console.log(`🟢 Started region body drag: region ${regionIndex}, width ${regionWidth} beats`);
+    }
+    
+    const handleMouseMove = (moveEvent) => {
+      if (!isDragging) {
+        const dragDistance = Math.abs(moveEvent.clientX - dragStartX);
+        if (dragDistance > 5) {
+          isDragging = true;
+          
+          // Capture state for undo
+          if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
+            undoManager.captureState(`Timeline: Move region ${targetRegion.start}-${targetRegion.end}`, true);
+          }
+          
+          if (DEBUG.EVENTS) {
+            console.log(`🖱️ Region drag started (threshold reached)`);
+          }
+        } else {
+          return;
+        }
+      }
+      
+      const currentBeat = this.screenXToBeat(moveEvent.clientX);
+      const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+      
+      // Calculate new region position
+      let newRegionStart = snappedBeat - clickOffset;
+      let newRegionEnd = newRegionStart + regionWidth;
+      
+      // Clamp to timeline bounds
+      if (newRegionStart < 0) {
+        newRegionStart = 0;
+        newRegionEnd = regionWidth;
+      } else if (newRegionEnd > this.maxBeats) {
+        newRegionEnd = this.maxBeats;
+        newRegionStart = this.maxBeats - regionWidth;
+      }
+      
+      newRegionStart = Math.max(0, newRegionStart);
+      newRegionEnd = Math.min(this.maxBeats, newRegionEnd);
+      
+      // Update visual position with live label update
+      this.updateWholeRegionPosition(regionElement, newRegionStart, newRegionEnd);
+      
+      // Update diamonds in real-time during region drag
+      this.updateDiamondsForRegionDragRealTime(regionIndex, newRegionStart, newRegionEnd);
+      
+      // Show position in tooltip
+      const timeMs = beatsToMs(newRegionStart, this.beatUnit, this.tempo);
+      const timeFormatted = formatMsToMMSS(timeMs);
+      
+      this.showDragTooltip(moveEvent.clientX, moveEvent.clientY, newRegionStart, timeFormatted, 'region-move');
+    };
+    
+    const handleMouseUp = (upEvent) => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      if (isDragging) {
+        // Apply the drag operation to events array
+        const currentBeat = this.screenXToBeat(upEvent.clientX);
+        const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
+        
+        let newRegionStart = snappedBeat - clickOffset;
+        let newRegionEnd = newRegionStart + regionWidth;
+        
+        // Clamp and snap final positions
+        if (newRegionStart < 0) {
+          newRegionStart = 0;
+          newRegionEnd = regionWidth;
+        } else if (newRegionEnd > this.maxBeats) {
+          newRegionEnd = this.maxBeats;
+          newRegionStart = this.maxBeats - regionWidth;
         }
         
-        lifeSpan[`lifeSpan${i}Legacy`].enter = beatsToMs(span.enterBeats || 0, beatUnit, tempo);
-        lifeSpan[`lifeSpan${i}Legacy`].exit = beatsToMs(span.exitBeats || 0, beatUnit, tempo);
+        newRegionStart = Math.round(Math.max(0, newRegionStart));
+        newRegionEnd = Math.round(Math.min(this.maxBeats, newRegionEnd));
+        
+        // Update events array
+        this.replaceRegionInEvents(regionIndex, newRegionStart, newRegionEnd);
+        
+        if (DEBUG.EVENTS) {
+          console.log(`✅ Region moved to: ${newRegionStart}-${newRegionEnd} beats`);
+        }
       }
-    }
+      
+      // Reset visual state
+      regionElement.style.cursor = '';
+      regionElement.style.boxShadow = '';
+      regionElement.style.transform = '';
+      regionElement.style.opacity = '';
+      regionElement.style.border = '';
+      
+      // Remove tooltip
+      const dragTooltip = document.querySelector('.drag-tooltip');
+      if (dragTooltip) {
+        dragTooltip.remove();
+      }
+      
+      // Refresh timeline
+      setTimeout(() => this.refresh(), 50);
+    };
     
-    console.log(`💾 Updated legacy storage for Voice ${this.voiceIndex + 1}`);
-  }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+}
 
-
-  // NEW: Show drag preview overlay
-  showDragPreview(startBeat, endBeat) {
-    // Clear existing preview
-    this.clearDragPreview();
-    
-    const track = this.container.querySelector('.visual-timeline-track');
-    if (!track) return;
-    
-    const minBeat = Math.min(startBeat, endBeat);
-    const maxBeat = Math.max(startBeat, endBeat);
-    
-    const leftPercent = (minBeat / this.maxBeats) * 100;
-    const widthPercent = ((maxBeat - minBeat) / this.maxBeats) * 100;
-    
-    const preview = document.createElement('div');
-    preview.className = 'timeline-drag-preview';
-    preview.style.cssText = `
-      position: absolute;
-      left: ${leftPercent.toFixed(2)}%;
-      width: ${widthPercent.toFixed(2)}%;
-      top: 5px;
-      bottom: 5px;
-      background: ${this.currentMode === 'mute' ? 'rgba(108,117,125,0.5)' : 'rgba(40,167,69,0.5)'};
-      border: 2px dashed ${this.currentMode === 'mute' ? '#6c757d' : '#28a745'};
-      border-radius: 4px;
-      z-index: 150;
-      pointer-events: none;
-    `;
-    
-    track.appendChild(preview);
-  }
-  
-  // NEW: Clear drag preview
-  clearDragPreview() {
-    const preview = this.container.querySelector('.timeline-drag-preview');
-    if (preview) {
-      preview.remove();
-    }
-  }
-  
-
-  // NEW: Update cursor based on position  
-  updateCursorForPosition(beat) {
-    const track = this.container.querySelector('.visual-timeline-track');
-    const isInPlayingRegion = this.checkIfBeatIsInPlayingRegion(beat);
-    
-    if (isInPlayingRegion) {
-      // Over green region - show gray vertical bar cursor (will mute)
-      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%23666\'/></svg>") 12 12, crosshair';
-      track.title = `Beat ${beat.toFixed(0)} - Drag to MUTE this area`;
-    } else {
-      // Over gray region - show green vertical bar cursor (will unmute)
-      track.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><rect x=\'11\' y=\'4\' width=\'2\' height=\'16\' fill=\'%2328a745\'/></svg>") 12 12, crosshair';
-      track.title = `Beat ${beat.toFixed(0)} - Drag to UNMUTE this area`;
-    }
-  }
 
 }
 
 // Global visual timeline instance
 let visualTimeline = null;
-
 
 // ===== VIEW TOGGLE SYSTEM =====
 let currentViewMode = 'parameter'; // 'parameter' or 'timeline'
@@ -17204,8 +19890,6 @@ function logPerformanceSummary() {
 // Manual performance summary trigger
 window.showPerformanceStats = logPerformanceSummary;
 
-// ADD this pool testing function before DOMContentLoaded
-
 // Initialize systems on page load
 document.addEventListener('DOMContentLoaded', () => {
   audioManager = new AudioManager();
@@ -17213,13 +19897,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // NEW: Initialize undo manager BEFORE voices
   undoManager = new UndoManager();
   
-  // NEW: Initialize view state manager
-  viewStateManager = new ViewStateManager();
-
-  if (DEBUG.TIMELINE) {
-    console.log('🔄 ViewStateManager initialized');
-  }
-
   // NEW: Disable capturing during initialization
   undoManager.isCapturing = false;
   
@@ -17229,20 +19906,18 @@ document.addEventListener('DOMContentLoaded', () => {
   
   initializeVoices();
   createVoiceTabs();
-  renderParameters();
   
   presetManager = new PresetManager();
 
-  // NEW: Initialize view state manager AFTER preset manager
+  // NEW: Initialize view state manager ONCE (removed duplicate)
   viewStateManager = new ViewStateManager();
 
   if (DEBUG.TIMELINE) {
-    console.log('🔄 ViewStateManager initialized');
-    console.log('   Default mode: parameter');
+    console.log('🔄 ViewStateManager initialized ONCE');
+    console.log('   Default mode: timeline');
     console.log('   State preservation: enabled');
     console.log('   Audio protection: active');
   }
-
 
   setTimeout(() => {
       const openButton = document.querySelector('#file-controls button:nth-child(2)');
@@ -17265,55 +19940,44 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   }, 300);
 
-// NEW: Connect view toggle button with state preservation  
-setTimeout(() => {
-  const viewToggleBtn = document.getElementById('view-toggle-btn');
-  if (viewToggleBtn) {
-    // Remove any existing click handler
-    viewToggleBtn.onclick = null;
-    
-    viewToggleBtn.onclick = function(e) {
-      e.preventDefault();
-      e.stopPropagation();
+  // NEW: Connect view toggle button with state preservation  
+  setTimeout(() => {
+    const viewToggleBtn = document.getElementById('view-toggle-btn');
+    if (viewToggleBtn) {
+      // Remove any existing click handler
+      viewToggleBtn.onclick = null;
       
-      // Protect audio state before switch
-      const audioState = protectAudioDuringViewSwitch();
+      viewToggleBtn.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Protect audio state before switch
+        const audioState = protectAudioDuringViewSwitch();
+        
+        const newMode = viewStateManager.currentMode === 'parameter' ? 'timeline' : 'parameter';
+        
+        if (DEBUG.TIMELINE) {
+          console.log(`🔘 View toggle clicked: switching to ${newMode} mode`);
+          console.log(`   Audio protected: ${audioState.masterClockRunning ? 'playing' : 'stopped'}`);
+        }
+        
+        const success = viewStateManager.switchMode(newMode);
+        
+        if (success) {
+          // Validate audio continuity after switch
+          setTimeout(() => {
+            validateAudioAfterViewSwitch(audioState);
+          }, 250);
+        } else {
+          console.warn(`⚠️ View switch failed or already in progress`);
+        }
+      };
       
-      const newMode = viewStateManager.currentMode === 'parameter' ? 'timeline' : 'parameter';
-      
-      if (DEBUG.TIMELINE) {
-        console.log(`🔘 View toggle clicked: switching to ${newMode} mode`);
-        console.log(`   Audio protected: ${audioState.masterClockRunning ? 'playing' : 'stopped'}`);
-      }
-      
-      const success = viewStateManager.switchMode(newMode);
-      
-      if (success) {
-        // Validate audio continuity after switch
-        setTimeout(() => {
-          validateAudioAfterViewSwitch(audioState);
-        }, 250);
-      } else {
-        console.warn(`⚠️ View switch failed or already in progress`);
-      }
-    };
-    
-    console.log('✅ View toggle button connected with state preservation');
-  } else {
-    console.warn('⚠️ View toggle button not found - check HTML structure');
-    
-    // Debug: Log all file control buttons
-    const fileControls = document.getElementById('file-controls');
-    if (fileControls) {
-      const buttons = fileControls.querySelectorAll('button');
-      console.log(`   Found ${buttons.length} file control buttons:`);
-      buttons.forEach((btn, index) => {
-        console.log(`     ${index + 1}: ${btn.textContent} (id: ${btn.id || 'none'})`);
-      });
+      console.log('✅ View toggle button connected with state preservation');
+    } else {
+      console.warn('⚠️ View toggle button not found - check HTML structure');
     }
-  }
-}, 400); // Slightly later than other button connections
-
+  }, 400);
 
   setTimeout(() => {
     resetAdvancedParameterDefaults();
@@ -17365,36 +20029,51 @@ setTimeout(() => {
   
   if (DEBUG.UNDO_REDO) {
     console.log('⌨️ Undo/Redo keyboard shortcuts registered');
-    console.log('   Ctrl+Z = Undo');
-    console.log('   Ctrl+Y or Ctrl+Shift+Z = Redo');
   }
   
   // NEW: Re-enable undo capturing AFTER initialization complete
   setTimeout(() => {
     if (undoManager) {
       undoManager.isCapturing = true;
-      undoManager.clear(); // Clear any states captured during init
+      undoManager.clear();
       
       if (DEBUG.UNDO_REDO) {
         console.log('🔓 Undo capturing ENABLED');
-        console.log('   Initialization states cleared');
-        console.log('   Ready for user actions');
       }
     }
-  }, 1000); // Wait 1 second after page load
+  }, 1000);
 
-//     // NEW: Initialize view state manager as final step
-// NEW: Initialize view state manager as final step
-setTimeout(() => {
-  if (viewStateManager) {
-    // Capture initial parameter view state
-    viewStateManager.captureCurrentState();
-    
-    console.log('🎯 Initial view state captured');
-  }
-}, 1500); // After undo system is ready
+  // FINAL CLEAN INITIALIZATION (no competing timers)
+  setTimeout(() => {
+    if (viewStateManager) {
+      console.log('🎯 FINAL: Setting Timeline View as default');
+      
+      // Force Timeline View without switching logic (avoid bounce)
+      viewStateManager.currentMode = 'timeline';
+      
+      // Hide Parameter View
+      const parameterSection = document.getElementById('parameter-section');
+      if (parameterSection) {
+        parameterSection.style.display = 'none';
+      }
+      
+      // Show Master Timeline  
+      let masterTimelineContainer = document.getElementById('master-timeline-container');
+      if (!masterTimelineContainer) {
+        masterTimelineContainer = viewStateManager.createMasterTimelineContainer();
+        document.getElementById('main-content').appendChild(masterTimelineContainer);
+      }
+      masterTimelineContainer.style.display = 'flex';
+      
+      // Set button correctly
+      viewStateManager.updateToggleButton('timeline');
+      
+      console.log('✅ FINAL: Timeline View set as default (no bounce)');
+    }
+  }, 100); // Faster initialization
 
 });
+
 
 
 // ===== UNDO/REDO VISUAL FEEDBACK =====
