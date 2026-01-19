@@ -15964,14 +15964,14 @@ showStreamlinedParameterPicker(beat, regionIndex) {
         
         <!-- Column 1: Mixing & Levels -->
         <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">MIXING</div>
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; font-weight: 600; text-align: center;">MIXING</div>
           <div class="param-btn" data-param="VOLUME">🔊 Volume</div>
           <div class="param-btn" data-param="STEREO BALANCE">⚖️ Stereo Balance</div>
         </div>
         
         <!-- Column 2: Instrument & Sound -->
         <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">INSTRUMENT</div>
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; font-weight: 600; text-align: center;">INSTRUMENT</div>
           <div class="param-btn" data-param="INSTRUMENT">🎼 Instrument</div>
           <div class="param-btn" data-param="MELODIC RANGE">🎹 Melodic Range</div>
           <div class="param-btn" data-param="POLYPHONY">🎛️ Polyphony</div>
@@ -15982,7 +15982,7 @@ showStreamlinedParameterPicker(beat, regionIndex) {
         
         <!-- Column 3: Rhythm & Timing -->
         <div class="param-column" style="background: white; padding: 12px; border-right: 1px solid #dee2e6;">
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">RHYTHM</div>
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; font-weight: 600; text-align: center;">RHYTHM</div>
           <div class="param-btn" data-param="TEMPO (BPM)">🎵 Tempo</div>
           <div class="param-btn" data-param="RHYTHMS">🎶 Rhythms</div>
           <div class="param-btn" data-param="RESTS">⏸️ Rests</div>
@@ -15990,7 +15990,7 @@ showStreamlinedParameterPicker(beat, regionIndex) {
         
         <!-- Column 4: Effects (No right border) -->
         <div class="param-column" style="background: white; padding: 12px;">
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; color: #666; font-weight: 600; text-align: center;">EFFECTS</div>
+          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; font-weight: 600; text-align: center;">EFFECTS</div>
           <div class="param-btn" data-param="TREMOLO">〰️ Tremolo</div>
           <div class="param-btn" data-param="CHORUS">🎭 Chorus</div>
           <div class="param-btn" data-param="PHASER">🌀 Phaser</div>
@@ -16034,7 +16034,7 @@ showStreamlinedParameterPicker(beat, regionIndex) {
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s ease;
-      font-size: 12px;
+      font-size: 13px;
       background: #f8f9fa;
       border: 1px solid #dee2e6;
       text-align: left;
@@ -16682,25 +16682,30 @@ createMultiSelectControls(paramName, currentParam) {
   const selectedValues = currentParam.selectedValues || [];
   
   container.innerHTML = `
-    <div style="margin-bottom: 10px;">
-      <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600;">Select ${paramName}:</label>
-      <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: #fefefe;">
+  <div style="margin-bottom: 10px;">
+    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600;">Select ${paramName}:</label>
+    <div style="max-height: 140px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: #fefefe;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 8px; align-items: start;">
         ${options.map((option, index) => `
-          <label style="display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; cursor: pointer;">
+          <label style="display: flex; align-items: center; gap: 4px; padding: 2px 0; font-size: 12px; cursor: pointer; white-space: nowrap;">
             <input type="checkbox" class="event-rhythm-checkbox" value="${index}" 
                    ${selectedValues.includes(index) ? 'checked' : ''} 
-                   style="margin: 0;">
-            <span>${option}</span>
+                   style="margin: 0; flex-shrink: 0;">
+            <span style="overflow: hidden; text-overflow: ellipsis;">${option}</span>
           </label>
         `).join('')}
       </div>
     </div>
-    
-    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 10px; font-size: 12px; color: #0d47a1;">
-      <div style="font-weight: 600; margin-bottom: 4px;">💡 Currently selected:</div>
-      <div>${selectedValues.map(i => options[i]).join(', ') || 'None'}</div>
+  </div>
+  
+  <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 8px; font-size: 11px; color: #0d47a1;">
+    <div style="font-weight: 600; margin-bottom: 4px;">💡 Currently selected (${selectedValues.length}):</div>
+    <div style="max-height: 40px; overflow-y: auto; font-size: 10px; line-height: 1.3;">
+      ${selectedValues.map(i => options[i]).join(', ') || 'None'}
     </div>
-  `;
+  </div>
+`;
+
   
   return container;
 }
