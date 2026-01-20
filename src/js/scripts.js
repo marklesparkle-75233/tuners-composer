@@ -3714,12 +3714,11 @@ function toggleLockVoice(voiceIndex) {
   renderParameters();
 }
 
-
 async function toggleMasterPlayback() {
-
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
   
   if (playButton && playButton.textContent === 'STOP') {
+    // ===== STOP PLAYBACK =====
     
     if (voiceClockManager) {
       voiceClockManager.stopAllVoices();
@@ -3728,17 +3727,22 @@ async function toggleMasterPlayback() {
     if (masterClock) {
       masterClock.stop();
     }
-// In the STOP section (around line 1586), add:
-    if (audioManager && audioManager.audioHealthMonitor) {
-      audioManager.audioHealthMonitor.stopMonitoring();
+    
+    if (audioManager) {
+      audioManager.isPlaying = false;
+      if (audioManager.audioHealthMonitor) {
+        audioManager.audioHealthMonitor.stopMonitoring();
+      }
     }
 
     playButton.textContent = 'PLAY';
     playButton.style.backgroundColor = '';
     playButton.style.color = '';
     
+    console.log('⏹️ Playback stopped');
     
   } else {
+    // ===== START PLAYBACK =====
     
     if (!audioManager || !audioManager.isInitialized) {
       if (!audioManager) {
@@ -3775,51 +3779,30 @@ async function toggleMasterPlayback() {
     }
     
     masterClock.start();
-
-    // ✅ CRITICAL: Set audioManager.isPlaying IMMEDIATELY after master clock starts
+    
+    // Set audio manager playing state
     if (audioManager) {
       audioManager.isPlaying = true;
-      console.log(`🔊 FIXED: AudioManager.isPlaying set to: ${audioManager.isPlaying}`);
-    } else {
-      console.error(`❌ AudioManager not found when setting isPlaying`);
+      console.log(`🔊 AudioManager.isPlaying set to: ${audioManager.isPlaying}`);
     }
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
     voiceClockManager.startAllVoices();
-
-    console.log("🚀 ABOUT TO CREATE TIMELINE EVENT MANAGER"); // ADD THIS LINE
-
-    // NEW: Reset and start event processing  
-    if (!timelineEventManager) {
-      timelineEventManager = new TimelineEventManager();
-    }
-
-    // CRITICAL: Reset events and parameters to baseline before starting
-    timelineEventManager.reset();
-    for (let i = 0; i < 16; i++) {
-      if (voiceData[i].enabled) {
-        timelineEventManager.resetToBaseline(i);
-      }
-    }
-
-    // Wait for reset to complete, then start event processing
-    setTimeout(() => {
-      timelineEventManager.start();
-      console.log(`✅ Event processing started with forced baseline reset`);
-    }, 100);
-
     
-    // In the START section 
+    // Start audio health monitoring
     if (audioManager && audioManager.audioHealthMonitor) {
       audioManager.audioHealthMonitor.startMonitoring();
     }
+    
     playButton.textContent = 'STOP';
     playButton.style.backgroundColor = '#dc3545';
     playButton.style.color = 'white';
     
+    console.log('▶️ Playback started');
   }
 }
+
 
 function stopMasterPlayback() {
   
@@ -16939,161 +16922,6 @@ applyCompoundParameterEvent(beat, regionIndex, selectedParameters) {
   return eventId;
 }
 
-collectParameterValues(paramName, controlPanel) {
-  if (!controlPanel) {
-    console.error(`❌ collectParameterValues: No control panel for ${paramName}`);
-    return null;
-  }
-  
-  // DEBUG: Check parameter structure
-  console.log(`🔍 Checking parameter data for ${paramName}:`);
-  console.log(`   voiceData[${this.voiceIndex}].parameters:`, voiceData[this.voiceIndex].parameters);
-  
-  const currentParam = voiceData[this.voiceIndex].parameters[paramName];
-  if (currentParam === undefined && paramName !== 'INSTRUMENT') {
-    console.error(`❌ collectParameterValues: No parameter data for ${paramName}`);
-    return null;
-  }
-  
-  if (DEBUG.EVENTS) {
-    console.log(`🔍 Collecting values for ${paramName}:`);
-    console.log(`   Current param:`, currentParam);
-    console.log(`   Control panel:`, controlPanel.className);
-  }
-  
-  if (paramName === 'MELODIC RANGE') {
-    // Special handling for melodic range with piano
-    const eventPiano = controlPanel.eventPiano;
-    const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
-    const behaviorValue = behaviorSlider ? parseInt(behaviorSlider.value) : (currentParam.behavior || 50);
-    
-    if (eventPiano && eventPiano.selectedNotes.size > 0) {
-      const selectedArray = Array.from(eventPiano.selectedNotes).sort((a, b) => a - b);
-      return {
-        changeType: 'melodic-range',
-        value: {
-          selectedNotes: selectedArray,
-          min: selectedArray[0],
-          max: selectedArray[selectedArray.length - 1],
-          behavior: behaviorValue
-        }
-      };
-    } else {
-      // Fallback to current range
-      return {
-        changeType: 'melodic-range',
-        value: {
-          min: currentParam.min,
-          max: currentParam.max,
-          selectedNotes: currentParam.selectedNotes || [],
-          behavior: behaviorValue
-        }
-      };
-    }
-    
-  } else if (paramName === 'INSTRUMENT') {
-    // Dropdown parameter - INSTRUMENT is stored as number, not object
-    const select = controlPanel.querySelector('.event-instrument-select');
-    
-    console.log(`🎼 Collecting INSTRUMENT values:`);
-    console.log(`   Current param value:`, currentParam);
-    console.log(`   Select element:`, select);
-    console.log(`   Select value:`, select?.value);
-    
-    if (!select) {
-      console.warn(`⚠️ No instrument select found for ${paramName}`);
-      return null;
-    }
-    
-    const instrumentValue = parseInt(select.value);
-    console.log(`   Final instrument value:`, instrumentValue);
-    
-    return {
-      changeType: 'dropdown',
-      value: instrumentValue
-    };
-    
-  } else if (typeof currentParam.min === 'number' && typeof currentParam.max === 'number') {
-    // Range parameter
-    if (DEBUG.EVENTS) {
-      console.log(`   Collecting range parameter: ${paramName}`);
-    }
-    
-    // Check for noUiSlider first (primary method)
-    const rangeSliderDiv = controlPanel.querySelector('.event-range-slider');
-    let minValue = currentParam.min;
-    let maxValue = currentParam.max;
-    
-    if (rangeSliderDiv && rangeSliderDiv.noUiSlider) {
-      // Get values from noUiSlider
-      try {
-        const sliderValues = rangeSliderDiv.noUiSlider.get();
-        minValue = parseFloat(sliderValues[0]);
-        maxValue = parseFloat(sliderValues[1]);
-        
-        if (DEBUG.EVENTS) {
-          console.log(`     noUiSlider values: ${minValue} - ${maxValue}`);
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error reading noUiSlider for ${paramName}:`, error);
-      }
-    }
-    
-    // Get behavior value
-    const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
-    const behaviorValue = behaviorSlider ? parseInt(behaviorSlider.value) : (currentParam.behavior || 50);
-    
-    if (DEBUG.EVENTS) {
-      console.log(`     Behavior: ${behaviorValue}%`);
-    }
-    
-    return {
-      changeType: 'range',
-      value: {
-        min: minValue,
-        max: maxValue,
-        behavior: behaviorValue
-      }
-    };
-    
-  } else if (currentParam.selectedValues && Array.isArray(currentParam.selectedValues)) {
-    // Multi-select parameter (Rhythms, Rests)
-    const checkboxes = controlPanel.querySelectorAll('.event-rhythm-checkbox:checked');
-    const selectedValues = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    
-    return {
-      changeType: 'multi-select',
-      value: {
-        selectedValues: selectedValues
-      }
-    };
-    
-  } else if (currentParam.speed || currentParam.depth) {
-    // Effect parameter
-    const speedRange = controlPanel.querySelector('.event-speed-range');
-    const depthRange = controlPanel.querySelector('.event-depth-range');
-    const feedbackRange = controlPanel.querySelector('.event-feedback-range');
-    
-    const result = {
-      changeType: 'effect',
-      value: {
-        speed: { min: speedRange ? parseInt(speedRange.value) : 0, max: speedRange ? parseInt(speedRange.value) : 0 },
-        depth: { min: depthRange ? parseInt(depthRange.value) : 0, max: depthRange ? parseInt(depthRange.value) : 0 }
-      }
-    };
-    
-    if (feedbackRange) {
-      result.value.feedback = { min: parseInt(feedbackRange.value), max: parseInt(feedbackRange.value) };
-    }
-    
-    return result;
-  }
-  
-  console.warn(`⚠️ Unknown parameter type for ${paramName}:`, currentParam);
-  return null;
-}
-
-
 
 showCompoundEventSuccessNotification(beat, parameterChanges) {
   const paramNames = Object.keys(parameterChanges);
@@ -17227,44 +17055,21 @@ initializeCompoundEventEditor(editor, beat, regionIndex) {
   
   // Connect Apply button with enhanced functionality
 applyBtn.onclick = () => {
-  if (selectedParameters.size > 0) {
-    if (DEBUG.EVENTS) {
-      console.log(`🎯 Applying compound event with ${selectedParameters.size} parameters`);
-    }
-    
-    try {
-      const eventId = this.applyCompoundParameterEvent(beat, regionIndex, selectedParameters);
-      
-      if (eventId) {
-        if (DEBUG.EVENTS) {
-          console.log(`✅ Successfully created compound event: ${eventId}`);
-        }
-        
-        // Show success and close editor
-        editor.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        editor.style.opacity = '0';
-        editor.style.transform = 'translate(-50%, -50%) scale(0.95)';
-        
-        setTimeout(() => {
-          editor.remove();
-        }, 300);
-      } else {
-        console.error(`❌ Failed to create compound event`);
-        alert('❌ Failed to create parameter event. Please try again.');
-      }
-    } catch (error) {
-      console.error(`❌ Error applying compound event:`, error);
-      alert(`❌ Error creating event: ${error.message}`);
-    }
-  } else {
-    alert('⚠️ Please select at least one parameter to automate.');
+  console.log('🎯 Apply button clicked - Event system will be rebuilt in new architecture');
+  console.log('Parameters selected:', selectedParameters);
+  
+  // TODO: Replace with new EventRegistry system
+  alert('Event creation temporarily disabled during architecture rebuild');
+  
+  // Close the editor for now
+  const editor = document.querySelector('.compound-parameter-editor') || 
+                 document.querySelector('.event-editor') ||
+                 document.querySelector('[class*="editor"]');
+  if (editor) {
+    editor.remove();
   }
 };
 
-  
-  if (DEBUG.EVENTS) {
-    console.log(`📋 Compound event editor initialized for beat ${beat.toFixed(0)}`);
-  }
 }
 
 selectParameter(paramName, btn, selectedParameters, activeControlPanels, controlsArea, beat) {
@@ -20435,131 +20240,3 @@ function updateVisualTimelineForVoiceChange(newVoiceIndex) {
     }
   }
 }
-
-// ===== REGION ALGORITHM HELPER FUNCTIONS =====
-
-/**
- * Detect all mute regions based on gaps between playing regions
- * @param {Array} playingRegions - Array of {start, end} playing regions
- * @param {number} maxBeats - Total timeline length
- * @returns {Array} Array of {start, end} muted regions
- */
-function detectMuteRegions(playingRegions, maxBeats) {
-  const mutedRegions = [];
-  
-  if (playingRegions.length === 0) {
-    return [{ start: 0, end: maxBeats }];
-  }
-  
-  const sorted = [...playingRegions].sort((a, b) => a.start - b.start);
-  
-  // Muted region at start
-  if (sorted[0].start > 0) {
-    mutedRegions.push({
-      start: 0,
-      end: sorted[0].start
-    });
-  }
-  
-  // Muted regions between playing regions
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const currentEnd = sorted[i].end;
-    const nextStart = sorted[i + 1].start;
-    
-    if (nextStart > currentEnd) {
-      mutedRegions.push({
-        start: currentEnd,
-        end: nextStart
-      });
-    }
-  }
-  
-  // Muted region at end
-  const lastRegion = sorted[sorted.length - 1];
-  if (lastRegion.end < maxBeats) {
-    mutedRegions.push({
-      start: lastRegion.end,
-      end: maxBeats
-    });
-  }
-  
-  return mutedRegions;
-}
-
-/**
- * Convert mute regions back to playing regions (inverse operation)
- * @param {Array} mutedRegions - Array of {start, end} muted regions
- * @param {number} maxBeats - Total timeline length
- * @returns {Array} Array of {start, end} playing regions
- */
-function invertMuteRegions(mutedRegions, maxBeats) {
-  if (mutedRegions.length === 0) {
-    return [{ start: 0, end: maxBeats }];
-  }
-  
-  const playingRegions = [];
-  const sorted = [...mutedRegions].sort((a, b) => a.start - b.start);
-  
-  // Playing region before first mute
-  if (sorted[0].start > 0) {
-    playingRegions.push({
-      start: 0,
-      end: sorted[0].start
-    });
-  }
-  
-  // Playing regions between muted regions
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const currentEnd = sorted[i].end;
-    const nextStart = sorted[i + 1].start;
-    
-    if (nextStart > currentEnd) {
-      playingRegions.push({
-        start: currentEnd,
-        end: nextStart
-      });
-    }
-  }
-  
-  // Playing region after last mute
-  const lastMuted = sorted[sorted.length - 1];
-  if (lastMuted.end < maxBeats) {
-    playingRegions.push({
-      start: lastMuted.end,
-      end: maxBeats
-    });
-  }
-  
-  return playingRegions;
-}
-
-/**
- * Optimize regions to fit 3-entrance limit
- * Prioritizes longest regions and merges adjacent ones
- * @param {Array} regions - Array of regions to optimize
- * @returns {Array} Optimized array with maximum 3 regions
- */
-function optimizeRegionsForThreeLimit(regions) {
-  if (regions.length <= 3) return regions;
-  
-  // Sort by duration (longest first)
-  const sorted = [...regions].sort((a, b) => (b.end - b.start) - (a.end - a.start));
-  
-  // Keep top 3 longest regions
-  let optimized = sorted.slice(0, 3);
-  
-  // Sort back by start time
-  optimized.sort((a, b) => a.start - b.start);
-  
-  // Assign entrance numbers
-  optimized.forEach((region, index) => {
-    region.entrance = index + 1;
-  });
-  
-  console.log(`✂️ Optimized ${regions.length} regions to 3:`, optimized);
-  
-  return optimized;
-}
-
-
-
