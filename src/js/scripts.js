@@ -159,11 +159,15 @@ function calculateBeatDurationMs(voiceIndex, beatUnit) {
 function beatsToMs(beatCount, beatUnit, tempo) {
   if (beatCount >= 999999) return 999999999; // Infinity case
   
-  const beatDurationS = 60 / tempo; // Quarter note duration in seconds
+  // PRECISION FIX: Use integer arithmetic
+  const beatDurationMs = (60000 / tempo); // Quarter note in milliseconds
   const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7];
-  const unitDurationS = rhythmInfo.beats * beatDurationS;
+  const unitDurationMs = rhythmInfo.beats * beatDurationMs;
   
-  return Math.round(beatCount * unitDurationS * 1000);
+  // Use consistent calculation
+  const totalMs = beatCount * unitDurationMs;
+  
+  return Math.round(totalMs); // Round to nearest millisecond
 }
 
 /**
@@ -176,13 +180,18 @@ function beatsToMs(beatCount, beatUnit, tempo) {
 function msToBeats(timeMs, beatUnit, tempo) {
   if (timeMs >= 999999999) return 999999; // Infinity case
   
-  const beatDurationS = 60 / tempo;
+  // PRECISION FIX: Use integer arithmetic where possible
+  const beatDurationMs = (60000 / tempo); // Quarter note in milliseconds (integer)
   const rhythmInfo = rhythmDurations[beatUnit] || rhythmDurations[7];
-  const unitDurationS = rhythmInfo.beats * beatDurationS;
+  const unitDurationMs = rhythmInfo.beats * beatDurationMs;
   
-  if (unitDurationS === 0) return 0; // Safety check
+  if (unitDurationMs === 0) return 0;
   
-  return Math.round(timeMs / (unitDurationS * 1000));
+  // CRITICAL: Use consistent rounding to prevent drift
+  const rawBeats = timeMs / unitDurationMs;
+  
+  // Round to 3 decimal places and ensure consistency
+  return Math.round(rawBeats * 1000) / 1000;
 }
 
 /**
@@ -3705,6 +3714,7 @@ function toggleLockVoice(voiceIndex) {
   renderParameters();
 }
 
+
 async function toggleMasterPlayback() {
 
   const playButton = document.querySelector('#file-controls button:nth-child(4)');
@@ -3764,14 +3774,43 @@ async function toggleMasterPlayback() {
       return;
     }
     
-    
     masterClock.start();
+
+    // ✅ CRITICAL: Set audioManager.isPlaying IMMEDIATELY after master clock starts
+    if (audioManager) {
+      audioManager.isPlaying = true;
+      console.log(`🔊 FIXED: AudioManager.isPlaying set to: ${audioManager.isPlaying}`);
+    } else {
+      console.error(`❌ AudioManager not found when setting isPlaying`);
+    }
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
     voiceClockManager.startAllVoices();
+
+    console.log("🚀 ABOUT TO CREATE TIMELINE EVENT MANAGER"); // ADD THIS LINE
+
+    // NEW: Reset and start event processing  
+    if (!timelineEventManager) {
+      timelineEventManager = new TimelineEventManager();
+    }
+
+    // CRITICAL: Reset events and parameters to baseline before starting
+    timelineEventManager.reset();
+    for (let i = 0; i < 16; i++) {
+      if (voiceData[i].enabled) {
+        timelineEventManager.resetToBaseline(i);
+      }
+    }
+
+    // Wait for reset to complete, then start event processing
+    setTimeout(() => {
+      timelineEventManager.start();
+      console.log(`✅ Event processing started with forced baseline reset`);
+    }, 100);
+
     
-    // In the START section (around line 1647), add:
+    // In the START section 
     if (audioManager && audioManager.audioHealthMonitor) {
       audioManager.audioHealthMonitor.startMonitoring();
     }
@@ -7684,33 +7723,30 @@ hasVoiceCompletedLifeSpan(voiceIndex) {
   const lifeSpanParam = voiceData[voiceIndex].parameters['LIFE SPAN'];
   
   if (!lifeSpanParam) return false;
+  if (lifeSpanParam.repeat) return false;
   
-  // If repeat is enabled, NEVER complete
-  if (lifeSpanParam.repeat) {
-    return false;
-  }
-  
-  // Get voice's max time in beats
   const maxBeats = lifeSpanParam.maxTimeBeats || 600;
   const beatUnit = lifeSpanParam.beatUnit || 7;
   
-  // Get current tempo
+  // Get actual locked tempo
   const voiceClock = this.getVoiceClock(voiceIndex);
-  const tempo = voiceClock ? voiceClock.currentTempo : getCurrentTempoForVoice(voiceIndex);
+  const tempo = voiceClock && voiceClock.playbackStartTempo ? 
+    voiceClock.playbackStartTempo : 
+    getCurrentTempoForVoice(voiceIndex);
   
-  // Convert elapsed time to beats
-  const elapsedBeats = msToBeats(elapsedMs, beatUnit, tempo);
+  // PRECISION: Calculate expected completion time instead of beat comparison
+  const expectedCompletionMs = beatsToMs(maxBeats, beatUnit, tempo);
   
-  // Voice completes when elapsed beats reaches max beats
-  const completed = elapsedBeats >= maxBeats;
+  // FIXED: Compare time instead of beats to avoid precision errors
+  const completed = elapsedMs >= (expectedCompletionMs - 50); // 50ms tolerance
   
   if (completed) {
-    console.log(`✅ Voice ${voiceIndex + 1} completed: ${elapsedBeats}/${maxBeats} beats`);
+    const actualBeats = msToBeats(elapsedMs, beatUnit, tempo);
+    console.log(`✅ Voice ${voiceIndex + 1} COMPLETED: ${elapsedMs}ms >= ${expectedCompletionMs}ms (${actualBeats.toFixed(3)} beats)`);
   }
   
   return completed;
 }
-
 
 
   checkForAutoReset() {
@@ -14371,37 +14407,58 @@ editCompoundEvent(event, beat) {
   }
   
   updatePlayhead() {
-    if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
-      return;
-    }
-    
-    const elapsedMs = masterClock.getElapsedTime();
-    const maxTimeMs = beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
-    
-    let percentage = (elapsedMs / maxTimeMs) * 100;
-    
-    // Handle repeat cycling
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (lifeSpan && lifeSpan.repeat && percentage > 100) {
-      percentage = percentage % 100;
-    }
-    
-    // Update playhead position
-    this.playhead.style.left = `${Math.min(percentage, 100)}%`;
-    
-    // Update tooltip text
-    const currentTimeFormatted = formatMsToMMSS(elapsedMs);
-    const currentBeat = Math.round(msToBeats(elapsedMs, this.beatUnit, this.tempo));
-    
-    if (this.playheadTooltip) {
-      this.playheadTooltip.textContent = currentTimeFormatted;
-      this.playheadTooltip.title = `Beat ${currentBeat}`;
-    }
-    
-    if (DEBUG.TIMELINE && Math.random() < 0.05) {
-      console.log(`⏱️ Playhead: ${percentage.toFixed(1)}% (${currentTimeFormatted}, Beat ${currentBeat})`);
+  if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
+    return;
+  }
+  
+  const elapsedMs = masterClock.getElapsedTime();
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  const maxBeats = lifeSpan ? lifeSpan.maxTimeBeats || 700 : 700;
+  const beatUnit = lifeSpan ? lifeSpan.beatUnit || 7 : 7;
+  
+  // CRITICAL: Use the same locked tempo that the voice clock is using
+  let actualTempo = this.tempo; // Fallback
+  
+  if (voiceClockManager && voiceClockManager.isInitialized) {
+    const voiceClock = voiceClockManager.getVoiceClock(this.voiceIndex);
+    if (voiceClock && voiceClock.playbackStartTempo) {
+      actualTempo = voiceClock.playbackStartTempo; // Use exact same locked tempo
+    } else if (voiceClock && voiceClock.currentTempo) {
+      actualTempo = voiceClock.currentTempo; // Fallback to current tempo
     }
   }
+  
+  // Calculate current beat using the SAME tempo as voice clock
+  const currentBeat = msToBeats(elapsedMs, beatUnit, actualTempo);
+  
+  // FIXED: Calculate percentage based on beat position relative to max beats
+  let percentage = (currentBeat / maxBeats) * 100;
+  
+  // Handle repeat cycling
+  if (lifeSpan && lifeSpan.repeat && percentage > 100) {
+    percentage = percentage % 100;
+  }
+  
+  // CRITICAL: Clamp percentage to prevent off-screen display
+  const finalPercentage = Math.max(0, Math.min(100, percentage));
+  
+  // Update playhead position
+  this.playhead.style.left = `${finalPercentage.toFixed(2)}%`;
+  
+  // Update tooltip with accurate information
+  const displayBeat = Math.min(currentBeat, maxBeats);
+  const currentTimeFormatted = formatMsToMMSS(elapsedMs);
+  
+  if (this.playheadTooltip) {
+    this.playheadTooltip.textContent = currentTimeFormatted;
+    this.playheadTooltip.title = `Beat ${displayBeat.toFixed(1)}/${maxBeats} @ ${actualTempo} BPM`;
+  }
+  
+  // Debug playhead positioning (only when near boundaries)
+  if (Math.random() < 0.05 && (finalPercentage > 95 || currentBeat > maxBeats - 2)) {
+    console.log(`🎯 Playhead sync: beat ${currentBeat.toFixed(2)}/${maxBeats} = ${finalPercentage.toFixed(1)}% @ ${actualTempo} BPM`);
+  }
+}
   
 // ===== CORRECTED ZOOM AND PAN SYSTEM =====
 
