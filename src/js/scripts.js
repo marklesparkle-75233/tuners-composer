@@ -1594,14 +1594,15 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
   if (!spanData) {
     console.warn(`      ⚠️ Creating missing lifeSpan${entranceNum} data...`);
     lifeSpan[`lifeSpan${entranceNum}`] = {
-      enterBeats: 0,
-      exitBeats: entranceNum === 1 ? 999999 : 0
+      enterBeats: 1,  // Changed from 0 to 1 - start at Beat 1
+      exitBeats: entranceNum === 1 ? 999999 : 1
     };
     spanData = lifeSpan[`lifeSpan${entranceNum}`];
   }
   
-  const enterBeats = spanData.enterBeats || 0;
-  const exitBeats = spanData.exitBeats || 0;
+  // Ensure minimum Beat 1 for enter beats
+  const enterBeats = Math.max(1, spanData.enterBeats || 1);
+  const exitBeats = spanData.exitBeats || 1;
   
   console.log(`      Entrance ${entranceNum} data: ${enterBeats}-${exitBeats} beats`);
   
@@ -1612,8 +1613,9 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
   
   console.log(`      Timeline range: ${formatMsToMMSS(enterMs)} - ${formatMsToMMSS(exitMs)}`);
   
-  // Calculate step size (1 beat in ms)
+  // Calculate step size (1 beat in ms) and minimum time for Beat 1
   const beatStepMs = beatsToMs(1, beatUnit, tempo);
+  const minTimeMs = beatsToMs(1, beatUnit, tempo);
   
   // Create formatter
   const formatter = {
@@ -1628,17 +1630,17 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
         const beats = parseInt(beatsMatch[1]);
         return beatsToMs(beats, beatUnit, tempo);
       }
-      return parseFloat(value) || 0;
+      return parseFloat(value) || minTimeMs;  // Default to Beat 1 minimum
     }
   };
   
-  console.log(`      Creating noUiSlider: range 0-${maxTimeMs}ms, step ${beatStepMs}ms`);
+  console.log(`      Creating noUiSlider: range ${minTimeMs}-${maxTimeMs}ms, step ${beatStepMs}ms`);
   
   try {
     noUiSlider.create(sliderDiv, {
-      start: [enterMs, Math.min(exitMs, maxTimeMs)],
+      start: [Math.max(enterMs, minTimeMs), Math.min(exitMs, maxTimeMs)],
       connect: true,
-      range: { min: 0, max: maxTimeMs },
+      range: { min: minTimeMs, max: maxTimeMs },
       step: Math.max(1, Math.round(beatStepMs)),
       tooltips: [true, true],
       format: formatter
@@ -1721,6 +1723,7 @@ function createTimelineEntranceSlider(voiceIndex, entranceNum, maxTimeMs, beatUn
   
   return container;
 }
+
 
 function createTimelineVoiceRow(voiceIndex, maxTimeMs) {
   const row = document.createElement('div');
@@ -2515,38 +2518,39 @@ if (!spanData) {
   // Calculate step size (1 beat in ms)
   const beatStepMs = beatsToMs(1, beatUnit, tempo);
   
-  // Create formatter
+  // Calculate minimum time for Beat 1 (never allow Beat 0)
+  const minTimeMs = beatsToMs(1, beatUnit, tempo);
+  
+  // Create formatter - converts between slider time values and beat display
   const formatter = {
     to: function(timeMs) {
-      // Convert timeline position (ms) to beats for tooltip
+      // Convert timeMs back to beats, but add 1 for display (since minTimeMs represents Beat 1)
       const beats = Math.round(msToBeats(timeMs, beatUnit, tempo));
       const timeStr = formatMsToMMSS(timeMs);
       return `${beats} beats (${timeStr})`;
     },
     from: function(value) {
-      // Parse "80 beats (1:20)" format
       const beatsMatch = value.match(/^(\d+) beats/);
       if (beatsMatch) {
         const beats = parseInt(beatsMatch[1]);
         return beatsToMs(beats, beatUnit, tempo);
       }
-      
-      // Fallback: parse as ms
-      return parseFloat(value) || 0;
+      return parseFloat(value) || minTimeMs;  // Default to Beat 1 minimum
     }
   };
-  
-  console.log(`      Creating noUiSlider with range: 0-${maxTimeMs}ms, step: ${beatStepMs}ms`);
-  
+
+  console.log(`      Creating noUiSlider: range ${minTimeMs}-${maxTimeMs}ms, step ${beatStepMs}ms`);
+
   try {
     noUiSlider.create(sliderDiv, {
-      start: [enterMs, Math.min(exitMs, maxTimeMs)],
+      start: [Math.max(enterMs, minTimeMs), Math.min(exitMs, maxTimeMs)],
       connect: true,
-      range: { min: 0, max: maxTimeMs },
-      // NO STEP - allow free positioning, quantize on user release
+      range: { min: minTimeMs, max: maxTimeMs },
+      step: Math.max(1, Math.round(beatStepMs)),
       tooltips: [true, true],
       format: formatter
     });
+
     
     console.log(`      ✅ noUiSlider created successfully`);
     
@@ -13545,7 +13549,8 @@ if (!isDragging) return;
 
 const currentBeat = this.screenXToBeat(e.clientX);
 const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(currentBeat) : currentBeat;
-const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+const clampedBeat = Math.max(1, Math.min(this.maxBeats, snappedBeat));  // Changed from 0 to 1
+
 
 // Update handle position visually (preview)
 this.updateHandlePosition(handle, handleType, clampedBeat);
@@ -13559,10 +13564,11 @@ let previewStartBeat = originalStartBeat;
 let previewEndBeat = originalEndBeat;
 
 if (handleType === 'left') {
-  previewStartBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
+  previewStartBeat = Math.max(1, Math.round((clampedBeat / this.maxBeats) * this.maxBeats));  // Ensure left handle minimum Beat 1
 } else {
   previewEndBeat = Math.round((clampedBeat / this.maxBeats) * this.maxBeats);
 }
+
 
 // NEW: Update diamonds during handle drag too
 this.updateDiamondsForRegionDragRealTime(regionIndex, previewStartBeat, previewEndBeat);
@@ -13581,9 +13587,10 @@ const handleMouseUp = (e) => {
   
   isDragging = false;
   
-  const finalBeat = this.screenXToBeat(e.clientX);
-  const snappedFinalBeat = this.snapToBeat ? this.snapBeatToGrid(finalBeat) : finalBeat;
-  const clampedFinalBeat = Math.max(0, Math.min(this.maxBeats, snappedFinalBeat));
+const finalBeat = this.screenXToBeat(e.clientX);
+const snappedFinalBeat = this.snapToBeat ? this.snapBeatToGrid(finalBeat) : finalBeat;
+const clampedFinalBeat = Math.max(1, Math.min(this.maxBeats, snappedFinalBeat));  // Changed from 0 to 1
+
   
   // Apply the drag operation to events array
   this.applyHandleDrag(regionIndex, handleType, clampedFinalBeat);
@@ -13600,7 +13607,7 @@ const handleMouseUp = (e) => {
   handle.style.boxShadow = 'none';
   handle.title = `Drag to adjust ${handleType === 'left' ? 'start' : 'end'} time`;
   
-        // NEW: Remove floating tooltip
+  // NEW: Remove floating tooltip
   const dragTooltip = document.querySelector('.drag-tooltip');
   if (dragTooltip) {
     dragTooltip.remove();
@@ -13622,7 +13629,9 @@ const handleMouseUp = (e) => {
 
 // NEW: Update handle position during drag (visual preview)
 updateHandlePosition(handle, handleType, beat) {
-  const percentage = (beat / this.maxBeats) * 100;
+  // Map beat range (1 to maxBeats) to percentage range (0% to 100%)
+  const percentage = ((beat - 1) / (this.maxBeats - 1)) * 100;
+
   const region = handle.closest('.timeline-region');
   if (!region) return;
   
@@ -13630,8 +13639,9 @@ updateHandlePosition(handle, handleType, beat) {
   const originalStartBeat = parseFloat(region.dataset.originalStartBeat) || 0;
   const originalEndBeat = parseFloat(region.dataset.originalEndBeat) || this.maxBeats;
   
-  const originalLeftPercent = (originalStartBeat / this.maxBeats) * 100;
-  const originalRightPercent = (originalEndBeat / this.maxBeats) * 100;
+    const originalLeftPercent = ((originalStartBeat - 1) / (this.maxBeats - 1)) * 100;
+  const originalRightPercent = ((originalEndBeat - 1) / (this.maxBeats - 1)) * 100;
+
   
   let newStartBeat = originalStartBeat;
   let newEndBeat = originalEndBeat;
@@ -13646,7 +13656,8 @@ updateHandlePosition(handle, handleType, beat) {
     region.style.width = `${Math.max(1, newWidth).toFixed(1)}%`;
     
     // Calculate new beat boundaries for label update
-    newStartBeat = Math.round((newLeftPercent / 100) * this.maxBeats);
+    newStartBeat = Math.round(((newLeftPercent / 100) * (this.maxBeats - 1)) + 1);
+
     newEndBeat = originalEndBeat;
     
   } else {
@@ -13719,19 +13730,26 @@ applyHandleDrag(regionIndex, handleType, newBeat) {
   
   // Update the appropriate boundary
   if (handleType === 'left') {
-    newStartBeat = Math.max(0, Math.min(newBeat, region.end - 1)); // Can't go past end
+    console.log(`🔍 LEFT HANDLE: input newBeat=${newBeat}, region.end=${region.end}`);
+    newStartBeat = Math.max(1, Math.min(newBeat, region.end - 1)); // Changed from 0 to 1 - Can't go past end or below Beat 1
+    console.log(`🔍 LEFT HANDLE: calculated newStartBeat=${newStartBeat}`);
   } else {
     newEndBeat = Math.max(region.start + 1, Math.min(newBeat, this.maxBeats)); // Can't go before start
   }
   
+  console.log(`🔍 BEFORE replaceRegionInEvents: newStartBeat=${newStartBeat}, newEndBeat=${newEndBeat}`);
+
+  
   // Validate the new region
-  if (newStartBeat >= newEndBeat) {
-    console.warn(`Invalid drag: start ${newStartBeat} >= end ${newEndBeat}`);
+  if (newStartBeat >= newEndBeat || newStartBeat < 1) {
+    console.warn(`Invalid drag: start ${newStartBeat} >= end ${newEndBeat} or start < 1`);
     return;
   }
   
   // Update events array by replacing this region's events
   this.replaceRegionInEvents(regionIndex, newStartBeat, newEndBeat);
+
+  console.log(`🔍 AFTER replaceRegionInEvents - about to call refresh()`);
   
   if (DEBUG.EVENTS) {
     console.log(`🔄 Updated region ${regionIndex}: ${region.start}-${region.end} → ${newStartBeat}-${newEndBeat}`);
@@ -14389,7 +14407,7 @@ handleSeekZoneClick(e) {
   
   const clickedBeat = this.screenXToBeat(e.clientX);
   const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(clickedBeat) : clickedBeat;
-  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  const clampedBeat = Math.max(1, Math.min(this.maxBeats, snappedBeat));  // Changed from 0 to 1
   
   if (DEBUG.EVENTS) {
     console.log(`🎯 Seek zone clicked: beat ${clampedBeat.toFixed(0)}`);
@@ -14402,10 +14420,11 @@ handleSeekZoneClick(e) {
   this.showSeekFeedback(clampedBeat);
 }
 
+
 showSeekPreview(e) {
   const beat = this.screenXToBeat(e.clientX);
   const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
-  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  const clampedBeat = Math.max(1, Math.min(this.maxBeats, snappedBeat));  // Changed from 0 to 1
   
   const timeMs = beatsToMs(clampedBeat, this.beatUnit, this.tempo);
   const timeFormatted = formatMsToMMSS(timeMs);
@@ -14416,6 +14435,7 @@ showSeekPreview(e) {
   // Optional: Show temporary vertical line preview
   this.showSeekLinePreview(clampedBeat);
 }
+
 
 showSeekLinePreview(beat) {
   // Remove existing preview
@@ -14554,16 +14574,23 @@ renderLifeSpanRegions(container) {
   // Convert events array to playing regions
   const playingRegions = this.convertEventsToRegions(lifeSpan.events);
   
+  // DEBUG: Check actual region data
+  console.log(`🔍 RENDER: playingRegions=`, playingRegions);
+  
   if (DEBUG.EVENTS) {
     console.log(`   Converted to ${playingRegions.length} playing regions:`, playingRegions);
   }
   
   // Render each playing region
-  playingRegions.forEach((region, index) => {
-    const leftPercent = (region.start / this.maxBeats) * 100;
-    const rightPercent = (region.end / this.maxBeats) * 100;
-    const regionWidth = rightPercent - leftPercent;
-    
+playingRegions.forEach((region, index) => {
+// Map Beat 1 to 0% and maxBeats to 100%, with handle padding
+const handlePadding = 0.2; // 0.5% padding for handles
+const leftPercent = Math.max(handlePadding, ((region.start - 1) / (this.maxBeats - 1)) * 100);
+const rightPercent = Math.min(100 - handlePadding, ((region.end - 1) / (this.maxBeats - 1)) * 100);
+const regionWidth = rightPercent - leftPercent;
+
+
+
     if (DEBUG.EVENTS) {
       console.log(`   Region ${index + 1}: ${region.start}-${region.end} beats = ${leftPercent.toFixed(1)}%-${rightPercent.toFixed(1)}%`);
     }
@@ -14593,8 +14620,7 @@ renderLifeSpanRegions(container) {
   box-sizing: border-box;
 `;
 
-    
-    regionElement.title = `Playing region: Beat ${region.start} - ${region.end} (double-click for options)`;
+    regionElement.title = `Playing region: Beat ${Math.max(1, region.start)} - ${region.end} (double-click for options)`;
     
     // Add region label and handles (existing code unchanged)
     const regionLabel = this.createRegionLabel(region, finalWidth);
@@ -14627,6 +14653,8 @@ renderLifeSpanRegions(container) {
     console.log(`✅ Rendered ${playingRegions.length} playing regions for Voice ${this.voiceIndex + 1}`);
   }
 }
+
+
 
 createRegionLabel(region, regionWidthPercent) {
   const regionLabel = document.createElement('div');
@@ -15267,7 +15295,7 @@ createMutedRegion(startBeat, endBeat, position) {
     
     for (let i = 0; i <= intervals; i++) {
       const percent = (i / intervals) * 100;
-      const beats = Math.round((percent / 100) * this.maxBeats);
+      const beats = Math.max(1, Math.round((percent / 100) * this.maxBeats));  // Ensure minimum Beat 1
       
       const label = document.createElement('span');
       label.textContent = `Beat ${beats}`;
@@ -15770,15 +15798,17 @@ editCompoundEvent(event, beat) {
   // Update playhead position
   this.playhead.style.left = `${finalPercentage.toFixed(2)}%`;
   
-  // Update tooltip with accurate information
-  const displayBeat = Math.min(currentBeat, maxBeats);
+    // Update tooltip with accurate information
+  const displayBeat = Math.max(1, Math.min(currentBeat, maxBeats));  // Ensure minimum Beat 1
   const currentTimeFormatted = formatMsToMMSS(elapsedMs);
   
   if (this.playheadTooltip) {
     this.playheadTooltip.textContent = currentTimeFormatted;
     this.playheadTooltip.title = `Beat ${displayBeat.toFixed(1)}/${maxBeats} @ ${actualTempo} BPM`;
   }
-  
+
+
+
   // Debug playhead positioning (only when near boundaries)
   if (Math.random() < 0.05 && (finalPercentage > 95 || currentBeat > maxBeats - 2)) {
     console.log(`🎯 Playhead sync: beat ${currentBeat.toFixed(2)}/${maxBeats} = ${finalPercentage.toFixed(1)}% @ ${actualTempo} BPM`);
@@ -16237,7 +16267,7 @@ updateLabelsForCurrentView() {
         const timelinePercent = viewStart + (percent * (viewEnd - viewStart));
         const timeMs = timelinePercent * beatsToMs(this.maxBeats, this.beatUnit, this.tempo);
         const timeFormatted = formatMsToMMSS(timeMs);
-        const beats = Math.round(timelinePercent * this.maxBeats);
+        const beats = Math.max(1, Math.round(timelinePercent * this.maxBeats));  // Ensure minimum Beat 1
         
         labels[i].textContent = timeFormatted;
         labels[i].title = `Beat ${beats} - ${timeFormatted}`;
@@ -16255,7 +16285,7 @@ updateLabelsForCurrentView() {
       if (labels[i]) {
         const percent = (i / intervals);
         const timelinePercent = viewStart + (percent * (viewEnd - viewStart));
-        const beats = Math.round(timelinePercent * this.maxBeats);
+        const beats = Math.max(1, Math.round(timelinePercent * this.maxBeats));  // Ensure minimum Beat 1
         
         labels[i].textContent = `Beat ${beats}`;
         labels[i].title = `Beat ${beats}`;
@@ -16263,6 +16293,7 @@ updateLabelsForCurrentView() {
     }
   }
 }
+
 
 startPanning(e) {
   e.preventDefault();
@@ -16314,10 +16345,11 @@ updateBeatIndicator(e) {
   }
 
   
-  const beat = this.screenXToBeat(e.clientX);
+    const beat = this.screenXToBeat(e.clientX);
   const snappedBeat = this.snapToBeat ? this.snapBeatToGrid(beat) : beat;
-  const clampedBeat = Math.max(0, Math.min(this.maxBeats, snappedBeat));
+  const clampedBeat = Math.max(1, Math.min(this.maxBeats, snappedBeat));  // Changed from 0 to 1
   const roundedBeat = Math.round(clampedBeat);
+
   
   // Only update tooltip when beat number actually changes
   if (this.lastDisplayedBeat !== roundedBeat) {
@@ -16498,7 +16530,6 @@ clearDiamondDragTooltip() {
   }
 }
 
-
 // ENHANCED: Clear all creation-related tooltips
 clearCreationTooltip() {
   const tooltipSelectors = [
@@ -16518,7 +16549,6 @@ clearCreationTooltip() {
     console.log(`🧹 Cleared all creation tooltips`);
   }
 }
-
 
 // NEW: Show brief success message for region creation
 showRegionCreatedSuccess(startBeat, endBeat) {
@@ -16560,7 +16590,7 @@ showRegionCreatedSuccess(startBeat, endBeat) {
 getRegionDescription(beat) {
   const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
   if (!lifeSpan || !lifeSpan.events) {
-    return `Full timeline: Beat 0-${this.maxBeats}`;
+    return `Full timeline: Beat 1-${this.maxBeats}`;
   }
   
   // Find which region this beat belongs to using your existing convertEventsToRegions
@@ -16570,13 +16600,13 @@ getRegionDescription(beat) {
   for (let i = 0; i < playingRegions.length; i++) {
     const region = playingRegions[i];
     if (beat >= region.start && beat < region.end) {
-      return `Playing region: Beat ${region.start}-${region.end}`;
+      return `Playing region: Beat ${Math.max(1, region.start)}-${region.end}`;
     }
   }
   
   // If not in playing region, determine muted region
   if (playingRegions.length === 0) {
-    return `Muted timeline: Beat 0-${this.maxBeats}`;
+    return `Muted timeline: Beat 1-${this.maxBeats}`;
   }
   
   // Find which muted gap this beat is in
@@ -16584,7 +16614,7 @@ getRegionDescription(beat) {
   
   // Check if in start gap
   if (beat < sorted[0].start) {
-    return `Muted start: Beat 0-${sorted[0].start}`;
+    return `Muted start: Beat 1-${Math.max(1, sorted[0].start)}`;
   }
   
   // Check gaps between playing regions
@@ -16593,18 +16623,19 @@ getRegionDescription(beat) {
     const nextStart = sorted[i + 1].start;
     
     if (beat >= currentEnd && beat < nextStart) {
-      return `Muted gap: Beat ${currentEnd}-${nextStart}`;
+      return `Muted gap: Beat ${Math.max(1, currentEnd)}-${nextStart}`;
     }
   }
   
   // Check end gap
   const lastRegion = sorted[sorted.length - 1];
   if (beat >= lastRegion.end) {
-    return `Muted end: Beat ${lastRegion.end}-${this.maxBeats}`;
+    return `Muted end: Beat ${Math.max(1, lastRegion.end)}-${this.maxBeats}`;
   }
   
   return `Timeline: Beat ${beat.toFixed(0)} of ${this.maxBeats}`;
 }
+
 
 // NEW: Find which region index contains a specific beat
 findRegionIndexForBeat(beat) {
@@ -16643,6 +16674,7 @@ hideBeatIndicator() {
   this.currentBeat = null;
   this.lastDisplayedBeat = null;
 }
+
 updateCursorWithBeat(beat) {
   const track = this.container.querySelector('.visual-timeline-track');
   const isInPlaying = this.checkIfBeatIsInPlayingRegion(beat);
@@ -16949,7 +16981,7 @@ updateViewInfo(viewInfo) {
 // ===== ENHANCED SCREEN COORDINATE CONVERSION (ZOOM-AWARE) =====
 screenXToBeat(screenX) {
   const track = this.container.querySelector('.visual-timeline-track');
-  if (!track) return 0;
+  if (!track) return 1;  // Changed from 0 to 1 - return Beat 1 if no track found
   
   const rect = track.getBoundingClientRect();
   const relativeX = screenX - rect.left;
@@ -16964,8 +16996,10 @@ screenXToBeat(screenX) {
   const clampedPercent = Math.max(0, Math.min(1, actualTimelinePercent));
   const beat = clampedPercent * this.maxBeats;
   
-  return beat;
+  // Ensure minimum Beat 1 - never return Beat 0
+  return Math.max(1, beat);
 }
+
 
 
 refresh() {
@@ -20097,444 +20131,6 @@ updateParameterEventRelativePosition(eventId, newRelativePosition) {
   }
 }
 
-// showParameterSelectionDialog(beat, clientX, clientY) {
-//   // Remove any existing dialog
-//   const existingDialog = document.querySelector('.parameter-selection-dialog');
-//   if (existingDialog) {
-//     existingDialog.remove();
-//   }
-  
-//   // Create parameter selection dialog
-//   const dialog = document.createElement('div');
-//   dialog.className = 'parameter-selection-dialog';
-//   dialog.style.cssText = `
-//     position: fixed;
-//     left: ${clientX + 15}px;
-//     top: ${Math.max(20, clientY - 100)}px;
-//     background: white;
-//     border: 2px solid #4a90e2;
-//     border-radius: 8px;
-//     box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-//     z-index: 10001;
-//     min-width: 280px;
-//     max-height: 500px;
-//     height: auto;
-//     min-height: 450px;
-//     overflow-y: auto;
-//   `;
-  
-//   const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
-//   const timeFormatted = formatMsToMMSS(timeMs);
-  
-//   dialog.innerHTML = `
-//     <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 10px 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between;">
-      
-//       <!-- Left side: Icon and title -->
-//       <div style="display: flex; align-items: center; gap: 8px;">
-//         <span>💎</span>
-//         <span>Parameter Event - Beat ${beat.toFixed(0)}</span>
-//       </div>
-      
-//       <!-- Right side: Delete button and time info -->
-//       <div style="display: flex; align-items: center; gap: 8px;">
-//         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
-//           <span style="font-size: 10px; color: #666;">${timeFormatted}</span>
-//         </div>
-//         <button class="delete-region-btn" style="
-//           background: #dc3545; color: white; border: none; padding: 4px 8px;
-//           border-radius: 3px; font-size: 10px; font-weight: 600; cursor: pointer;
-//           transition: all 0.2s ease;
-//         " title="Delete this entire playing region">Delete Region</button>
-//       </div>
-//     </div>
-    
-//     <div style="padding: 15px; max-height: 375px; overflow-y: auto;">
-//       <div style="margin-bottom: 15px; color: #666; font-size: 12px; font-style: italic; text-align: center;">
-//         Select a parameter to automate at this beat position:
-//       </div>
-      
-//       <!-- INSTRUMENT & SOUND PARAMETERS -->
-//       <div class="param-category" style="margin-bottom: 15px;">
-//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-//           🎼 Instrument & Sound
-//         </div>
-//         <div class="param-option" data-param="INSTRUMENT" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Instrument</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Switch to different GM sound</span>
-//         </div>
-//         <div class="param-option" data-param="MELODIC RANGE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Melodic Range</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note range or apply scale/chord filter</span>
-//         </div>
-//         <div class="param-option" data-param="POLYPHONY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Polyphony</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change number of simultaneous notes</span>
-//         </div>
-//         <div class="param-option" data-param="ATTACK VELOCITY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Attack Velocity</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change note attack strength (0-127)</span>
-//         </div>
-//         <div class="param-option" data-param="DETUNING" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Detuning</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Adjust pitch offset in cents (±50)</span>
-//         </div>
-//         <div class="param-option" data-param="PORTAMENTO GLIDE TIME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Portamento Glide</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pitch bend time between notes</span>
-//         </div>
-//       </div>
-      
-//       <!-- RHYTHM & TIMING PARAMETERS -->
-//       <div class="param-category" style="margin-bottom: 15px;">
-//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-//           🎵 Rhythm & Timing  
-//         </div>
-//         <div class="param-option" data-param="TEMPO (BPM)" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Tempo</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change BPM range (40-240)</span>
-//         </div>
-//         <div class="param-option" data-param="RHYTHMS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Rhythms</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected note durations</span>
-//         </div>
-//         <div class="param-option" data-param="RESTS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Rests</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change selected rest durations</span>
-//         </div>
-//       </div>
-      
-//       <!-- MIXING & LEVELS PARAMETERS -->
-//       <div class="param-category" style="margin-bottom: 15px;">
-//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-//           🔊 Mixing & Levels
-//         </div>
-//         <div class="param-option" data-param="VOLUME" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Volume</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change volume range (0-100%)</span>
-//         </div>
-//         <div class="param-option" data-param="STEREO BALANCE" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Stereo Balance</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change pan position (-100 to +100)</span>
-//         </div>
-//       </div>
-      
-//       <!-- MODULATION EFFECTS PARAMETERS -->
-//       <div class="param-category" style="margin-bottom: 15px;">
-//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-//           🌊 Modulation Effects
-//         </div>
-//         <div class="param-option" data-param="TREMOLO" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Tremolo</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change tremolo speed/depth</span>
-//         </div>
-//         <div class="param-option" data-param="CHORUS" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Chorus</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change chorus speed/depth</span>
-//         </div>
-//         <div class="param-option" data-param="PHASER" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Phaser</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change phaser speed/depth</span>
-//         </div>
-//       </div>
-      
-//       <!-- SPATIAL EFFECTS PARAMETERS -->
-//       <div class="param-category" style="margin-bottom: 8px;">
-//         <div style="font-weight: 600; color: #333; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background: #f8f9fa; border-radius: 3px;">
-//           🎛️ Spatial Effects
-//         </div>
-//         <div class="param-option" data-param="REVERB" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease;">
-//           <span style="font-weight: 500;">Reverb</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change reverb time/mix</span>
-//         </div>
-//         <div class="param-option" data-param="DELAY" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; transition: background 0.2s ease; margin-bottom: 0;">
-//           <span style="font-weight: 500;">Delay</span>
-//           <span style="font-size: 11px; color: #666; margin-left: 8px;">Change delay time/mix/feedback</span>
-//         </div>
-//       </div>
-//     </div>
-    
-//     <div style="padding: 12px; border-top: 1px solid #eee; background: #f8f9fa; text-align: center; position: sticky; bottom: 0;">
-//       <button onclick="this.closest('.parameter-selection-dialog').remove()" style="
-//         background: #6c757d; color: white; border: none; padding: 8px 20px;
-//         border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;
-//       ">Cancel</button>
-//     </div>
-//   `;
-  
-//   // Add hover effects and click handlers for parameter options
-//   const options = dialog.querySelectorAll('.param-option');
-//   options.forEach(option => {
-//     option.onmouseenter = function() {
-//       this.style.background = '#e7f3ff';
-//       this.style.borderLeft = '3px solid #4a90e2';
-//       this.style.paddingLeft = '7px';
-//     };
-//     option.onmouseleave = function() {
-//       this.style.background = '';
-//       this.style.borderLeft = '';
-//       this.style.paddingLeft = '10px';
-//     };
-    
-//     option.onclick = (e) => {
-//       const parameterName = option.dataset.param;
-//       console.log(`💎 Selected parameter: ${parameterName} at beat ${beat.toFixed(0)}`);
-      
-//       // Close dialog and proceed to value selection
-//       dialog.remove();
-//       this.showParameterValueDialog(parameterName, beat, clientX, clientY);
-//     };
-//   });
-  
-//   // Connect delete region button (in top-right of header)
-//   const deleteBtn = dialog.querySelector('.delete-region-btn');
-//   if (deleteBtn) {
-//     deleteBtn.onclick = (e) => {
-//       e.preventDefault();
-//       e.stopPropagation();
-      
-//       // Find which region this beat belongs to
-//       const targetRegionIndex = this.findRegionIndexForBeat(beat);
-      
-//       if (targetRegionIndex !== -1) {
-//         const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-//         const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-//         const targetRegion = playingRegions[targetRegionIndex];
-        
-//         const confirmDelete = confirm(
-//           `🗑️ Delete Playing Region?\n\n` +
-//           `Beat ${targetRegion.start} to ${targetRegion.end} will be muted.\n\n` +
-//           `Continue?`
-//         );
-        
-//         if (confirmDelete) {
-//           // Capture for undo
-//           if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-//             undoManager.captureState(`Delete region ${targetRegion.start}-${targetRegion.end}`, true);
-//           }
-          
-//           // Delete the region
-//           this.handleRegionDeletion(targetRegionIndex);
-          
-//           // Close dialog
-//           dialog.remove();
-          
-//           console.log(`🗑️ Region deleted: ${targetRegion.start}-${targetRegion.end}`);
-//         }
-//       } else {
-//         alert('❌ Could not find region to delete.');
-//       }
-//     };
-    
-//     // Hover effect for delete button
-//     deleteBtn.onmouseenter = function() {
-//       this.style.background = '#c82333';
-//       this.style.transform = 'scale(1.1)';
-//     };
-    
-//     deleteBtn.onmouseleave = function() {
-//       this.style.background = '#dc3545';
-//       this.style.transform = 'scale(1)';
-//     };
-//   }
-  
-//   document.body.appendChild(dialog);
-  
-//   // Auto-close when clicking elsewhere
-//   const closeDialog = (e) => {
-//     if (!dialog.contains(e.target)) {
-//       dialog.remove();
-//       document.removeEventListener('click', closeDialog);
-//     }
-//   };
-  
-//   setTimeout(() => {
-//     document.addEventListener('click', closeDialog);
-//   }, 100);
-// }
-
-// showParameterValueDialog(parameterName, beat, clientX, clientY) {
-//   // Get current parameter data
-//   const paramData = voiceData[this.voiceIndex].parameters[parameterName];
-//   if (!paramData) {
-//     console.error(`Parameter ${parameterName} not found for Voice ${this.voiceIndex + 1}`);
-//     return;
-//   }
-  
-//   // Remove any existing dialog
-//   const existingDialog = document.querySelector('.parameter-value-dialog');
-//   if (existingDialog) {
-//     existingDialog.remove();
-//   }
-  
-//   const dialog = document.createElement('div');
-//   dialog.className = 'parameter-value-dialog';
-//   dialog.style.cssText = `
-//     position: fixed;
-//     left: ${Math.min(clientX + 20, window.innerWidth - 350)}px;
-//     top: ${Math.max(20, clientY - 50)}px;
-//     background: white;
-//     border: 2px solid #4a90e2;
-//     border-radius: 8px;
-//     box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-//     z-index: 10002;
-//     width: 320px;
-//   `;
-  
-//   const timeMs = beatsToMs(beat, this.beatUnit, this.tempo);
-//   const timeFormatted = formatMsToMMSS(timeMs);
-  
-
-// dialog.innerHTML = `
-//   <div style="background: linear-gradient(to bottom, #f7f8f8, #c0def7); border-bottom: 2px solid #4a90e2; color: #333; padding: 12px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-//     <span>💎</span>
-//     <span>${parameterName} Event</span>
-//     <span style="font-size: 12px; color: #666; margin-left: auto;">Beat ${beat.toFixed(0)}</span>
-//   </div>
-          
-//     <div style="padding: 20px;">
-//       <div style="margin-bottom: 20px; text-align: center; color: #666; font-size: 13px;">
-//         Set new values for <strong>${parameterName}</strong> starting at beat ${beat.toFixed(0)} (${timeFormatted})
-//       </div>
-      
-//       <div id="parameter-value-inputs">
-//         <!-- Dynamic content based on parameter type -->
-//       </div>
-      
-//       <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
-//         <button class="create-event-btn" style="
-//           background: #28a745; color: white; border: none; padding: 8px 20px;
-//           border-radius: 4px; font-weight: 600; cursor: pointer;
-//         ">Create Event</button>
-//         <button onclick="this.closest('.parameter-value-dialog').remove()" style="
-//           background: #6c757d; color: white; border: none; padding: 8px 16px;
-//           border-radius: 4px; cursor: pointer;
-//         ">Cancel</button>
-//       </div>
-//     </div>
-//   `;
-  
-//   // Generate appropriate input interface
-//   const inputsContainer = dialog.querySelector('#parameter-value-inputs');
-//   this.createParameterInputInterface(parameterName, paramData, inputsContainer);
-  
-//   // Connect create button
-//   const createBtn = dialog.querySelector('.create-event-btn');
-//   createBtn.onclick = () => {
-//     const eventData = this.collectParameterEventData(parameterName, inputsContainer);
-//     if (eventData) {
-//       this.insertParameterEvent(beat, parameterName, eventData);
-//       dialog.remove();
-      
-//       // Show success feedback
-//       this.showParameterEventCreated(beat, parameterName);
-      
-//       // Refresh timeline
-//       setTimeout(() => this.refresh(), 100);
-//     }
-//   };
-  
-//   document.body.appendChild(dialog);
-
-//   document.body.appendChild(dialog);
-
-// // Connect delete region button
-// const deleteBtn = dialog.querySelector('.delete-region-btn');
-// if (deleteBtn) {
-//   deleteBtn.onclick = (e) => {
-//     e.preventDefault();
-//     e.stopPropagation();
-    
-//     // Find which region this beat belongs to
-//     const targetRegionIndex = this.findRegionIndexForBeat(beat);
-    
-//     if (targetRegionIndex !== -1) {
-//       // Confirm deletion
-//       const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-//       const playingRegions = this.convertEventsToRegions(lifeSpan.events);
-//       const targetRegion = playingRegions[targetRegionIndex];
-      
-//       const confirmDelete = confirm(
-//         `🗑️ Delete Playing Region?\n\n` +
-//         `This will delete the playing region from Beat ${targetRegion.start} to ${targetRegion.end}.\n\n` +
-//         `The timeline will be muted in this area.\n\n` +
-//         `Continue with deletion?`
-//       );
-      
-//       if (confirmDelete) {
-//         // Capture state for undo
-//         if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
-//           undoManager.captureState(`Timeline: Delete region ${targetRegion.start}-${targetRegion.end}`, true);
-//         }
-        
-//         // Delete the region
-//         this.handleRegionDeletion(targetRegionIndex);
-        
-//         // Close dialog
-//         dialog.remove();
-        
-//         // Show success feedback
-//         setTimeout(() => {
-//           this.showUnifiedBeatTooltip(window.innerWidth / 2, 100, {
-//             type: 'context-help',
-//             beat: beat,
-//             operation: 'Region Deleted',
-//             additionalInfo: `Playing region ${targetRegion.start}-${targetRegion.end} removed`
-//           });
-          
-//           setTimeout(() => {
-//             this.hideUnifiedTooltip();
-//           }, 3000);
-//         }, 200);
-        
-//         if (DEBUG.EVENTS) {
-//           console.log(`🗑️ Deleted region via popup button: ${targetRegion.start}-${targetRegion.end}`);
-//         }
-//       }
-//     } else {
-//       alert('❌ Could not find region to delete.');
-//     }
-//   };
-  
-//   // Add hover effect to delete button
-//   deleteBtn.onmouseenter = function() {
-//     this.style.background = '#c82333';
-//     this.style.transform = 'scale(1.05)';
-//   };
-  
-//   deleteBtn.onmouseleave = function() {
-//     this.style.background = '#dc3545';
-//     this.style.transform = 'scale(1)';
-//   };
-// }
-
-// }
-
-// createParameterInputInterface(parameterName, paramData, container) {
-//   container.innerHTML = '';
-  
-//   if (typeof paramData.min === 'number' && typeof paramData.max === 'number') {
-//     // Range parameter (Volume, Tempo, Melodic Range, etc.)
-//     this.createRangeInputInterface(parameterName, paramData, container);
-//   } else if (paramData.selectedValues && Array.isArray(paramData.selectedValues)) {
-//     // Multi-select parameter (Rhythms, Rests)
-//     this.createMultiSelectInterface(parameterName, paramData, container);
-//   } else if (typeof paramData === 'number') {
-//     // Simple dropdown (Instrument)
-//     this.createDropdownInterface(parameterName, paramData, container);
-//   } else if (paramData.speed || paramData.depth) {
-//     // Multi-dual parameter (Effects)
-//     this.createEffectInterface(parameterName, paramData, container);
-//   } else {
-//     // Placeholder for complex parameters
-//     container.innerHTML = `
-//       <div style="text-align: center; color: #666; padding: 20px;">
-//         <div>📋</div>
-//         <div style="margin-top: 8px;">Parameter event interface for <strong>${parameterName}</strong><br>will be implemented in Phase A.2</div>
-//       </div>
-//     `;
-//   }
-// }
-
 createRangeInputInterface(parameterName, paramData, container) {
   const currentMin = paramData.currentValue !== undefined ? paramData.currentValue : paramData.min;
   const currentMax = paramData.currentValue !== undefined ? paramData.currentValue : paramData.max;
@@ -20860,17 +20456,18 @@ addRegionBodyDragFunctionality(regionElement, regionIndex) {
       let newRegionStart = snappedBeat - clickOffset;
       let newRegionEnd = newRegionStart + regionWidth;
       
-      // Clamp to timeline bounds
-      if (newRegionStart < 0) {
-        newRegionStart = 0;
-        newRegionEnd = regionWidth;
+      // Clamp to timeline bounds (minimum Beat 1)
+      if (newRegionStart < 1) {
+        newRegionStart = 1;
+        newRegionEnd = 1 + regionWidth;
       } else if (newRegionEnd > this.maxBeats) {
         newRegionEnd = this.maxBeats;
         newRegionStart = this.maxBeats - regionWidth;
       }
       
-      newRegionStart = Math.max(0, newRegionStart);
+      newRegionStart = Math.max(1, newRegionStart);  // Changed from 0 to 1
       newRegionEnd = Math.min(this.maxBeats, newRegionEnd);
+
       
       // Update visual position with live label update
       this.updateWholeRegionPosition(regionElement, newRegionStart, newRegionEnd);
@@ -20897,17 +20494,18 @@ addRegionBodyDragFunctionality(regionElement, regionIndex) {
         let newRegionStart = snappedBeat - clickOffset;
         let newRegionEnd = newRegionStart + regionWidth;
         
-        // Clamp and snap final positions
-        if (newRegionStart < 0) {
-          newRegionStart = 0;
-          newRegionEnd = regionWidth;
+        // Clamp and snap final positions (minimum Beat 1)
+        if (newRegionStart < 1) {
+          newRegionStart = 1;
+          newRegionEnd = 1 + regionWidth;
         } else if (newRegionEnd > this.maxBeats) {
           newRegionEnd = this.maxBeats;
           newRegionStart = this.maxBeats - regionWidth;
         }
         
-        newRegionStart = Math.round(Math.max(0, newRegionStart));
+        newRegionStart = Math.round(Math.max(1, newRegionStart));  // Changed from 0 to 1
         newRegionEnd = Math.round(Math.min(this.maxBeats, newRegionEnd));
+
         
         // Update events array
         this.replaceRegionInEvents(regionIndex, newRegionStart, newRegionEnd);
