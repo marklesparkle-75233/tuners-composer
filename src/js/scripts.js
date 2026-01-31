@@ -14681,13 +14681,12 @@ createRegionLabel(region, regionWidthPercent) {
   
   // Adaptive label content based on available space
   const effectiveWidth = regionWidthPercent * this.zoomLevel;
-  
-  if (effectiveWidth > 25) {
-    regionLabel.textContent = `Beat ${region.start}-${region.end}`;
+    if (effectiveWidth > 25) {
+    regionLabel.textContent = `Beat ${Math.max(1, region.start)}-${region.end}`;
   } else if (effectiveWidth > 15) {
-    regionLabel.textContent = `${region.start}-${region.end}`;
+    regionLabel.textContent = `${Math.max(1, region.start)}-${region.end}`;
   } else if (effectiveWidth > 8) {
-    const beatCount = region.end - region.start;
+    const beatCount = region.end - Math.max(1, region.start);
     regionLabel.textContent = `${beatCount}b`;
   } else {
     regionLabel.textContent = '▶';
