@@ -4670,7 +4670,7 @@ class InteractivePiano {
     this.container = container;
     this.voiceIndex = voiceIndex;
     this.selectedNotes = new Set();
-    
+        
     this.isDragging = false;
     this.dragStartNote = null;
     this.dragMode = null;
@@ -4680,7 +4680,7 @@ class InteractivePiano {
     this.loadInitialSelection();
   }
   
-    render() {
+  render() {
     this.container.innerHTML = '';
     
     const keyboard = document.createElement('div');
@@ -4706,7 +4706,6 @@ class InteractivePiano {
     this.container.appendChild(filterControls);
   }
 
-  
   createKey(midiNote) {
     const isBlack = this.isBlackKey(midiNote);
     const key = document.createElement('div');
@@ -4760,7 +4759,7 @@ class InteractivePiano {
   keyboard.addEventListener('selectstart', (e) => e.preventDefault());
 }
 
-  
+
   handleMouseMove = (e) => {
     if (!this.dragStartNote) return;
     
@@ -4792,8 +4791,6 @@ class InteractivePiano {
   }
 }
 
-
-  
   toggleNote(midiNote) {
     // NEW: Capture state before piano keyboard change
     if (undoManager && undoManager.isCapturing && this.voiceIndex === currentVoice) {
@@ -4813,7 +4810,6 @@ class InteractivePiano {
     this.updateInfoDisplay();
   }
 
-  
   selectRange(startNote, endNote, select = true) {
     const minNote = Math.min(startNote, endNote);
     const maxNote = Math.max(startNote, endNote);
@@ -4892,6 +4888,13 @@ class InteractivePiano {
   }
 
   updateVoiceData() {
+    // DON'T UPDATE voiceData during event editing!
+    // Check if we're in an event editor by looking for the event piano container class
+    if (this.container && this.container.classList.contains('event-piano-container')) {
+      console.log('🚫 Skipping voiceData update - this is an event piano');
+      return;
+    }
+    
     const melodicParam = voiceData[this.voiceIndex].parameters['MELODIC RANGE'];
     
     if (this.selectedNotes.size === 0) {
@@ -4910,8 +4913,9 @@ class InteractivePiano {
     melodicParam.selectedNotes = selectedArray;
     
     delete melodicParam.currentNote;
-    
   }
+
+
   
   updateInfoDisplay() {
     const infoDiv = this.container.querySelector('.selected-range');
@@ -5106,7 +5110,6 @@ class InteractivePiano {
     
     return filterContainer;
   }
-
 
   applyFilters(event = null) {
     const rootSelect = this.container.querySelector('.root-note-select');
@@ -11925,34 +11928,37 @@ class EventRegistry {
     return id;
   }
   
-  /**
-   * Add event to registry with full indexing
-   * @param {object} eventData - Complete event object
-   * @returns {string} Generated event ID
-   */
-  addEvent(eventData) {
-    const eventId = this.generateEventId();
-    
-    // Store complete event data
-    const completeEvent = {
-      id: eventId,
-      timestamp: Date.now(),
-      ...eventData
-    };
-    
-    this.events.set(eventId, completeEvent);
-    
-    // Update all indexes
-    this.updateIndexes(eventId, completeEvent);
-    
-    // Update statistics
-    this.updateStats('add', completeEvent);
-    
-    console.log(`➕ EventRegistry: Added ${completeEvent.type} event ${eventId} for Voice ${completeEvent.voiceIndex + 1}`);
-    
-    return eventId;
-  }
+/**
+ * Add event to registry with full indexing
+ * @param {object} eventData - Complete event object
+ * @returns {string} Generated event ID
+ */
+addEvent(eventData) {
+  const eventId = this.generateEventId();
   
+  // Deep clone eventData to prevent reference sharing between events
+  const clonedEventData = JSON.parse(JSON.stringify(eventData));
+  
+  // Store complete event data with cloned parameters
+  const completeEvent = {
+    id: eventId,
+    timestamp: Date.now(),
+    ...clonedEventData
+  };
+  
+  this.events.set(eventId, completeEvent);
+  
+  // Update all indexes
+  this.updateIndexes(eventId, completeEvent);
+  
+  // Update statistics
+  this.updateStats('add', completeEvent);
+  
+  console.log(`➕ EventRegistry: Added ${completeEvent.type} event ${eventId} for Voice ${completeEvent.voiceIndex + 1}`);
+  
+  return eventId;
+}
+
   /**
    * Update all indexing maps for an event
    * @private
@@ -12050,48 +12056,70 @@ class EventRegistry {
     return true;
   }
   
-  /**
-   * Update existing event
-   * @param {string} eventId - Event ID to update
-   * @param {object} newData - New event data (partial or complete)
-   * @returns {boolean} True if event was updated
-   */
-  updateEvent(eventId, newData) {
-    const existingEvent = this.events.get(eventId);
-    if (!existingEvent) {
-      console.warn(`⚠️ EventRegistry: Event ${eventId} not found for update`);
-      return false;
-    }
-    
-    // Remove old indexes
-    this.removeFromIndexes(eventId, existingEvent);
-    
-    // Merge new data
-    const updatedEvent = {
-      ...existingEvent,
-      ...newData,
-      id: eventId, // Preserve original ID
-      timestamp: Date.now() // Update timestamp
-    };
-    
-    // Store updated event
-    this.events.set(eventId, updatedEvent);
-    
-    // Update indexes with new data
-    this.updateIndexes(eventId, updatedEvent);
-    
-    console.log(`🔄 EventRegistry: Updated event ${eventId} for Voice ${updatedEvent.voiceIndex + 1}`);
-    return true;
+/**
+ * Update existing event
+ * @param {string} eventId - Event ID to update
+ * @param {object} newData - New event data (partial or complete)
+ * @returns {boolean} True if event was updated
+ */
+updateEvent(eventId, newData) {
+  const existingEvent = this.events.get(eventId);
+  if (!existingEvent) {
+    console.warn(`⚠️ EventRegistry: Event ${eventId} not found for update`);
+    return false;
   }
   
-  /**
-   * Get specific event by ID
-   * @param {string} eventId - Event ID
-   * @returns {object|null} Event data or null if not found
-   */
-  getEvent(eventId) {
-    return this.events.get(eventId) || null;
+  // Remove old indexes
+  this.removeFromIndexes(eventId, existingEvent);
+  
+  // CRITICAL FIX: Deep clone both existing and new data to prevent reference sharing
+  const clonedExisting = JSON.parse(JSON.stringify(existingEvent));
+  const clonedNewData = JSON.parse(JSON.stringify(newData));
+  
+  // Merge new data with deep cloning
+  const updatedEvent = {
+    ...clonedExisting,
+    ...clonedNewData,
+    id: eventId, // Preserve original ID
+    timestamp: Date.now() // Update timestamp
+  };
+  
+  // Store updated event
+  this.events.set(eventId, updatedEvent);
+  
+  // Update indexes with new data
+  this.updateIndexes(eventId, updatedEvent);
+  
+  console.log(`🔄 EventRegistry: Updated event ${eventId} for Voice ${updatedEvent.voiceIndex + 1}`);
+  return true;
+}
+
+  
+/**
+ * Get specific event by ID
+ * @param {string} eventId - Event ID
+ * @returns {object|null} Event data or null if not found
+ */
+getEvent(eventId) {
+  const event = this.events.get(eventId);
+  if (!event) {
+    return null;
   }
+  
+  // TEMPORARY: Log the event structure (remove after debugging)
+  console.log('Original event structure:', event);
+  console.log('Event keys:', Object.keys(event));
+  console.log('Parameters value:', event.parameters);
+  console.log('Parameters type:', typeof event.parameters);
+  
+  // Deep clone with proper undefined/null handling
+  return {
+    ...event,
+    parameters: event.parameters ? JSON.parse(JSON.stringify(event.parameters)) : event.parameters
+  };
+}
+
+
   
   /**
    * Get events by beat position
@@ -12551,6 +12579,7 @@ class EventCreator {
       regionIndex: regionIndex,
       relativePosition: Math.max(0, Math.min(1, relativePosition)),
       value: newValue,
+      parameters: newValue,  // ← ADD THIS LINE
       changeType: this.determineChangeType(parameterName, newValue)
     };
     
@@ -15439,56 +15468,56 @@ createMutedRegion(startBeat, endBeat, position) {
     }
   }
 
-  // NEW: Create new region in events array
-createNewRegionInEvents(startBeat, endBeat) {
-  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-  if (!lifeSpan || !lifeSpan.events) return;
-  
-  // CLEAN: Remove any orphaned parameter events in the area we're about to create
-  const beforeCount = lifeSpan.events.length;
-  lifeSpan.events = lifeSpan.events.filter(event => {
-    if (event.type === 'compound-parameter' || event.type === 'parameter') {
-      const eventBeat = event.beatPosition || 0;
-      // Keep events outside the new region area
-      return eventBeat < startBeat || eventBeat > endBeat;
+    // NEW: Create new region in events array
+  createNewRegionInEvents(startBeat, endBeat) {
+    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+    if (!lifeSpan || !lifeSpan.events) return;
+    
+    // CLEAN: Remove any orphaned parameter events in the area we're about to create
+    const beforeCount = lifeSpan.events.length;
+    lifeSpan.events = lifeSpan.events.filter(event => {
+      if (event.type === 'compound-parameter' || event.type === 'parameter') {
+        const eventBeat = event.beatPosition || 0;
+        // Keep events outside the new region area
+        return eventBeat < startBeat || eventBeat > endBeat;
+      }
+      return true; // Keep mute events
+    });
+    
+    if (lifeSpan.events.length < beforeCount) {
+      console.log(`🧹 Cleaned ${beforeCount - lifeSpan.events.length} orphaned parameter events`);
     }
-    return true; // Keep mute events
-  });
-  
-  if (lifeSpan.events.length < beforeCount) {
-    console.log(`🧹 Cleaned ${beforeCount - lifeSpan.events.length} orphaned parameter events`);
-  }
-  
-  // Generate unique IDs
-  const startEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
-  const endEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+    
+    // Generate unique IDs
+    const startEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
+    const endEventId = `evt-${String(lifeSpan.nextEventId++).padStart(3, '0')}`;
 
-    
-    // Create events for new region
-    const newStartEvent = {
-      type: 'mute',
-      beatPosition: startBeat,
-      action: 'unmute',
-      id: startEventId
-    };
-    
-    const newEndEvent = {
-      type: 'mute',
-      beatPosition: endBeat,
-      action: 'mute',
-      id: endEventId
-    };
-    
-    // Add events and sort chronologically
-    lifeSpan.events.push(newStartEvent);
-    lifeSpan.events.push(newEndEvent);
-    lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
-    
-    if (DEBUG.EVENTS) {
-      console.log(`➕ Created new region events: unmute@${startBeat}, mute@${endBeat}`);
-      console.log(`   Total events:`, lifeSpan.events.length);
-    }
-  }  
+      
+      // Create events for new region
+      const newStartEvent = {
+        type: 'mute',
+        beatPosition: startBeat,
+        action: 'unmute',
+        id: startEventId
+      };
+      
+      const newEndEvent = {
+        type: 'mute',
+        beatPosition: endBeat,
+        action: 'mute',
+        id: endEventId
+      };
+      
+      // Add events and sort chronologically
+      lifeSpan.events.push(newStartEvent);
+      lifeSpan.events.push(newEndEvent);
+      lifeSpan.events.sort((a, b) => a.beatPosition - b.beatPosition);
+      
+      if (DEBUG.EVENTS) {
+        console.log(`➕ Created new region events: unmute@${startBeat}, mute@${endBeat}`);
+        console.log(`   Total events:`, lifeSpan.events.length);
+      }
+    }  
 
   // NEW: Show context menu for region (double-click region)
   showRegionContextMenu(e) {
@@ -15594,41 +15623,41 @@ createNewRegionInEvents(startBeat, endBeat) {
     }
   }
 
-editCompoundEvent(event, beat) {
-  // Store the event being edited for later updates
-  window.currentEditingEvent = event;
-  
-  // Show Event Editor
-  this.showStreamlinedParameterPicker(beat, event.regionIndex);
-  
-  // After Event Editor opens, pre-select and populate parameters
-  setTimeout(() => {
-    if (event.changes) {
-      Object.keys(event.changes).forEach(paramName => {
-        // Click parameter button to select it
-        const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
-        if (paramBtn && !paramBtn.classList.contains('selected')) {
-          paramBtn.click();
-          
-          // Mark as having existing values
-          paramBtn.classList.add('has-existing-values');
-          paramBtn.style.background = '#17a2b8'; // Blue for editing existing
+  editCompoundEvent(event, beat) {
+    // Store the event being edited for later updates
+    window.currentEditingEvent = event;
+    
+    // Show Event Editor
+    this.showStreamlinedParameterPicker(beat, event.regionIndex);
+    
+    // After Event Editor opens, pre-select and populate parameters
+    setTimeout(() => {
+      if (event.changes) {
+        Object.keys(event.changes).forEach(paramName => {
+          // Click parameter button to select it
+          const paramBtn = document.querySelector(`[data-param="${paramName}"]`);
+          if (paramBtn && !paramBtn.classList.contains('selected')) {
+            paramBtn.click();
+            
+            // Mark as having existing values
+            paramBtn.classList.add('has-existing-values');
+            paramBtn.style.background = '#17a2b8'; // Blue for editing existing
+          }
+        });
+        
+        // Update Apply button text for editing
+        const applyBtn = document.querySelector('.apply-event-btn');
+        if (applyBtn) {
+          applyBtn.textContent = 'Update Event';
+          applyBtn.style.background = '#17a2b8'; // Blue for update
         }
-      });
-      
-      // Update Apply button text for editing
-      const applyBtn = document.querySelector('.apply-event-btn');
-      if (applyBtn) {
-        applyBtn.textContent = 'Update Event';
-        applyBtn.style.background = '#17a2b8'; // Blue for update
       }
+    }, 300);
+    
+    if (DEBUG.EVENTS) {
+      console.log(`✏️ Opened Event Editor for editing: ${Object.keys(event.changes).join(', ')}`);
     }
-  }, 300);
-  
-  if (DEBUG.EVENTS) {
-    console.log(`✏️ Opened Event Editor for editing: ${Object.keys(event.changes).join(', ')}`);
   }
-}
 
 
   // NEW: Handle quick region deletion (Alt+Click)
@@ -15740,23 +15769,21 @@ editCompoundEvent(event, beat) {
     }, 50);
   }
 
-  
-
   updateVoiceData() {
-    const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
-    if (!lifeSpan) {
-      console.warn(`Voice ${this.voiceIndex + 1}: No LIFE SPAN parameter`);
-      return;
-    }
-    
-    this.maxBeats = lifeSpan.maxTimeBeats || 700;
-    this.beatUnit = lifeSpan.beatUnit || 7;
-    this.tempo = getCurrentTempoForVoice(this.voiceIndex);
-    
-    if (DEBUG.TIMELINE) {
-      console.log(`📊 Updated timeline data: ${this.maxBeats} beats @ ${this.tempo} BPM`);
-    }
+  const lifeSpan = voiceData[this.voiceIndex].parameters['LIFE SPAN'];
+  if (!lifeSpan) {
+    console.warn(`Voice ${this.voiceIndex + 1}: No LIFE SPAN parameter`);
+    return;
   }
+  
+  this.maxBeats = lifeSpan.maxTimeBeats || 700;
+  this.beatUnit = lifeSpan.beatUnit || 7;
+  this.tempo = getCurrentTempoForVoice(this.voiceIndex);
+  
+  if (DEBUG.TIMELINE) {
+    console.log(`📊 Updated timeline data: ${this.maxBeats} beats @ ${this.tempo} BPM`);
+  }
+}
   
   updatePlayhead() {
   if (!this.isVisible || !this.playhead || !masterClock || !masterClock.isActive()) {
@@ -17943,19 +17970,65 @@ createMelodicRangeControls(paramName, currentParam) {
   container.appendChild(pianoContainer);
   container.appendChild(behaviorContainer);
   
-    // Initialize piano keyboard after DOM insertion
+  // Initialize piano keyboard after DOM insertion
   setTimeout(() => {
     try {
       console.log(`🎹 Initializing piano keyboard for MELODIC RANGE event editor`);
-      const eventPiano = new InteractivePiano(pianoContainer, this.voiceIndex);
       
-      // FIXED: Store reference in pianoContainer, not container
-      pianoContainer.eventPiano = eventPiano;
+      // Check if we're editing an existing event
+      const isEditing = window.currentEditingEvent && window.currentEditingEvent.parameters;
+      
+      if (isEditing) {
+        console.log(`🔄 Editing mode: Skipping default initialization`);
+        
+        // Create piano without loading defaults
+        const eventPiano = new InteractivePiano(pianoContainer, this.voiceIndex);
+        pianoContainer.eventPiano = eventPiano;
+        
+        // Skip loadInitialSelection by clearing the default selection immediately
+        eventPiano.selectedNotes.clear();
+        
+        // Load the stored selection immediately
+        const storedNotes = window.currentEditingEvent.parameters.selectedNotes;
+        if (storedNotes && storedNotes.length > 0) {
+          console.log(`📥 Pre-loading stored selection:`, storedNotes);
+          
+          storedNotes.forEach(note => {
+            eventPiano.selectedNotes.add(note);
+          });
+          
+          if (eventPiano.updateDisplay) {
+            eventPiano.updateDisplay();
+          }
+          if (eventPiano.updateVisualSelection) {
+            eventPiano.updateVisualSelection();
+          }
+          
+          // Update the range display to show loaded data
+          const minNote = Math.min(...storedNotes);
+          const maxNote = Math.max(...storedNotes);
+          const minNoteName = midiNoteNames[minNote] || `MIDI${minNote}`;
+          const maxNoteName = midiNoteNames[maxNote] || `MIDI${maxNote}`;
+          
+          currentRange.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">📥 Loaded range:</div>
+            <div>${minNoteName} (${minNote}) to ${maxNoteName} (${maxNote}) - ${storedNotes.length} notes</div>
+          `;
+          
+          console.log(`✅ Piano pre-loaded with stored selection - no visual hop!`);
+        }
+      } else {
+        console.log(`➕ Creation mode: Using default initialization`);
+        
+        // Normal creation - use default initialization
+        const eventPiano = new InteractivePiano(pianoContainer, this.voiceIndex);
+        pianoContainer.eventPiano = eventPiano;
+      }
       
       console.log(`✅ Piano keyboard initialized and stored as pianoContainer.eventPiano`);
-
       
       // Mark parameter as changed when piano selection changes
+      const eventPiano = pianoContainer.eventPiano;
       const originalUpdateVoiceData = eventPiano.updateVoiceData;
       eventPiano.updateVoiceData = function() {
         // Call original method
@@ -18019,6 +18092,7 @@ createMelodicRangeControls(paramName, currentParam) {
   return container;
 }
 
+
 createDropdownControls(paramName, currentValue) {
   const container = document.createElement('div');
   container.style.cssText = `
@@ -18074,12 +18148,24 @@ createDropdownControls(paramName, currentValue) {
   return container;
 }
 
-
 createMultiSelectControls(paramName, currentParam) {
   const container = document.createElement('div');
   
   const options = paramName === 'RHYTHMS' ? rhythmOptions : restOptions;
-  const selectedValues = currentParam.selectedValues || [];
+  
+  // CRITICAL FIX: Check if we're editing an existing event to avoid shared reference corruption
+  let selectedValues = [];
+  const isEditing = window.currentEditingEvent && window.currentEditingEvent.parameters;
+  
+  if (isEditing && window.currentEditingEvent.parameters.selectedValues) {
+    // Editing mode: Use stored event data directly
+    selectedValues = [...window.currentEditingEvent.parameters.selectedValues]; // Deep copy
+    console.log(`🔄 Rhythm editing mode: Loading stored values:`, selectedValues);
+  } else {
+    // Creation mode: Use currentParam (could be corrupted, but we'll fix it)
+    selectedValues = currentParam.selectedValues || [];
+    console.log(`➕ Rhythm creation mode: Using currentParam values:`, selectedValues);
+  }
   
   container.innerHTML = `
   <div style="margin-bottom: 10px;">
@@ -18104,11 +18190,12 @@ createMultiSelectControls(paramName, currentParam) {
       ${selectedValues.map(i => options[i]).join(', ') || 'None'}
     </div>
   </div>
-`;
-
-  
+`; 
   return container;
 }
+
+
+
 
 createEffectControls(paramName, currentParam) {
   const container = document.createElement('div');
@@ -18452,40 +18539,43 @@ initializeCompoundEventEditor(editor, beat, regionIndex) {
     let eventId;
     const paramNames = Object.keys(parameterChanges);
     
-    if (isUpdating) {
-      // UPDATE existing event
-      const existingEvent = window.currentEditingEvent;
-      
-      if (paramNames.length === 1) {
-        // Update as single parameter event
-        const paramName = paramNames[0];
-        const success = eventRegistry.updateEvent(existingEvent.id, {
-          parameterName: paramName,
-          value: parameterChanges[paramName],
-          changeType: 'range' // TODO: Make this dynamic
-        });
-        eventId = success ? existingEvent.id : null;
-      } else {
-        // Update as compound event
-        const changes = {};
-        paramNames.forEach(paramName => {
-          changes[paramName] = {
-            value: parameterChanges[paramName],
-            changeType: 'range' // TODO: Make this dynamic
-          };
-        });
-        
-        const success = eventRegistry.updateEvent(existingEvent.id, {
-          type: 'compound-parameter',
-          changes: changes,
-          parameterNames: paramNames
-        });
-        eventId = success ? existingEvent.id : null;
-      }
-      
-      if (eventId) {
-        console.log(`💎 EventRegistry event updated: ${eventId}`);
-      }
+if (isUpdating) {
+  // UPDATE existing event
+  const existingEvent = window.currentEditingEvent;
+  
+  if (paramNames.length === 1) {
+    // Update as single parameter event
+    const paramName = paramNames[0];
+    const success = eventRegistry.updateEvent(existingEvent.id, {
+      type: 'parameter',  // Ensure type is preserved
+      parameterName: paramName,
+      parameters: parameterChanges[paramName],  // ← FIX: Use 'parameters' not 'value'
+      value: parameterChanges[paramName],       // Keep both for compatibility
+      changeType: 'range'
+    });
+    eventId = success ? existingEvent.id : null;
+  } else {
+    // Update as compound event
+    const changes = {};
+    paramNames.forEach(paramName => {
+      changes[paramName] = {
+        value: parameterChanges[paramName],
+        changeType: 'range'
+      };
+    });
+    
+    const success = eventRegistry.updateEvent(existingEvent.id, {
+      type: 'compound-parameter',
+      parameters: changes,  // ← FIX: Add 'parameters' property
+      changes: changes,     // Keep both for compatibility
+      parameterNames: paramNames
+    });
+    eventId = success ? existingEvent.id : null;
+  }
+  
+  if (eventId) {
+    console.log(`💎 EventRegistry event updated: ${eventId}`);
+  }
       
     } else {
       // CREATE new event (existing logic)
@@ -18607,23 +18697,56 @@ collectParameterValuesFromPanel(paramName, controlPanel) {
   return null;
 }
 
-/**
- * Collect values from melodic range piano keyboard
- */
 collectMelodicRangeValues(controlPanel) {
   console.log(`🎹 Collecting Melodic Range from piano keyboard`);
   
-  // Look for the piano instance
   const pianoContainer = controlPanel.querySelector('.event-piano-container');
   if (!pianoContainer || !pianoContainer.eventPiano) {
     console.error(`❌ Piano keyboard not found or not initialized`);
-    console.log(`   Piano container:`, !!pianoContainer);
-    console.log(`   Piano instance:`, pianoContainer ? !!pianoContainer.eventPiano : 'N/A');
     return null;
   }
   
   const piano = pianoContainer.eventPiano;
-  const selectedNotes = Array.from(piano.selectedNotes).sort((a, b) => a - b);
+  
+  // DIAGNOSTIC: Check if piano object is being reused
+  console.log('🔍 DIAGNOSTIC - Piano object ID:', piano);
+  console.log('🔍 DIAGNOSTIC - Piano selectedNotes before conversion:', piano.selectedNotes);
+  console.log('🔍 DIAGNOSTIC - Piano selectedNotes type:', typeof piano.selectedNotes);
+  console.log('🔍 DIAGNOSTIC - Piano selectedNotes constructor:', piano.selectedNotes.constructor.name);
+  
+// CRITICAL DIAGNOSTIC: Track piano.selectedNotes object identity
+console.log('🔍 CRITICAL DIAGNOSTIC:');
+console.log('  piano.selectedNotes object reference:', piano.selectedNotes);
+console.log('  piano.selectedNotes hash:', JSON.stringify([...piano.selectedNotes].sort()));
+console.log('  Global piano tracker:');
+
+// Track all piano selectedNotes references globally
+if (!window.pianoReferences) {
+  window.pianoReferences = [];
+}
+
+const existingRef = window.pianoReferences.find(ref => ref.selectedNotes === piano.selectedNotes);
+if (existingRef) {
+  console.log('  🚨 SHARED REFERENCE FOUND! This selectedNotes is shared with:', existingRef.eventId);
+  console.log('  🚨 Previous event will be corrupted!');
+} else {
+  console.log('  ✅ Unique selectedNotes reference');
+}
+
+// Store this reference for tracking
+window.pianoReferences.push({
+  eventId: 'collecting-now',
+  selectedNotes: piano.selectedNotes,
+  timestamp: Date.now()
+});
+
+console.log('  Total tracked piano references:', window.pianoReferences.length);
+
+
+  const selectedNotes = [...Array.from(piano.selectedNotes)].sort((a, b) => a - b);
+  
+  console.log('🔍 DIAGNOSTIC - Converted selectedNotes:', selectedNotes);
+  console.log('🔍 DIAGNOSTIC - Are they same reference?:', piano.selectedNotes === selectedNotes);
   
   if (selectedNotes.length === 0) {
     console.warn(`⚠️ No notes selected on piano keyboard`);
@@ -18632,8 +18755,6 @@ collectMelodicRangeValues(controlPanel) {
   
   const minNote = selectedNotes[0];
   const maxNote = selectedNotes[selectedNotes.length - 1];
-  
-  // Get behavior from behavior slider
   const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
   const behavior = behaviorSlider ? parseInt(behaviorSlider.value) : 50;
   
@@ -18643,14 +18764,18 @@ collectMelodicRangeValues(controlPanel) {
     min: minNote,
     max: maxNote,
     behavior: behavior,
-    selectedNotes: selectedNotes
+    selectedNotes: [...selectedNotes]
   };
+  
+  console.log('🔍 DIAGNOSTIC - Final value object:', value);
+  console.log('🔍 DIAGNOSTIC - Final selectedNotes reference:', value.selectedNotes);
   
   return {
     value: value,
     changeType: 'range'
   };
 }
+
 
 /**
  * Collect values from standard range slider
@@ -18916,11 +19041,18 @@ editParameterEvent(eventId, parameterName) {
         
         console.log(`✅ Pre-selected ${event.parameterName} for single editing`);
         
-        // Load existing values
-        setTimeout(() => {
-          this.loadEventValuesIntoControls(event.parameterName, { value: event.value });
-        }, 200);
-      }
+      // Load existing values - FIX: Use event.parameters not event.value
+      setTimeout(() => {
+        // CRITICAL FIX: Pass the correct stored parameters
+        const paramData = { value: event.parameters || event.value };
+        console.log(`🔍 LOADING DIAGNOSTIC - Raw stored data:`, event);
+        console.log(`🔍 LOADING DIAGNOSTIC - Parameters to load:`, event.parameters);
+        console.log(`🔍 LOADING DIAGNOSTIC - Selected notes:`, event.parameters?.selectedNotes);
+        console.log(`🔍 LOADING DIAGNOSTIC - Passing to loadEventValuesIntoControls:`, paramData);
+        
+        this.loadEventValuesIntoControls(event.parameterName, paramData);
+      }, 200);
+    }
       
       // Update Apply button for single editing
       setTimeout(() => {
@@ -18976,9 +19108,63 @@ loadEventValuesIntoControls(paramName, paramData) {
   console.log(`📝 Loading values for ${paramName}:`, paramData);
 
 
-  
-  switch (def.type) {
-    case 'range':
+switch (def.type) {
+  case 'range':
+    if (paramName === 'MELODIC RANGE') {
+      // SPECIAL CASE: Piano keyboard loading with proper timing
+      console.log(`🎹 Loading piano keyboard values:`, paramData.value);
+      
+      // Wait for piano to be fully ready before loading
+      const waitForPiano = () => {
+        const pianoContainer = controlPanel.querySelector('.event-piano-container');
+        const piano = pianoContainer?.eventPiano;
+        
+        if (piano && piano.selectedNotes && paramData.value?.selectedNotes) {
+          console.log(`🎹 Piano ready, loading stored notes:`, paramData.value.selectedNotes);
+          
+          // Clear existing selection
+          piano.selectedNotes.clear();
+          
+          // Load stored selection
+          paramData.value.selectedNotes.forEach(note => {
+            piano.selectedNotes.add(note);
+          });
+          
+          // Force visual update
+          if (piano.updateDisplay) {
+            piano.updateDisplay();
+          }
+          if (piano.updateVisualSelection) {
+            piano.updateVisualSelection();
+          }
+          
+          console.log(`🎹 Piano loaded with stored selection:`, [...piano.selectedNotes]);
+        } else if (pianoContainer) {
+          // Piano not ready yet, wait longer
+          console.log(`⏳ Piano not ready, retrying...`);
+          setTimeout(waitForPiano, 100);
+        } else {
+          console.warn(`❌ Piano container not found`);
+        }
+      };
+      
+      // Start checking for piano readiness
+      setTimeout(waitForPiano, 250); // Wait longer than piano initialization
+      
+      // Load behavior slider (this can happen immediately)
+      const behaviorSlider = controlPanel.querySelector('.event-behavior-slider');
+      if (behaviorSlider && paramData.value?.behavior !== undefined) {
+        behaviorSlider.value = paramData.value.behavior;
+        
+        const behaviorDisplay = controlPanel.querySelector('.behavior-value');
+        if (behaviorDisplay) {
+          behaviorDisplay.textContent = paramData.value.behavior + '%';
+        }
+        
+        console.log(`📝 Set behavior slider to: ${paramData.value.behavior}%`);
+      }
+    } else {
+      // Standard range slider
       if (paramData.value && typeof paramData.value === 'object') {
         // Load range slider values
         const rangeSlider = controlPanel.querySelector('.event-range-slider');
@@ -19007,21 +19193,47 @@ loadEventValuesIntoControls(paramName, paramData) {
           console.log(`📝 Set behavior slider to: ${paramData.value.behavior}%`);
         }
       }
-      break;
+    }
+    break;
+    
+  case 'multiselect':
+    // RHYTHMS and RESTS loading
+    console.log(`🥁 Loading rhythm/multiselect values:`, paramData.value);
+    
+    if (Array.isArray(paramData.value)) {
+      const checkboxes = controlPanel.querySelectorAll('.event-rhythm-checkbox');
       
-    case 'simple':
-      if (paramName === 'INSTRUMENT') {
-        const dropdown = controlPanel.querySelector('.event-instrument-select');
-        if (dropdown && typeof paramData.value === 'number') {
-          dropdown.value = paramData.value;
-          console.log(`📝 Set instrument dropdown to: ${paramData.value}`);
+      // Clear all checkboxes first
+      checkboxes.forEach(cb => cb.checked = false);
+      
+      // Check the stored selections
+      paramData.value.forEach(selectedIndex => {
+        const checkbox = controlPanel.querySelector(`.event-rhythm-checkbox[value="${selectedIndex}"]`);
+        if (checkbox) {
+          checkbox.checked = true;
         }
-      }
-      break;
+      });
       
-    default:
-      console.log(`📝 Loading for ${paramName} (${def.type}) - not yet implemented`);
-  }
+      console.log(`🥁 Loaded ${paramData.value.length} rhythm selections:`, paramData.value);
+    }
+    break;
+    
+  case 'simple':
+    if (paramName === 'INSTRUMENT') {
+      const dropdown = controlPanel.querySelector('.event-instrument-select');
+      if (dropdown && typeof paramData.value === 'number') {
+        dropdown.value = paramData.value;
+        console.log(`📝 Set instrument dropdown to: ${paramData.value}`);
+      }
+    }
+    break;
+    
+  default:
+    console.log(`📝 Loading for ${paramName} (${def.type}) - not yet implemented`);
+}
+
+
+
 }
 
 /**
@@ -19088,8 +19300,6 @@ deleteParameterEvent(eventId, parameterName) {
   }
 }
 
-
-
 editCompoundEvent(event, beat) {
   // Show Event Editor with pre-loaded values
   this.showStreamlinedParameterPicker(beat, event.regionIndex);
@@ -19144,7 +19354,6 @@ loadExistingValuesIntoControls(paramName, paramData) {
   }
   // Add other parameter types as needed
 }
-
 
 startEventPositionEdit(eventId, parameterName) {
   if (DEBUG.EVENTS) {

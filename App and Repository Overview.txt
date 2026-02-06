@@ -450,7 +450,7 @@ Development Notes
 Future Enhancement Opportunities
   Time Marker Grid: Vertical lines at regular intervals in Timeline View
   Click-to-Seek: Jump playback to timeline position
-  Zoom Controls: For compositions >10 minutes
+  Zoom Controls: For compositions >10 minutes --IMPLEMENTED--
   Custom Scales: User-defined interval patterns
   MIDI Export: Save compositions as MIDI files
   Audio Recording: Capture output to WAV/MP3
@@ -459,7 +459,7 @@ Future Enhancement Opportunities
   Core 16-voice engine
   20 parameters per voice
   Real-time effects processing
-  Save/load system
+  Save/load system -- IMPLEMENTED --
   Timeline View coordinator
   Scale/chord filtering
   Phrase Styles system
